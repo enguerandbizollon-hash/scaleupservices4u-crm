@@ -1,86 +1,5 @@
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
-
-type DealRow = {
-  id: string;
-  name: string;
-  deal_type: string;
-  deal_status: string;
-  deal_stage: string;
-  priority_level: string;
-  client_organization_id: string;
-  sector: string | null;
-  valuation_amount: number | null;
-  fundraising_amount: number | null;
-  description: string | null;
-  start_date: string | null;
-  target_date: string | null;
-};
-
-type OrganizationRow = {
-  id: string;
-  name: string;
-};
-
-type FormattedDeal = {
-  id: string;
-  name: string;
-  typeLabel: string;
-  statusLabel: string;
-  stageLabel: string;
-  priorityLabel: string;
-  organisation: string;
-  sector: string;
-  valuation: string;
-  fundraising: string;
-  startDate: string;
-  targetDate: string;
-  description: string;
-};
-
-const dealTypeLabels: Record<string, string> = {
-  fundraising: "Fundraising",
-  ma_sell: "M&A Sell-side",
-  ma_buy: "M&A Buy-side",
-  cfo_advisor: "CFO Advisor",
-  recruitment: "Recrutement",
-};
-
-const dealStatusLabels: Record<string, string> = {
-  active: "Actif",
-  inactive: "Inactif",
-  closed: "Clôturé",
-};
-
-const dealStageLabels: Record<string, string> = {
-  kickoff: "Kickoff",
-  preparation: "Préparation",
-  outreach: "Outreach",
-  management_meetings: "Management meetings",
-  dd: "Due diligence",
-  negotiation: "Négociation",
-  closing: "Closing",
-  post_closing: "Post-closing",
-  ongoing_support: "Suivi en cours",
-  search: "Recherche",
-};
-
-const priorityLabels: Record<string, string> = {
-  high: "Haute",
-  medium: "Moyenne",
-  low: "Basse",
-};
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return new Intl.DateTimeFormat("fr-FR").format(date);
-}
-
-function formatAmount(value: number | null) {
-  if (value === null || value === undefined) return "N/A";
-  return new Intl.NumberFormat("fr-FR").format(value);
-}
+import { getDealsView, type DealView } from "@/lib/crm/get-deals";
 
 function priorityBadgeClass(priority: string) {
   if (priority === "Haute") return "bg-rose-100 text-rose-800";
@@ -94,7 +13,7 @@ function statusBadgeClass(status: string) {
   return "bg-slate-100 text-slate-700";
 }
 
-function DealCard({ deal }: { deal: FormattedDeal }) {
+function DealCard({ deal }: { deal: DealView }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -188,67 +107,7 @@ function DossiersLoading() {
 }
 
 async function DossiersContent() {
-  const supabase = await createClient();
-
-  const { data: dealsData, error: dealsError } = await supabase
-    .from("deals")
-    .select(
-      "id,name,deal_type,deal_status,deal_stage,priority_level,client_organization_id,sector,valuation_amount,fundraising_amount,description,start_date,target_date"
-    )
-    .order("target_date", { ascending: true });
-
-  if (dealsError) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-bold">Erreur Supabase</h1>
-          <p className="mt-3 text-sm text-slate-600">
-            Impossible de charger les dossiers depuis la base.
-          </p>
-          <pre className="mt-4 overflow-auto rounded-xl bg-slate-900 p-4 text-sm text-white">
-            {dealsError.message}
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
-  const deals = (dealsData ?? []) as DealRow[];
-  const organizationIds = [...new Set(deals.map((deal) => deal.client_organization_id))];
-
-  let organizationMap: Record<string, string> = {};
-
-  if (organizationIds.length > 0) {
-    const { data: organizationsData } = await supabase
-      .from("organizations")
-      .select("id,name")
-      .in("id", organizationIds);
-
-    const organizations = (organizationsData ?? []) as OrganizationRow[];
-
-    organizationMap = Object.fromEntries(
-      organizations.map((organization) => [organization.id, organization.name])
-    );
-  }
-
-  const formattedDeals: FormattedDeal[] = deals.map((deal) => ({
-    id: deal.id,
-    name: deal.name,
-    typeLabel: dealTypeLabels[deal.deal_type] ?? deal.deal_type,
-    statusLabel: dealStatusLabels[deal.deal_status] ?? deal.deal_status,
-    stageLabel: dealStageLabels[deal.deal_stage] ?? deal.deal_stage,
-    priorityLabel: priorityLabels[deal.priority_level] ?? deal.priority_level,
-    organisation: organizationMap[deal.client_organization_id] ?? "Organisation inconnue",
-    sector: deal.sector ?? "N/A",
-    valuation: formatAmount(deal.valuation_amount),
-    fundraising: formatAmount(deal.fundraising_amount),
-    startDate: formatDate(deal.start_date),
-    targetDate: formatDate(deal.target_date),
-    description: deal.description ?? "—",
-  }));
-
-  const activeDeals = formattedDeals.filter((deal) => deal.statusLabel === "Actif");
-  const inactiveDeals = formattedDeals.filter((deal) => deal.statusLabel !== "Actif");
+  const { allDeals, activeDeals, inactiveDeals } = await getDealsView();
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
@@ -264,7 +123,7 @@ async function DossiersContent() {
         <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Total dossiers</p>
-            <p className="mt-3 text-3xl font-bold">{formattedDeals.length}</p>
+            <p className="mt-3 text-3xl font-bold">{allDeals.length}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Actifs</p>
@@ -276,11 +135,11 @@ async function DossiersContent() {
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Source</p>
-            <p className="mt-3 text-xl font-bold">Supabase</p>
+            <p className="mt-3 text-xl font-bold">lib/crm</p>
           </div>
         </div>
 
-        {formattedDeals.length === 0 ? (
+        {allDeals.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
             Aucun dossier trouvé dans Supabase.
           </div>

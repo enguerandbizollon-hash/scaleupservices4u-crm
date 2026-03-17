@@ -1,52 +1,8 @@
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
-
-type OrganizationRow = {
-  id: string;
-  name: string;
-  organization_type: string;
-  base_status: string;
-  sector: string | null;
-  country: string | null;
-  website: string | null;
-  notes: string | null;
-};
-
-type DealLinkRow = {
-  name: string;
-  client_organization_id: string;
-};
-
-type FormattedOrganization = {
-  id: string;
-  name: string;
-  typeLabel: string;
-  statusLabel: string;
-  sector: string;
-  country: string;
-  website: string | null;
-  notes: string;
-  linkedDeals: string[];
-};
-
-const organizationTypeLabels: Record<string, string> = {
-  investor: "Investisseur",
-  client: "Client",
-  prospect: "Prospect",
-  third_party: "Tiers",
-  bank: "Banque",
-  law_firm: "Avocat",
-  buyer: "Repreneur",
-  corporate: "Corporate",
-  consulting_firm: "Conseil",
-};
-
-const organizationStatusLabels: Record<string, string> = {
-  active: "Actif",
-  inactive: "Inactif",
-  qualified: "Qualifié",
-  dormant: "Dormant",
-};
+import {
+  getOrganizationsView,
+  type OrganizationView,
+} from "@/lib/crm/get-organizations";
 
 function typeBadgeClass(type: string) {
   if (type === "Client") return "bg-blue-100 text-blue-800";
@@ -64,7 +20,7 @@ function statusBadgeClass(status: string) {
   return "bg-slate-100 text-slate-700";
 }
 
-function OrganisationCard({ org }: { org: FormattedOrganization }) {
+function OrganisationCard({ org }: { org: OrganizationView }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -178,65 +134,12 @@ function OrganisationsLoading() {
 }
 
 async function OrganisationsContent() {
-  const supabase = await createClient();
-
-  const { data: organizationsData, error: organizationsError } = await supabase
-    .from("organizations")
-    .select("id,name,organization_type,base_status,sector,country,website,notes")
-    .order("name", { ascending: true });
-
-  if (organizationsError) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-bold">Erreur Supabase</h1>
-          <p className="mt-3 text-sm text-slate-600">
-            Impossible de charger les organisations depuis la base.
-          </p>
-          <pre className="mt-4 overflow-auto rounded-xl bg-slate-900 p-4 text-sm text-white">
-            {organizationsError.message}
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
-  const organizations = (organizationsData ?? []) as OrganizationRow[];
-
-  const { data: dealsData } = await supabase
-    .from("deals")
-    .select("name,client_organization_id")
-    .order("name", { ascending: true });
-
-  const deals = (dealsData ?? []) as DealLinkRow[];
-
-  const dealsByOrganizationId = deals.reduce<Record<string, string[]>>((acc, deal) => {
-    if (!acc[deal.client_organization_id]) {
-      acc[deal.client_organization_id] = [];
-    }
-    acc[deal.client_organization_id].push(deal.name);
-    return acc;
-  }, {});
-
-  const formattedOrganizations: FormattedOrganization[] = organizations.map((org) => ({
-    id: org.id,
-    name: org.name,
-    typeLabel: organizationTypeLabels[org.organization_type] ?? org.organization_type,
-    statusLabel: organizationStatusLabels[org.base_status] ?? org.base_status,
-    sector: org.sector ?? "N/A",
-    country: org.country ?? "N/A",
-    website: org.website,
-    notes: org.notes ?? "—",
-    linkedDeals: dealsByOrganizationId[org.id] ?? [],
-  }));
-
-  const clientsCount = formattedOrganizations.filter((o) => o.typeLabel === "Client").length;
-  const investorsCount = formattedOrganizations.filter(
-    (o) => o.typeLabel === "Investisseur"
-  ).length;
-  const thirdPartiesCount = formattedOrganizations.filter((o) =>
-    ["Avocat", "Conseil", "Banque", "Tiers"].includes(o.typeLabel)
-  ).length;
+  const {
+    allOrganizations,
+    clientsCount,
+    investorsCount,
+    thirdPartiesCount,
+  } = await getOrganizationsView();
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
@@ -252,7 +155,7 @@ async function OrganisationsContent() {
         <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Organisations total</p>
-            <p className="mt-3 text-3xl font-bold">{formattedOrganizations.length}</p>
+            <p className="mt-3 text-3xl font-bold">{allOrganizations.length}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Clients</p>
@@ -268,13 +171,13 @@ async function OrganisationsContent() {
           </div>
         </div>
 
-        {formattedOrganizations.length === 0 ? (
+        {allOrganizations.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
             Aucune organisation trouvée dans Supabase.
           </div>
         ) : (
           <div className="space-y-5">
-            {formattedOrganizations.map((org) => (
+            {allOrganizations.map((org) => (
               <OrganisationCard key={org.id} org={org} />
             ))}
           </div>
