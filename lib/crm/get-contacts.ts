@@ -1,4 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  baseContactStatusLabels,
+  contactPipelineStatusLabels,
+} from "@/lib/crm/labels";
+import type {
+  ContactLinkedDealView,
+  ContactView,
+} from "@/lib/crm/types";
 
 type ContactRow = {
   id: string;
@@ -47,55 +55,6 @@ type DealContactRow = {
 type DealRow = {
   id: string;
   name: string;
-};
-
-export type ContactLinkedDealView = {
-  dealName: string;
-  roleInDeal: string;
-  contacted: boolean;
-  contactedAt: string;
-  lastContactAt: string;
-  nextFollowUpAt: string;
-  statusInDeal: string;
-  notes: string;
-};
-
-export type ContactView = {
-  id: string;
-  fullName: string;
-  title: string;
-  email: string;
-  phone: string;
-  linkedinUrl: string | null;
-  sector: string;
-  ticket: string;
-  organisation: string;
-  status: string;
-  notes: string;
-  linkedDeals: ContactLinkedDealView[];
-};
-
-const baseStatusLabels: Record<string, string> = {
-  to_qualify: "À qualifier",
-  qualified: "Qualifié",
-  priority: "Prioritaire",
-  active: "Actif",
-  dormant: "Dormant",
-  inactive: "Inactif",
-  excluded: "Exclu",
-};
-
-const pipelineStatusLabels: Record<string, string> = {
-  to_contact: "À contacter",
-  contacted: "Contacté",
-  to_follow_up: "À relancer",
-  in_discussion: "En discussion",
-  meeting_done: "Meeting tenu",
-  strong_interest: "Intérêt marqué",
-  waiting: "En attente",
-  no_go: "No go",
-  partner_active: "Suivi en cours",
-  document_requested: "Document demandé",
 };
 
 function formatDate(value: string | null) {
@@ -174,7 +133,9 @@ export async function getContactsView() {
     }
 
     const organizations = (organizationsData ?? []) as OrganizationRow[];
-    organizationsMap = Object.fromEntries(organizations.map((org) => [org.id, org.name]));
+    organizationsMap = Object.fromEntries(
+      organizations.map((org) => [org.id, org.name])
+    );
   }
 
   if (dealIds.length > 0) {
@@ -198,7 +159,8 @@ export async function getContactsView() {
 
     const mainOrganisation =
       contactOrganizations.length > 0
-        ? organizationsMap[contactOrganizations[0].organization_id] ?? "Organisation inconnue"
+        ? organizationsMap[contactOrganizations[0].organization_id] ??
+          "Organisation inconnue"
         : "Organisation inconnue";
 
     const linkedDeals: ContactLinkedDealView[] = dealContacts
@@ -211,7 +173,8 @@ export async function getContactsView() {
         lastContactAt: formatDate(row.last_contact_at),
         nextFollowUpAt: formatDate(row.next_follow_up_at),
         statusInDeal:
-          pipelineStatusLabels[row.status_in_deal ?? ""] ?? (row.status_in_deal ?? "—"),
+          contactPipelineStatusLabels[row.status_in_deal ?? ""] ??
+          (row.status_in_deal ?? "—"),
         notes: row.notes ?? "—",
       }));
 
@@ -227,7 +190,7 @@ export async function getContactsView() {
       sector: contact.sector ?? "N/A",
       ticket: contact.investment_ticket_label ?? "N/A",
       organisation: mainOrganisation,
-      status: baseStatusLabels[contact.base_status] ?? contact.base_status,
+      status: baseContactStatusLabels[contact.base_status] ?? contact.base_status,
       notes: contact.notes ?? "—",
       linkedDeals,
     };

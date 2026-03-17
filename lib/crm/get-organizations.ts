@@ -1,4 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  organizationTypeLabels,
+  organizationStatusLabels,
+} from "@/lib/crm/labels";
+import type { OrganizationView } from "@/lib/crm/types";
 
 type OrganizationRow = {
   id: string;
@@ -14,37 +19,6 @@ type OrganizationRow = {
 type DealLinkRow = {
   name: string;
   client_organization_id: string;
-};
-
-export type OrganizationView = {
-  id: string;
-  name: string;
-  typeLabel: string;
-  statusLabel: string;
-  sector: string;
-  country: string;
-  website: string | null;
-  notes: string;
-  linkedDeals: string[];
-};
-
-const organizationTypeLabels: Record<string, string> = {
-  investor: "Investisseur",
-  client: "Client",
-  prospect: "Prospect",
-  third_party: "Tiers",
-  bank: "Banque",
-  law_firm: "Avocat",
-  buyer: "Repreneur",
-  corporate: "Corporate",
-  consulting_firm: "Conseil",
-};
-
-const organizationStatusLabels: Record<string, string> = {
-  active: "Actif",
-  inactive: "Inactif",
-  qualified: "Qualifié",
-  dormant: "Dormant",
 };
 
 export async function getOrganizationsView() {
@@ -80,7 +54,7 @@ export async function getOrganizationsView() {
     return acc;
   }, {});
 
-  const organizationsView: OrganizationView[] = organizations.map((org) => ({
+  const allOrganizations: OrganizationView[] = organizations.map((org) => ({
     id: org.id,
     name: org.name,
     typeLabel: organizationTypeLabels[org.organization_type] ?? org.organization_type,
@@ -93,10 +67,10 @@ export async function getOrganizationsView() {
   }));
 
   return {
-    allOrganizations: organizationsView,
-    clientsCount: organizationsView.filter((o) => o.typeLabel === "Client").length,
-    investorsCount: organizationsView.filter((o) => o.typeLabel === "Investisseur").length,
-    thirdPartiesCount: organizationsView.filter((o) =>
+    allOrganizations,
+    clientsCount: allOrganizations.filter((o) => o.typeLabel === "Client").length,
+    investorsCount: allOrganizations.filter((o) => o.typeLabel === "Investisseur").length,
+    thirdPartiesCount: allOrganizations.filter((o) =>
       ["Avocat", "Conseil", "Banque", "Tiers"].includes(o.typeLabel)
     ).length,
   };

@@ -1,4 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import {
+  dealTypeLabels,
+  dealStatusLabels,
+  dealStageLabels,
+  priorityLabels,
+} from "@/lib/crm/labels";
+import type { DealView } from "@/lib/crm/types";
 
 type DealRow = {
   id: string;
@@ -19,55 +26,6 @@ type DealRow = {
 type OrganizationRow = {
   id: string;
   name: string;
-};
-
-export type DealView = {
-  id: string;
-  name: string;
-  typeLabel: string;
-  statusLabel: string;
-  stageLabel: string;
-  priorityLabel: string;
-  organisation: string;
-  sector: string;
-  valuation: string;
-  fundraising: string;
-  startDate: string;
-  targetDate: string;
-  description: string;
-};
-
-const dealTypeLabels: Record<string, string> = {
-  fundraising: "Fundraising",
-  ma_sell: "M&A Sell-side",
-  ma_buy: "M&A Buy-side",
-  cfo_advisor: "CFO Advisor",
-  recruitment: "Recrutement",
-};
-
-const dealStatusLabels: Record<string, string> = {
-  active: "Actif",
-  inactive: "Inactif",
-  closed: "Clôturé",
-};
-
-const dealStageLabels: Record<string, string> = {
-  kickoff: "Kickoff",
-  preparation: "Préparation",
-  outreach: "Outreach",
-  management_meetings: "Management meetings",
-  dd: "Due diligence",
-  negotiation: "Négociation",
-  closing: "Closing",
-  post_closing: "Post-closing",
-  ongoing_support: "Suivi en cours",
-  search: "Recherche",
-};
-
-const priorityLabels: Record<string, string> = {
-  high: "Haute",
-  medium: "Moyenne",
-  low: "Basse",
 };
 
 function formatDate(value: string | null) {
