@@ -1,14 +1,15 @@
+import Link from "next/link";
 export default function ProtectedPage() {
-  const menuItems = [
-    "Dashboard",
-    "Dossiers",
-    "Organisations",
-    "Contacts",
-    "Activités",
-    "Documents",
-    "Imports",
-    "Connecteurs",
-  ];
+ const menuItems = [
+  { label: "Dashboard", href: "/protected" },
+  { label: "Dossiers", href: "/protected/dossiers" },
+  { label: "Organisations", href: "/protected/organisations" },
+  { label: "Contacts", href: "/protected/contacts" },
+  { label: "Activités", href: "/protected/activites" },
+  { label: "Documents", href: "/protected/documents" },
+  { label: "Imports", href: "/protected/imports" },
+  { label: "Connecteurs", href: "/protected/connecteurs" },
+];
 
   const kpis = [
     { label: "Dossiers actifs", value: "8" },
@@ -148,20 +149,21 @@ export default function ProtectedPage() {
             </p>
           </div>
 
-          <nav className="space-y-2">
-            {menuItems.map((item, index) => (
-              <div
-                key={item}
-                className={`rounded-xl px-4 py-3 text-sm font-medium ${
-                  index === 0
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                {item}
-              </div>
-            ))}
-          </nav>
+         <nav className="space-y-2">
+  {menuItems.map((item, index) => (
+    <Link
+      key={item.href}
+      href={item.href}
+      className={`block rounded-xl px-4 py-3 text-sm font-medium ${
+        index === 0
+          ? "bg-slate-900 text-white"
+          : "text-slate-700 hover:bg-slate-100"
+      }`}
+    >
+      {item.label}
+    </Link>
+  ))}
+</nav>
 
           <div className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -209,17 +211,63 @@ export default function ProtectedPage() {
             </div>
           </div>
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {kpis.map((kpi) => (
-              <div
-                key={kpi.label}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <p className="text-sm text-slate-500">{kpi.label}</p>
-                <p className="mt-3 text-3xl font-bold">{kpi.value}</p>
-              </div>
-            ))}
-          </section>
+         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  {kpis.map((kpi) => (
+    <div
+      key={kpi.label}
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
+      <p className="text-sm text-slate-500">{kpi.label}</p>
+      <p className="mt-3 text-3xl font-bold">{kpi.value}</p>
+    </div>
+  ))}
+</section>
+
+<section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <Link
+    href="/protected/dossiers"
+    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:bg-slate-50"
+  >
+    <p className="text-sm text-slate-500">Module</p>
+    <p className="mt-2 text-lg font-semibold">Dossiers</p>
+    <p className="mt-2 text-sm text-slate-600">
+      Ouvrir la vue active / inactive / clôturée
+    </p>
+  </Link>
+
+  <Link
+    href="/protected/organisations"
+    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:bg-slate-50"
+  >
+    <p className="text-sm text-slate-500">Module</p>
+    <p className="mt-2 text-lg font-semibold">Organisations</p>
+    <p className="mt-2 text-sm text-slate-600">
+      Voir clients, investisseurs et tiers
+    </p>
+  </Link>
+
+  <Link
+    href="/protected/contacts"
+    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:bg-slate-50"
+  >
+    <p className="text-sm text-slate-500">Module</p>
+    <p className="mt-2 text-lg font-semibold">Contacts</p>
+    <p className="mt-2 text-sm text-slate-600">
+      Gérer les contacts et les dossiers concernés
+    </p>
+  </Link>
+
+  <Link
+    href="/protected/activites"
+    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:bg-slate-50"
+  >
+    <p className="text-sm text-slate-500">Module</p>
+    <p className="mt-2 text-lg font-semibold">Activités</p>
+    <p className="mt-2 text-sm text-slate-600">
+      Suivre les échanges, relances et échéances
+    </p>
+  </Link>
+</section>
 
           <section className="mt-8 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
