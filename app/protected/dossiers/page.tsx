@@ -15,7 +15,10 @@ function statusBadgeClass(status: string) {
 
 function DealCard({ deal }: { deal: DealView }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <a
+      href={`/protected/dossiers/${deal.id}`}
+      className="block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-slate-400 hover:shadow-md transition-all"
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h3 className="text-lg font-semibold">{deal.name}</h3>
@@ -26,25 +29,19 @@ function DealCard({ deal }: { deal: DealView }) {
             Étape : <span className="font-medium">{deal.stageLabel}</span>
           </p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(
-              deal.statusLabel
-            )}`}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(deal.statusLabel)}`}
           >
             {deal.statusLabel}
           </span>
           <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${priorityBadgeClass(
-              deal.priorityLabel
-            )}`}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${priorityBadgeClass(deal.priorityLabel)}`}
           >
             Priorité {deal.priorityLabel}
           </span>
         </div>
       </div>
-
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Secteur</p>
@@ -63,12 +60,10 @@ function DealCard({ deal }: { deal: DealView }) {
           <p className="mt-1 text-sm font-medium">{deal.targetDate}</p>
         </div>
       </div>
-
       <div className="mt-5 rounded-xl border border-slate-200 p-3">
         <p className="text-xs uppercase tracking-wide text-slate-500">Description</p>
         <p className="mt-1 text-sm text-slate-700">{deal.description}</p>
       </div>
-
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Date de lancement</p>
@@ -79,7 +74,7 @@ function DealCard({ deal }: { deal: DealView }) {
           <p className="mt-1 text-sm font-medium">{deal.organisation}</p>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -92,7 +87,6 @@ function DossiersLoading() {
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Dossiers</h1>
           <p className="mt-2 text-sm text-slate-500">Chargement depuis Supabase…</p>
         </div>
-
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
             <div
@@ -113,21 +107,18 @@ async function DossiersContent() {
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between gap-4">
-  <div>
-    <p className="text-sm font-medium text-slate-500">Module CRM</p>
-    <h1 className="mt-1 text-3xl font-bold tracking-tight">Dossiers</h1>
-    <p className="mt-2 text-sm text-slate-500">
-      Vue métier connectée à Supabase
-    </p>
-  </div>
-
-  <a
-    href="/protected/dossiers/nouveau"
-    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-  >
-    Nouveau dossier
-  </a>
-</div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">Module CRM</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">Dossiers</h1>
+            <p className="mt-2 text-sm text-slate-500">Vue métier connectée à Supabase</p>
+          </div>
+          <a
+            href="/protected/dossiers/nouveau"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Nouveau dossier
+          </a>
+        </div>
 
         <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -161,7 +152,6 @@ async function DossiersContent() {
                   {activeDeals.length} actifs
                 </span>
               </div>
-
               <div className="space-y-5">
                 {activeDeals.map((deal) => (
                   <DealCard key={deal.id} deal={deal} />
@@ -176,7 +166,6 @@ async function DossiersContent() {
                   {inactiveDeals.length} dossiers
                 </span>
               </div>
-
               <div className="space-y-5">
                 {inactiveDeals.map((deal) => (
                   <DealCard key={deal.id} deal={deal} />

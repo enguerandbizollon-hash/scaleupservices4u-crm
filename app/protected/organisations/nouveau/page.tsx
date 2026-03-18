@@ -4,21 +4,28 @@ import { createOrganizationAction } from "./actions";
 
 const organizationTypeOptions = [
   { value: "client", label: "Client" },
+  { value: "prospect_client", label: "Prospect client" },
   { value: "investor", label: "Investisseur" },
-  { value: "prospect", label: "Prospect" },
-  { value: "third_party", label: "Tiers" },
-  { value: "bank", label: "Banque" },
-  { value: "law_firm", label: "Avocat" },
   { value: "buyer", label: "Repreneur" },
+  { value: "target", label: "Cible" },
+  { value: "law_firm", label: "Cabinet juridique" },
+  { value: "bank", label: "Banque" },
+  { value: "advisor", label: "Conseil" },
+  { value: "accounting_firm", label: "Cabinet comptable" },
+  { value: "family_office", label: "Family office" },
   { value: "corporate", label: "Corporate" },
-  { value: "consulting_firm", label: "Conseil" },
+  { value: "consulting_firm", label: "Cabinet de conseil" },
+  { value: "other", label: "Autre" },
 ];
 
 const organizationStatusOptions = [
-  { value: "active", label: "Actif" },
+  { value: "to_qualify", label: "À qualifier" },
   { value: "qualified", label: "Qualifié" },
-  { value: "inactive", label: "Inactif" },
+  { value: "priority", label: "Prioritaire" },
+  { value: "active", label: "Actif" },
   { value: "dormant", label: "Dormant" },
+  { value: "inactive", label: "Inactif" },
+  { value: "excluded", label: "Exclu" },
 ];
 
 function NouvelleOrganisationLoading() {
@@ -27,12 +34,9 @@ function NouvelleOrganisationLoading() {
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
           <p className="text-sm font-medium text-slate-500">Module CRM</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">
-            Nouvelle organisation
-          </h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">Nouvelle organisation</h1>
           <p className="mt-2 text-sm text-slate-500">Chargement du formulaire…</p>
         </div>
-
         <div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white" />
       </div>
     </div>
@@ -46,14 +50,9 @@ async function NouvelleOrganisationContent() {
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-slate-500">Module CRM</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">
-              Nouvelle organisation
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Création d’une organisation dans la base CRM
-            </p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">Nouvelle organisation</h1>
+            <p className="mt-2 text-sm text-slate-500">Création d'une organisation dans la base CRM</p>
           </div>
-
           <Link
             href="/protected/organisations"
             className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -69,7 +68,7 @@ async function NouvelleOrganisationContent() {
           <div className="grid gap-5 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Nom de l’organisation *
+                Nom de l'organisation *
               </label>
               <input
                 name="name"
@@ -172,12 +171,11 @@ async function NouvelleOrganisationContent() {
             >
               Annuler
             </Link>
-
             <button
               type="submit"
               className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
             >
-              Créer l’organisation
+              Créer l'organisation
             </button>
           </div>
         </form>

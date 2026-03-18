@@ -145,7 +145,7 @@ async function buildDealPayload(
     supabase,
     formData,
   );
-
+  const { data: { user } } = await supabase.auth.getUser();
   return {
     name,
     deal_type: dealType,
@@ -159,6 +159,7 @@ async function buildDealPayload(
     description: toNullableString(formData.get("description")),
     start_date: toNullableString(formData.get("start_date")),
     target_date: toNullableString(formData.get("target_date")),
+    user_id: user?.id ?? null,
   };
 }
 

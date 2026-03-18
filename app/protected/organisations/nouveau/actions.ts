@@ -20,7 +20,7 @@ export async function createOrganizationAction(formData: FormData) {
   const baseStatus = String(formData.get("base_status") ?? "").trim();
 
   if (!name) {
-    throw new Error("Le nom de l’organisation est obligatoire.");
+    throw new Error("Le nom de l'organisation est obligatoire.");
   }
 
   if (!organizationType || !baseStatus) {
@@ -47,6 +47,8 @@ export async function createOrganizationAction(formData: FormData) {
     throw new Error("Une organisation avec ce nom existe déjà.");
   }
 
+  const { data: { user } } = await supabase.auth.getUser();
+
   const payload = {
     name,
     organization_type: organizationType,
@@ -55,6 +57,7 @@ export async function createOrganizationAction(formData: FormData) {
     country: toNullableString(formData.get("country")),
     website: toNullableString(formData.get("website")),
     notes: toNullableString(formData.get("notes")),
+    user_id: user?.id ?? null,
   };
 
   const { error } = await supabase.from("organizations").insert(payload);

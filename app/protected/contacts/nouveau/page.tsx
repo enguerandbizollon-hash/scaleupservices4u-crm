@@ -11,11 +11,13 @@ type OrganizationRow = {
 };
 
 const contactStatusOptions = [
-  { value: "active", label: "Actif" },
+  { value: "to_qualify", label: "À qualifier" },
   { value: "qualified", label: "Qualifié" },
   { value: "priority", label: "Prioritaire" },
-  { value: "inactive", label: "Inactif" },
+  { value: "active", label: "Actif" },
   { value: "dormant", label: "Dormant" },
+  { value: "inactive", label: "Inactif" },
+  { value: "excluded", label: "Exclu" },
 ];
 
 const ticketOptions = [
@@ -66,11 +68,8 @@ async function NouveauContactContent() {
           <div>
             <p className="text-sm font-medium text-slate-500">Module CRM</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">Nouveau contact</h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Création d’un contact dans la base CRM
-            </p>
+            <p className="mt-2 text-sm text-slate-500">Création d'un contact dans la base CRM</p>
           </div>
-
           <Link
             href="/protected/contacts"
             className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -118,9 +117,7 @@ async function NouveauContactContent() {
                 defaultValue=""
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
               >
-                <option value="" disabled>
-                  Sélectionner une organisation
-                </option>
+                <option value="" disabled>Sélectionner une organisation</option>
                 {organizations.map((org) => (
                   <option key={org.id} value={org.id}>
                     {org.name}
@@ -142,7 +139,7 @@ async function NouveauContactContent() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Rôle dans l’organisation
+                Rôle dans l'organisation
               </label>
               <input
                 name="role_label"
@@ -198,7 +195,7 @@ async function NouveauContactContent() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Ticket d’investissement
+                Ticket d'investissement
               </label>
               <select
                 name="investment_ticket_label"
@@ -301,7 +298,6 @@ async function NouveauContactContent() {
             >
               Annuler
             </Link>
-
             <button
               type="submit"
               className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
