@@ -15,6 +15,8 @@ export async function createTaskAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   if (!title) throw new Error("Le titre est obligatoire.");
 
+  const { data: { user } } = await supabase.auth.getUser();
+
   const payload = {
     title,
     description: toNullableString(formData.get("description")),
@@ -23,6 +25,7 @@ export async function createTaskAction(formData: FormData) {
     due_date: toNullableString(formData.get("due_date")),
     deal_id: toNullableString(formData.get("deal_id")),
     contact_id: toNullableString(formData.get("contact_id")),
+    user_id: user?.id ?? null,
   };
 
   const { error } = await supabase.from("tasks").insert(payload);

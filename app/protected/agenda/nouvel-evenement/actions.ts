@@ -18,6 +18,8 @@ export async function createEventAction(formData: FormData) {
   const dealId = toNullableString(formData.get("deal_id"));
   if (!dealId) throw new Error("Le dossier est obligatoire.");
 
+  const { data: { user } } = await supabase.auth.getUser();
+
   const payload = {
     title,
     deal_id: dealId,
@@ -28,6 +30,7 @@ export async function createEventAction(formData: FormData) {
     meet_link: toNullableString(formData.get("meet_link")),
     description: toNullableString(formData.get("description")),
     status: "open",
+    user_id: user?.id ?? null,
   };
 
   const { error } = await supabase.from("agenda_events").insert(payload);
