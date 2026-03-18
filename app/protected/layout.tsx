@@ -1,10 +1,15 @@
-import { DeployButton } from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
-import { Suspense } from "react";
+import { FolderOpen, Users, Building2, Calendar, Activity, FileText, LayoutDashboard } from "lucide-react";
+
+const navItems = [
+  { href: "/protected", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/protected/contacts", label: "Contacts", icon: Users },
+  { href: "/protected/dossiers", label: "Dossiers", icon: FolderOpen },
+  { href: "/protected/agenda", label: "Agenda", icon: Calendar },
+  { href: "/protected/organisations", label: "Organisations", icon: Building2 },
+  { href: "/protected/activites", label: "Activités", icon: Activity },
+  { href: "/protected/documents", label: "Documents", icon: FileText },
+];
 
 export default function ProtectedLayout({
   children,
@@ -12,44 +17,48 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Next.js Supabase Starter</Link>
-              <div className="flex items-center gap-2">
-                <DeployButton />
-              </div>
-            </div>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
-          </div>
-        </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
-          {children}
+    <div className="flex min-h-screen bg-slate-50">
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-slate-200 bg-white">
+        <div className="flex h-16 items-center border-b border-slate-200 px-5">
+          <span className="text-base font-bold tracking-tight text-slate-900">
+            Scale Up CRM
+          </span>
         </div>
 
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <ul className="space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                  >
+                    <Icon size={17} strokeWidth={1.8} />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="border-t border-slate-200 p-4">
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
             >
-              Supabase
-            </a>
-          </p>
-          <ThemeSwitcher />
-        </footer>
-      </div>
-    </main>
+              Se déconnecter
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <main className="ml-60 flex-1 min-w-0">
+        {children}
+      </main>
+    </div>
   );
 }
