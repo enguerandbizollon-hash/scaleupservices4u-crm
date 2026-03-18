@@ -9,6 +9,7 @@ const navItems = [
   { href: "/protected/organisations", label: "Organisations", icon: Building2 },
   { href: "/protected/activites", label: "Activités", icon: Activity },
   { href: "/protected/documents", label: "Documents", icon: FileText },
+  { href: "/protected/ia", label: "Assistant IA", icon: Sparkles },
 ];
 
 export default function ProtectedLayout({
