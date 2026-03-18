@@ -5,7 +5,7 @@ import {
 } from "@/lib/crm/labels";
 import type {
   ContactLinkedDealView,
-  ContactView,
+  export ContactView,
 } from "@/lib/crm/types";
 
 type ContactRow = {

@@ -1,58 +1,125 @@
-import { DeployButton } from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-import { Hero } from "@/components/hero";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { ConnectSupabaseSteps } from "@/components/tutorial/connect-supabase-steps";
-import { SignUpUserSteps } from "@/components/tutorial/sign-up-user-steps";
-import { hasEnvVars } from "@/lib/utils";
-import Link from "next/link";
 import { Suspense } from "react";
+import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { FolderOpen, Users, Building2, Plus } from "lucide-react";
 
-export default function Home() {
+async function DashboardContent() {
+  const supabase = await createClient();
+
+  const [
+    { count: dealsCount },
+    { count: contactsCount },
+    { count: orgsCount },
+  ] = await Promise.all([
+    supabase.from("deals").select("*", { count: "exact", head: true }),
+    supabase.from("contacts").select("*", { count: "exact", head: true }),
+    supabase.from("organizations").select("*", { count: "exact", head: true }),
+  ]);
+
+  const stats = [
+    {
+      label: "Dossiers",
+      value: dealsCount ?? 0,
+      href: "/protected/dossiers",
+      icon: FolderOpen,
+      newHref: "/protected/dossiers/nouveau",
+    },
+    {
+      label: "Contacts",
+      value: contactsCount ?? 0,
+      href: "/protected/contacts",
+      icon: Users,
+      newHref: "/protected/contacts/nouveau",
+    },
+    {
+      label: "Organisations",
+      value: orgsCount ?? 0,
+      href: "/protected/organisations",
+      icon: Building2,
+      newHref: "/protected/organisations/nouveau",
+    },
+  ];
+
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Next.js Supabase Starter</Link>
-              <div className="flex items-center gap-2">
-                <DeployButton />
-              </div>
-            </div>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
-          </div>
-        </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
-          <Hero />
-          <main className="flex-1 flex flex-col gap-6 px-4">
-            <h2 className="font-medium text-xl mb-4">Next steps</h2>
-            {hasEnvVars ? <SignUpUserSteps /> : <ConnectSupabaseSteps />}
-          </main>
-        </div>
-
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
-            >
-              Supabase
-            </a>
-          </p>
-          <ThemeSwitcher />
-        </footer>
+    <div className="p-8">
+      <div className="mb-8">
+        <p className="text-sm font-medium text-slate-500">Scale Up Services 4U</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
       </div>
-    </main>
+
+      <div className="grid gap-5 md:grid-cols-3">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
+                    <Icon size={20} className="text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-500">{stat.label}</p>
+                    <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+                  </div>
+                </div>
+                <Link
+                  href={stat.newHref}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors"
+                >
+                  <Plus size={15} className="text-slate-600" />
+                </Link>
+              </div>
+              <Link
+                href={stat.href}
+                className="mt-4 block text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors"
+              >
+                Voir tous →
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-base font-semibold text-slate-900">Actions rapides</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/protected/contacts/nouveau"
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors"
+          >
+            + Nouveau contact
+          </Link>
+          <Link
+            href="/protected/dossiers/nouveau"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            + Nouveau dossier
+          </Link>
+          <Link
+            href="/protected/organisations/nouveau"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            + Nouvelle organisation
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8">
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-slate-200 mb-8" />
+        <div className="grid gap-5 md:grid-cols-3">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-32 animate-pulse rounded-2xl bg-slate-200" />
+          ))}
+        </div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }
