@@ -202,13 +202,22 @@ async function ContactsContent() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8">
-          <p className="text-sm font-medium text-slate-500">Module CRM</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Contacts</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Base contacts connectée à Supabase avec gestion multi-dossiers
-          </p>
-        </div>
+        <div className="mb-8 flex items-center justify-between gap-4">
+  <div>
+    <p className="text-sm font-medium text-slate-500">Module CRM</p>
+    <h1 className="mt-1 text-3xl font-bold tracking-tight">Contacts</h1>
+    <p className="mt-2 text-sm text-slate-500">
+      Base contacts connectée à Supabase avec gestion multi-dossiers
+    </p>
+  </div>
+
+  <a
+    href="/protected/contacts/nouveau"
+    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+  >
+    Nouveau contact
+  </a>
+</div>
 
         <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -46,13 +46,17 @@ export async function getOrganizationsView() {
 
   const deals = (dealsData ?? []) as DealLinkRow[];
 
-  const dealsByOrganizationId = deals.reduce<Record<string, string[]>>((acc, deal) => {
-    if (!acc[deal.client_organization_id]) {
-      acc[deal.client_organization_id] = [];
-    }
+const dealsByOrganizationId = deals.reduce<Record<string, string[]>>((acc, deal) => {
+  if (!acc[deal.client_organization_id]) {
+    acc[deal.client_organization_id] = [];
+  }
+
+  if (!acc[deal.client_organization_id].includes(deal.name)) {
     acc[deal.client_organization_id].push(deal.name);
-    return acc;
-  }, {});
+  }
+
+  return acc;
+}, {});
 
   const allOrganizations: OrganizationView[] = organizations.map((org) => ({
     id: org.id,
