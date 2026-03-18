@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateOrganizationAction } from "./actions";
+import { deleteOrganizationAction } from "@/app/protected/actions";
 
 const organizationTypeOptions = [
   { value: "client", label: "Client" },
@@ -55,14 +56,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             <p className="text-sm font-medium text-slate-500">Modifier une organisation</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">{org.name}</h1>
           </div>
-          <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Retour
-          </Link>
+          <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Retour</Link>
         </div>
 
         <form action={updateOrganizationAction} className="space-y-5">
           <input type="hidden" name="org_id" value={org.id} />
-
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -100,13 +98,17 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3">
-            <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Annuler
-            </Link>
-            <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-              Enregistrer
-            </button>
+          <div className="flex items-center justify-between">
+            <form action={deleteOrganizationAction}>
+              <input type="hidden" name="id" value={org.id} />
+              <button type="submit" className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50">
+                Supprimer
+              </button>
+            </form>
+            <div className="flex gap-3">
+              <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Annuler</Link>
+              <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Enregistrer</button>
+            </div>
           </div>
         </form>
       </div>
@@ -115,9 +117,5 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 }
 
 export default function ModifierOrganisationPage({ params }: { params: Promise<{ id: string }> }) {
-  return (
-    <Suspense fallback={<Loading />}>
-      <Content params={params} />
-    </Suspense>
-  );
+  return <Suspense fallback={<Loading />}><Content params={params} /></Suspense>;
 }
