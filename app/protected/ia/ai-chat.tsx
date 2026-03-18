@@ -16,9 +16,9 @@ type Stats = {
 
 const SUGGESTIONS = [
   "Rédige un email de relance pour un investisseur qui n'a pas répondu depuis 2 semaines",
-  "Quels sont les dossiers actifs en ce moment ?",
   "Génère un email d'introduction pour présenter Redpeaks à un family office",
   "Aide-moi à qualifier un nouveau contact investisseur",
+  "Quels éléments clés inclure dans un teaser M&A sell-side ?",
 ];
 
 export function AIChat({ stats }: { stats: Stats }) {
@@ -41,37 +41,19 @@ export function AIChat({ stats }: { stats: Stats }) {
     setLoading(true);
 
     try {
-      const systemPrompt = `Tu es un assistant CRM spécialisé en M&A, venture et advisory pour Scale Up Services 4U.
-      
-État actuel de la base :
-- ${stats.deals} dossiers
-- ${stats.contacts} contacts  
-- ${stats.orgs} organisations
-
-Tu peux aider à :
-- Rédiger des emails professionnels (relance investisseurs, introduction, suivi)
-- Analyser et qualifier des opportunités
-- Structurer des informations sur des dossiers
-- Conseiller sur la priorisation du pipeline
-
-Réponds toujours en français. Sois direct, professionnel et concis.
-Pour les emails, fournis directement le texte prêt à envoyer avec objet et corps.`;
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/ia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          stats,
         }),
       });
 
       const data = await response.json();
-      const assistantText = data.content?.[0]?.text ?? "Désolé, je n'ai pas pu générer une réponse.";
+      if (data.error) throw new Error(data.error);
 
-      setMessages(prev => [...prev, { role: "assistant", content: assistantText }]);
+      setMessages(prev => [...prev, { role: "assistant", content: data.text }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Erreur de connexion. Réessaie." }]);
     } finally {
@@ -89,7 +71,6 @@ Pour les emails, fournis directement le texte prêt à envoyer avec objet et cor
         </p>
       </div>
 
-      {/* Zone de messages */}
       <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-6">
@@ -142,7 +123,6 @@ Pour les emails, fournis directement le texte prêt à envoyer avec objet et cor
         )}
       </div>
 
-      {/* Zone de saisie */}
       <div className="mt-4 flex gap-3">
         <input
           value={input}

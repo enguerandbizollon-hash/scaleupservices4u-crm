@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FolderOpen, Users, Building2, Calendar, Activity, FileText, LayoutDashboard } from "lucide-react";
+import { LogOut, FolderOpen, Users, Building2, Calendar, Activity, FileText, LayoutDashboard, Sparkles } from "lucide-react";
 
 const navItems = [
   { href: "/protected", label: "Dashboard", icon: LayoutDashboard },
