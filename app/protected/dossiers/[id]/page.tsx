@@ -35,11 +35,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             </Link>
             <form action={deleteDealAction}>
               <input type="hidden" name="id" value={id} />
-              <button
-                type="submit"
-                className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50"
-                onClick={e => { if (!confirm("Supprimer ce dossier définitivement ?")) e.preventDefault(); }}
-              >
+              <button type="submit" className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50">
                 Supprimer
               </button>
             </form>
