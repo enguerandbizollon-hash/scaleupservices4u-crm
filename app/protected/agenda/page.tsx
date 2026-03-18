@@ -35,10 +35,33 @@ async function AgendaContent() {
 
   const dealsMap: Record<string, string> = Object.fromEntries((deals ?? []).map(d => [d.id, d.name]));
 
-  const eventTypeLabels: Record<string, string> = { deadline: "Deadline", follow_up: "Relance", meeting: "Réunion" };
-  const taskStatusLabels: Record<string, string> = { todo: "À faire", in_progress: "En cours", done: "Terminé", cancelled: "Annulé" };
-  const priorityClass: Record<string, string> = { high: "bg-rose-100 text-rose-800", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-700" };
-  const statusClass: Record<string, string> = { todo: "bg-slate-100 text-slate-700", in_progress: "bg-blue-100 text-blue-800", done: "bg-emerald-100 text-emerald-800", cancelled: "bg-rose-100 text-rose-800" };
+  const eventTypeLabels: Record<string, string> = {
+    deadline: "Deadline",
+    follow_up: "Relance",
+    meeting: "Réunion",
+    call: "Appel",
+    delivery: "Livraison",
+    closing: "Closing",
+    other: "Autre",
+  };
+
+  const taskStatusLabels: Record<string, string> = {
+    open: "À faire",
+    done: "Terminé",
+    cancelled: "Annulé",
+  };
+
+  const priorityClass: Record<string, string> = {
+    high: "bg-rose-100 text-rose-800",
+    medium: "bg-amber-100 text-amber-800",
+    low: "bg-slate-100 text-slate-700",
+  };
+
+  const statusClass: Record<string, string> = {
+    open: "bg-slate-100 text-slate-700",
+    done: "bg-emerald-100 text-emerald-800",
+    cancelled: "bg-rose-100 text-rose-800",
+  };
 
   const upcomingEvents = (events ?? []).filter(e => e.status !== "cancelled");
   const pendingTasks = (tasks ?? []).filter(t => t.task_status !== "done" && t.task_status !== "cancelled");
@@ -61,10 +84,9 @@ async function AgendaContent() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        {/* Événements */}
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Événements à venir</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Événements</h2>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{upcomingEvents.length}</span>
           </div>
           <div className="space-y-3">
@@ -105,7 +127,7 @@ async function AgendaContent() {
                 <div className="mt-3 flex justify-end">
                   <form action={deleteEventAction}>
                     <input type="hidden" name="id" value={event.id} />
-                    <button type="submit" className="text-xs text-rose-500 hover:text-rose-700 hover:underline" onClick={e => { if (!confirm("Supprimer cet événement ?")) e.preventDefault(); }}>
+                    <button type="submit" className="text-xs text-rose-500 hover:text-rose-700 hover:underline">
                       Supprimer
                     </button>
                   </form>
@@ -115,10 +137,9 @@ async function AgendaContent() {
           </div>
         </div>
 
-        {/* Tâches */}
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Tâches en cours</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Tâches</h2>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{pendingTasks.length}</span>
           </div>
           <div className="space-y-3">
@@ -147,7 +168,7 @@ async function AgendaContent() {
                   </div>
                   <form action={deleteTaskAction}>
                     <input type="hidden" name="id" value={task.id} />
-                    <button type="submit" className="text-xs text-rose-500 hover:text-rose-700 hover:underline" onClick={e => { if (!confirm("Supprimer cette tâche ?")) e.preventDefault(); }}>
+                    <button type="submit" className="text-xs text-rose-500 hover:text-rose-700 hover:underline">
                       Supprimer
                     </button>
                   </form>

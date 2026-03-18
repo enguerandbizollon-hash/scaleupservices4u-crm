@@ -27,7 +27,7 @@ export async function createEventAction(formData: FormData) {
     location: toNullableString(formData.get("location")),
     meet_link: toNullableString(formData.get("meet_link")),
     description: toNullableString(formData.get("description")),
-    status: "scheduled",
+    status: "open",
   };
 
   const { error } = await supabase.from("agenda_events").insert(payload);

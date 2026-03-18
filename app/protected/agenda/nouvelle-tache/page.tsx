@@ -36,9 +36,8 @@ async function Content() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Statut</label>
-                <select name="task_status" defaultValue="todo" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500">
-                  <option value="todo">À faire</option>
-                  <option value="in_progress">En cours</option>
+                <select name="task_status" defaultValue="open" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500">
+                  <option value="open">À faire</option>
                   <option value="done">Terminé</option>
                   <option value="cancelled">Annulé</option>
                 </select>

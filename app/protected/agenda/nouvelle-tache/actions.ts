@@ -18,7 +18,7 @@ export async function createTaskAction(formData: FormData) {
   const payload = {
     title,
     description: toNullableString(formData.get("description")),
-    task_status: String(formData.get("task_status") ?? "todo").trim(),
+    task_status: String(formData.get("task_status") ?? "open").trim(),
     priority_level: String(formData.get("priority_level") ?? "medium").trim(),
     due_date: toNullableString(formData.get("due_date")),
     deal_id: toNullableString(formData.get("deal_id")),
