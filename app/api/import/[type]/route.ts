@@ -77,8 +77,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
 
       // Normaliser les valeurs des menus déroulants
       const orgType = VALID_ORG_TYPES.includes(r.organization_type) ? r.organization_type : "other";
+      // Mapper les statuts métier vers l'enum Supabase base_status
       const rawStatus = (r.base_status || "").toLowerCase().replace(/\s/g,"");
-      const orgStatus = VALID_ORG_STATUSES.find(s => s === rawStatus || s.replace(/_/g,"") === rawStatus) ?? "to_qualify";
+      const statusMap: Record<string,string> = {
+        rencontre:   "qualified",   // Rencontré → Qualifié
+        arelancer:   "active",      // À relancer → Actif (en cours)
+        contacte:    "active",      // Contacté → Actif
+        arencontrer: "to_qualify",  // À rencontrer → À qualifier
+        excluded:    "excluded",    // Exclu → Exclu
+        excluded_no_go: "excluded",
+        // Valeurs enum natives (pass-through)
+        to_qualify:  "to_qualify",
+        qualified:   "qualified",
+        priority:    "priority",
+        active:      "active",
+        dormant:     "dormant",
+        inactive:    "inactive",
+      };
+      const orgStatus = statusMap[rawStatus] ?? "to_qualify";
 
       // Ticket — accepte valeur exacte ou partielle
       const ticketRaw = ns(r.investment_ticket);
