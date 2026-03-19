@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { DriveImport } from "./drive-import";
 import { CheckCircle, XCircle, Loader2, RefreshCw, Calendar, Mail, HardDrive, Building2, ArrowRight, Plus, ExternalLink, Check } from "lucide-react";
 
 type Stat = "connected" | "disconnected" | "checking";
@@ -225,6 +226,9 @@ export default function ConnecteursPage() {
                     )}
                   </div>
 
+                  {/* Import Drive */}
+                  <DriveImport deals={deals} />
+
                   {/* Export CRM → Google */}
                   <div style={{ padding:"14px 16px", borderRadius:12, border:"1px solid var(--border)", background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
                     <div style={{ fontSize:12, color:"var(--text-2)" }}>
@@ -333,3 +337,6 @@ function PappersResult({ r, onImported }: { r: any; onImported: () => void }) {
     </div>
   );
 }
+
+// ── Export pour usage externe ──
+// Le composant DriveImport est utilisable depuis d'autres pages
