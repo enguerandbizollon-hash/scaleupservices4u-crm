@@ -1,188 +1,135 @@
 import { Suspense } from "react";
-import { getDealsView, type DealView } from "@/lib/crm/get-deals";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { dealTypeLabels, dealStageLabels, dealStatusLabels, priorityLabels } from "@/lib/crm/labels";
 
-function priorityBadgeClass(priority: string) {
-  if (priority === "Haute") return "bg-rose-100 text-rose-800";
-  if (priority === "Moyenne") return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-700";
-}
+const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-function statusBadgeClass(status: string) {
-  if (status === "Actif") return "bg-emerald-100 text-emerald-800";
-  if (status === "Inactif") return "bg-slate-200 text-slate-700";
-  return "bg-slate-100 text-slate-700";
-}
+const typeColors: Record<string, string> = {
+  fundraising: "bg-emerald-100 text-emerald-800",
+  ma_sell: "bg-amber-100 text-amber-800",
+  ma_buy: "bg-sky-100 text-sky-800",
+  cfo_advisor: "bg-violet-100 text-violet-800",
+  recruitment: "bg-rose-100 text-rose-800",
+};
 
-function DealCard({ deal }: { deal: DealView }) {
+const stageColors: Record<string, string> = {
+  kickoff: "bg-slate-100 text-slate-600",
+  preparation: "bg-blue-100 text-blue-700",
+  outreach: "bg-cyan-100 text-cyan-700",
+  "management meetings": "bg-indigo-100 text-indigo-700",
+  dd: "bg-amber-100 text-amber-700",
+  negotiation: "bg-orange-100 text-orange-700",
+  closing: "bg-emerald-100 text-emerald-700",
+  Post_closing: "bg-green-100 text-green-700",
+  Ongoing_support: "bg-teal-100 text-teal-700",
+  search: "bg-slate-100 text-slate-600",
+};
+
+async function Content() {
+  const supabase = await createClient();
+
+  const { data: deals } = await supabase
+    .from("deals")
+    .select("id, name, deal_type, deal_status, deal_stage, priority_level, client_organization_id, sector, valuation_amount, fundraising_amount, target_date")
+    .order("priority_level", { ascending: true });
+
+  const orgIds = [...new Set((deals ?? []).map(d => d.client_organization_id).filter(Boolean))];
+  let orgsMap: Record<string, string> = {};
+  if (orgIds.length > 0) {
+    const { data: orgs } = await supabase.from("organizations").select("id, name").in("id", orgIds);
+    orgsMap = Object.fromEntries((orgs ?? []).map(o => [o.id, o.name]));
+  }
+
+  const sorted = [...(deals ?? [])].sort((a, b) => (priorityOrder[a.priority_level] ?? 3) - (priorityOrder[b.priority_level] ?? 3));
+  const active = sorted.filter(d => d.deal_status === "active");
+  const others = sorted.filter(d => d.deal_status !== "active");
+
+  function formatDate(v: string | null) {
+    if (!v) return "—";
+    return new Intl.DateTimeFormat("fr-FR").format(new Date(v));
+  }
+
+  function DealCard({ deal }: { deal: typeof sorted[0] }) {
+    const priority = deal.priority_level;
+    const borderColor = priority === "high" ? "border-l-rose-500" : priority === "medium" ? "border-l-amber-400" : "border-l-slate-300";
+    return (
+      <Link
+        href={`/protected/dossiers/${deal.id}`}
+        className={`block rounded-xl border border-[#E8E0D0] border-l-4 ${borderColor} bg-white p-4 hover:shadow-md transition-all`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate font-semibold text-[#0F1B2D]">{deal.name}</h3>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{orgsMap[deal.client_organization_id] ?? "—"}</p>
+          </div>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${typeColors[deal.deal_type] ?? "bg-slate-100 text-slate-600"}`}>
+            {dealTypeLabels[deal.deal_type] ?? deal.deal_type}
+          </span>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stageColors[deal.deal_stage] ?? "bg-slate-100 text-slate-600"}`}>
+            {dealStageLabels[deal.deal_stage] ?? deal.deal_stage}
+          </span>
+          <span className="text-xs text-slate-400">{formatDate(deal.target_date)}</span>
+        </div>
+      </Link>
+    );
+  }
+
   return (
-    <a
-      href={`/protected/dossiers/${deal.id}`}
-      className="block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-slate-400 hover:shadow-md transition-all"
-    >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="min-h-screen p-8">
+      <div className="mb-8 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">{deal.name}</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            {deal.typeLabel} • {deal.organisation}
-          </p>
-          <p className="mt-2 text-sm text-slate-700">
-            Étape : <span className="font-medium">{deal.stageLabel}</span>
-          </p>
+          <p className="text-sm font-semibold tracking-widest text-[#C9A84C]">MODULE CRM</p>
+          <h1 className="mt-1 text-4xl font-bold tracking-tight text-[#0F1B2D]">Dossiers</h1>
+          <p className="mt-1 text-sm text-[#6B8CAE]">{(deals ?? []).length} dossiers · {active.length} actifs</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(deal.statusLabel)}`}
-          >
-            {deal.statusLabel}
-          </span>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${priorityBadgeClass(deal.priorityLabel)}`}
-          >
-            Priorité {deal.priorityLabel}
-          </span>
-        </div>
+        <Link href="/protected/dossiers/nouveau" className="rounded-xl bg-[#0F1B2D] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1B2A4A] transition-colors">
+          + Nouveau dossier
+        </Link>
       </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Secteur</p>
-          <p className="mt-1 text-sm font-medium">{deal.sector}</p>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Valorisation</p>
-          <p className="mt-1 text-sm font-medium">{deal.valuation}</p>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Fundraising</p>
-          <p className="mt-1 text-sm font-medium">{deal.fundraising}</p>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Date cible</p>
-          <p className="mt-1 text-sm font-medium">{deal.targetDate}</p>
-        </div>
-      </div>
-      <div className="mt-5 rounded-xl border border-slate-200 p-3">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Description</p>
-        <p className="mt-1 text-sm text-slate-700">{deal.description}</p>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Date de lancement</p>
-          <p className="mt-1 text-sm font-medium">{deal.startDate}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Organisation liée</p>
-          <p className="mt-1 text-sm font-medium">{deal.organisation}</p>
-        </div>
-      </div>
-    </a>
-  );
-}
 
-function DossiersLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+      {/* Actifs */}
+      {active.length > 0 && (
         <div className="mb-8">
-          <p className="text-sm font-medium text-slate-500">Module CRM</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Dossiers</h1>
-          <p className="mt-2 text-sm text-slate-500">Chargement depuis Supabase…</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
-            <div
-              key={item}
-              className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white"
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-async function DossiersContent() {
-  const { allDeals, activeDeals, inactiveDeals } = await getDealsView();
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-slate-500">Module CRM</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">Dossiers</h1>
-            <p className="mt-2 text-sm text-slate-500">Vue métier connectée à Supabase</p>
+          <div className="mb-4 flex items-center gap-3">
+            <h2 className="text-sm font-semibold tracking-widest text-[#0F1B2D]">DOSSIERS ACTIFS</h2>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">{active.length}</span>
           </div>
-          <a
-            href="/protected/dossiers/nouveau"
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            Nouveau dossier
-          </a>
-        </div>
-
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Total dossiers</p>
-            <p className="mt-3 text-3xl font-bold">{allDeals.length}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Actifs</p>
-            <p className="mt-3 text-3xl font-bold">{activeDeals.length}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Inactifs / clôturés</p>
-            <p className="mt-3 text-3xl font-bold">{inactiveDeals.length}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Source</p>
-            <p className="mt-3 text-xl font-bold">lib/crm</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {active.map(deal => <DealCard key={deal.id} deal={deal} />)}
           </div>
         </div>
+      )}
 
-        {allDeals.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
-            Aucun dossier trouvé dans Supabase.
+      {/* Autres */}
+      {others.length > 0 && (
+        <div>
+          <div className="mb-4 flex items-center gap-3">
+            <h2 className="text-sm font-semibold tracking-widest text-slate-400">INACTIFS / CLÔTURÉS</h2>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">{others.length}</span>
           </div>
-        ) : (
-          <>
-            <section className="mb-10">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Dossiers actifs</h2>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                  {activeDeals.length} actifs
-                </span>
-              </div>
-              <div className="space-y-5">
-                {activeDeals.map((deal) => (
-                  <DealCard key={deal.id} deal={deal} />
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Dossiers inactifs / clôturés</h2>
-                <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {inactiveDeals.length} dossiers
-                </span>
-              </div>
-              <div className="space-y-5">
-                {inactiveDeals.map((deal) => (
-                  <DealCard key={deal.id} deal={deal} />
-                ))}
-              </div>
-            </section>
-          </>
-        )}
-      </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 opacity-60">
+            {others.map(deal => <DealCard key={deal.id} deal={deal} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function DossiersPage() {
   return (
-    <Suspense fallback={<DossiersLoading />}>
-      <DossiersContent />
+    <Suspense fallback={
+      <div className="p-8">
+        <div className="h-10 w-48 animate-pulse rounded-lg bg-slate-200 mb-8" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {[1,2,3,4,5,6].map(i => <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-200" />)}
+        </div>
+      </div>
+    }>
+      <Content />
     </Suspense>
   );
 }
