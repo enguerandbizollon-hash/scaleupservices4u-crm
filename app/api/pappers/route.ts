@@ -9,36 +9,17 @@ export async function GET(req: NextRequest) {
   if (!q) return NextResponse.json({ resultats: [] });
 
   try {
-    const isSiret = /^\d{14}$/.test(q);
-    const isSiren = /^\d{9}$/.test(q);
-
-    let url: string;
-    if (isSiret) {
-      url = `https://api.pappers.fr/v2/entreprise?siret=${q}&api_token=${key}`;
-    } else if (isSiren) {
-      url = `https://api.pappers.fr/v2/entreprise?siren=${q}&api_token=${key}`;
-    } else {
-      url = `https://api.pappers.fr/v2/recherche?q=${encodeURIComponent(q)}&api_token=${key}&nombre=10`;
-    }
-
+    // Toujours utiliser /recherche (gratuit) — fonctionne avec nom ET SIRET/SIREN
+    const url = `https://api.pappers.fr/v2/recherche?q=${encodeURIComponent(q)}&api_token=${key}&nombre=10`;
     const res = await fetch(url);
     const data = await res.json();
 
-    // Log pour debug
-    console.log("[Pappers] query:", q, "type:", isSiret?"siret":isSiren?"siren":"nom", "status:", res.status);
-    if (data.error || data.message) console.log("[Pappers] error:", data.error ?? data.message);
+    console.log("[Pappers] query:", q, "status:", res.status, "resultats:", data.resultats?.length ?? 0);
 
-    // Entreprise unique (SIRET/SIREN)
-    if (isSiret || isSiren) {
-      if (data.nom_entreprise) return NextResponse.json({ resultats: [data] });
-      // Essayer aussi avec recherche par nom si SIRET ne trouve rien
-      return NextResponse.json({ 
-        resultats: [], 
-        debug: { status: res.status, message: data.message ?? data.error ?? "Entreprise non trouvée", query: q }
-      });
+    if (res.status === 401) {
+      return NextResponse.json({ error: "Clé API Pappers invalide ou expirée", resultats: [] }, { status: 401 });
     }
 
-    // Recherche par nom — normaliser si Pappers retourne resultats ou entreprises
     const resultats = data.resultats ?? data.entreprises ?? [];
     return NextResponse.json({ resultats, total: data.total ?? resultats.length });
 
