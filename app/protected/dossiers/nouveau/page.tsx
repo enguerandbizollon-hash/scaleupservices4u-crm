@@ -3,424 +3,214 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createDealAction } from "./actions";
 
-type OrganizationRow = {
-  id: string;
-  name: string;
-  organization_type: string;
-  base_status: string;
-};
-
-const dealTypeOptions = [
-  { value: "fundraising", label: "Fundraising" },
-  { value: "ma_sell", label: "M&A Sell-side" },
-  { value: "ma_buy", label: "M&A Buy-side" },
-  { value: "cfo_advisor", label: "CFO Advisor" },
-  { value: "recruitment", label: "Recrutement" },
-];
-
-const dealStatusOptions = [
-  { value: "active", label: "Actif" },
-  { value: "inactive", label: "Inactif" },
-  { value: "closed", label: "Clôturé" },
-];
-
-const dealStageOptions = [
-  { value: "kickoff", label: "Kickoff" },
-  { value: "preparation", label: "Préparation" },
-  { value: "outreach", label: "Outreach" },
-  { value: "management_meetings", label: "Management meetings" },
-  { value: "dd", label: "Due diligence" },
-  { value: "negotiation", label: "Négociation" },
-  { value: "closing", label: "Closing" },
-  { value: "post_closing", label: "Post-closing" },
-  { value: "ongoing_support", label: "Suivi en cours" },
-  { value: "search", label: "Recherche" },
-];
-
-const priorityOptions = [
-  { value: "high", label: "Haute" },
-  { value: "medium", label: "Moyenne" },
-  { value: "low", label: "Basse" },
-];
-
-const organizationTypeOptions = [
-  { value: "client", label: "Client" },
-  { value: "investor", label: "Investisseur" },
-  { value: "prospect_client", label: "Prospect client" },
-  { value: "other", label: "Autre" },
-  { value: "bank", label: "Banque" },
-  { value: "law_firm", label: "Avocat" },
-  { value: "buyer", label: "Repreneur" },
-  { value: "corporate", label: "Corporate" },
-  { value: "consulting_firm", label: "Conseil" },
-];
-
-const organizationStatusOptions = [
-  { value: "active", label: "Actif" },
-  { value: "qualified", label: "Qualifié" },
-  { value: "inactive", label: "Inactif" },
-  { value: "dormant", label: "Dormant" },
-];
-
-function NouveauDossierLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8">
-          <p className="text-sm font-medium text-slate-500">Module CRM</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">
-            Nouveau dossier
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Chargement du formulaire…
-          </p>
-        </div>
-        <div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white" />
-      </div>
-    </div>
-  );
-}
-
-async function NouveauDossierContent() {
+async function Content() {
   const supabase = await createClient();
-
-  const { data, error } = await supabase
+  const { data: organizations } = await supabase
     .from("organizations")
-    .select("id,name,organization_type,base_status")
-    .order("name", { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const organizations = (data ?? []) as OrganizationRow[];
+    .select("id, name, organization_type")
+    .order("name");
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
+    <div className="p-8 min-h-screen" style={{ background: "var(--bg-app)" }}>
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-8 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-500">Module CRM</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">
-              Nouveau dossier
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Création d’un dossier avec organisation existante ou nouvelle
-            </p>
+            <p className="text-xs font-semibold tracking-widest" style={{ color: "var(--brand-blue)" }}>DOSSIERS</p>
+            <h1 className="mt-1 text-3xl font-bold" style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Nouveau dossier</h1>
           </div>
-
-          <Link
-            href="/protected/dossiers"
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Retour aux dossiers
+          <Link href="/protected/dossiers" className="rounded-xl border px-4 py-2 text-sm font-medium transition-all hover:opacity-80"
+            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)", background: "white" }}>
+            Retour
           </Link>
         </div>
 
-        <form
-          action={createDealAction}
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Nom du dossier *
-              </label>
-              <input
-                name="name"
-                type="text"
-                required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                placeholder="Ex. Redpeaks Series A"
-              />
-            </div>
+        <form action={createDealAction} className="space-y-5">
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Type de dossier *
-              </label>
-              <select
-                name="deal_type"
-                required
-                defaultValue="fundraising"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              >
-                {dealTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Mode d’organisation *
-              </label>
-              <select
-                name="organization_mode"
-                required
-                defaultValue="existing"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              >
-                <option value="existing">Organisation existante</option>
-                <option value="new">Créer une nouvelle organisation</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="mb-3 text-sm font-semibold text-slate-700">
-                Si organisation existante
-              </p>
-
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Organisation liée
-              </label>
-              <select
-                name="client_organization_id"
-                defaultValue=""
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-              >
-                <option value="">Sélectionner une organisation</option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="mb-3 text-sm font-semibold text-slate-700">
-                Si nouvelle organisation
-              </p>
-
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Nom de la nouvelle organisation
-                  </label>
-                  <input
-                    name="new_org_name"
-                    type="text"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                    placeholder="Ex. Nouvelle société"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Type organisation
-                  </label>
-                  <select
-                    name="new_org_type"
-                    defaultValue="client"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                  >
-                    {organizationTypeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Statut organisation
-                  </label>
-                  <select
-                    name="new_org_status"
-                    defaultValue="active"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                  >
-                    {organizationStatusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Secteur organisation
-                  </label>
-                  <input
-                    name="new_org_sector"
-                    type="text"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Pays organisation
-                  </label>
-                  <input
-                    name="new_org_country"
-                    type="text"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Site web organisation
-                  </label>
-                  <input
-                    name="new_org_website"
-                    type="text"
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Notes organisation
-                  </label>
-                  <textarea
-                    name="new_org_notes"
-                    rows={4}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
-                  />
-                </div>
+          {/* Infos principales */}
+          <div className="rounded-2xl border p-6 shadow-sm" style={{ background: "white", borderColor: "var(--border-default)" }}>
+            <h2 className="mb-5 text-xs font-semibold tracking-widest" style={{ color: "var(--text-muted)" }}>INFORMATIONS PRINCIPALES</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Nom du dossier *</label>
+                <input name="name" required placeholder="Ex. Redpeaks – Série A"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-all"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}
+                  onFocus={e => e.target.style.borderColor = "var(--brand-blue)"}
+                  onBlur={e => e.target.style.borderColor = "var(--border-default)"}
+                />
               </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Statut dossier *
-              </label>
-              <select
-                name="deal_status"
-                required
-                defaultValue="active"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              >
-                {dealStatusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Étape *
-              </label>
-              <select
-                name="deal_stage"
-                required
-                defaultValue="preparation"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              >
-                {dealStageOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Priorité *
-              </label>
-              <select
-                name="priority_level"
-                required
-                defaultValue="medium"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              >
-                {priorityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Secteur dossier
-              </label>
-              <input
-                name="sector"
-                type="text"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Valorisation
-              </label>
-              <input
-                name="valuation_amount"
-                type="text"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Fundraising
-              </label>
-              <input
-                name="fundraising_amount"
-                type="text"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Date de lancement
-              </label>
-              <input
-                name="start_date"
-                type="date"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Date cible
-              </label>
-              <input
-                name="target_date"
-                type="date"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Description
-              </label>
-              <textarea
-                name="description"
-                rows={5}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Type de mission *</label>
+                <select name="deal_type" required defaultValue="fundraising"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                  <option value="fundraising">📈 Fundraising</option>
+                  <option value="ma_sell">🏢 M&A Sell-side</option>
+                  <option value="ma_buy">🎯 M&A Buy-side</option>
+                  <option value="cfo_advisor">💼 CFO Advisor</option>
+                  <option value="recruitment">👤 Recrutement</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Statut *</label>
+                <select name="deal_status" required defaultValue="active"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                  <option value="active">Actif</option>
+                  <option value="inactive">Inactif</option>
+                  <option value="closed">Clôturé</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Étape *</label>
+                <select name="deal_stage" required defaultValue="kickoff"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                  <option value="kickoff">Kickoff</option>
+                  <option value="preparation">Préparation</option>
+                  <option value="outreach">Outreach</option>
+                  <option value="management_meetings">Management meetings</option>
+                  <option value="dd">Due diligence</option>
+                  <option value="negotiation">Négociation</option>
+                  <option value="closing">Closing</option>
+                  <option value="post_closing">Post-closing</option>
+                  <option value="ongoing_support">Suivi en cours</option>
+                  <option value="search">Recherche</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Priorité *</label>
+                <select name="priority_level" required defaultValue="medium"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                  <option value="high">🔴 Haute</option>
+                  <option value="medium">🟡 Moyenne</option>
+                  <option value="low">⚪ Basse</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Secteur</label>
+                <input name="sector" placeholder="Ex. SaaS, FinTech, Santé…"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Date de début</label>
+                <input name="start_date" type="date"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Date cible</label>
+                <input name="target_date" type="date"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Valorisation (€)</label>
+                <input name="valuation_amount" type="text" placeholder="Ex. 5000000"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Montant levée (€)</label>
+                <input name="fundraising_amount" type="text" placeholder="Ex. 3000000"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Contexte / description</label>
+                <textarea name="description" rows={3} placeholder="Décrivez le contexte de l'opération…"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none resize-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }} />
+              </div>
             </div>
           </div>
 
-          <div className="mt-8 flex items-center justify-end gap-3">
-            <Link
-              href="/protected/dossiers"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
+          {/* Organisation */}
+          <div className="rounded-2xl border p-6 shadow-sm" style={{ background: "white", borderColor: "var(--border-default)" }}>
+            <h2 className="mb-5 text-xs font-semibold tracking-widest" style={{ color: "var(--text-muted)" }}>ORGANISATION CLIENTE</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Mode *</label>
+                <select name="organization_mode" required defaultValue="existing"
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                  <option value="existing">Organisation existante</option>
+                  <option value="new">Créer une nouvelle organisation</option>
+                </select>
+              </div>
+
+              {/* Existante */}
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Organisation existante</label>
+                <select name="client_organization_id" defaultValue=""
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                  <option value="">— Sélectionner —</option>
+                  {(organizations ?? []).map(org => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nouvelle */}
+              <div className="md:col-span-2 rounded-xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-app)" }}>
+                <p className="mb-3 text-xs font-semibold tracking-widest" style={{ color: "var(--text-muted)" }}>NOUVELLE ORGANISATION</p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Nom</label>
+                    <input name="new_org_name" placeholder="Ex. Redpeaks"
+                      className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "var(--border-default)", background: "white" }} />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Type</label>
+                    <select name="new_org_type" defaultValue="client"
+                      className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "var(--border-default)", background: "white" }}>
+                      <option value="client">Client</option>
+                      <option value="prospect_client">Prospect client</option>
+                      <option value="investor">Investisseur</option>
+                      <option value="buyer">Repreneur</option>
+                      <option value="target">Cible</option>
+                      <option value="law_firm">Cabinet juridique</option>
+                      <option value="bank">Banque</option>
+                      <option value="advisor">Conseil</option>
+                      <option value="family_office">Family office</option>
+                      <option value="corporate">Corporate</option>
+                      <option value="other">Autre</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Pays</label>
+                    <input name="new_org_country" className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "var(--border-default)", background: "white" }} />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Site web</label>
+                    <input name="new_org_website" placeholder="https://…"
+                      className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "var(--border-default)", background: "white" }} />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Secteur</label>
+                    <input name="new_org_sector" className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "var(--border-default)", background: "white" }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pb-8">
+            <Link href="/protected/dossiers" className="rounded-xl border px-5 py-2.5 text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)", background: "white" }}>
               Annuler
             </Link>
-
-            <button
-              type="submit"
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <button type="submit" className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+              style={{ background: "var(--sidebar-bg)" }}>
               Créer le dossier
             </button>
           </div>
@@ -432,8 +222,8 @@ async function NouveauDossierContent() {
 
 export default function NouveauDossierPage() {
   return (
-    <Suspense fallback={<NouveauDossierLoading />}>
-      <NouveauDossierContent />
+    <Suspense fallback={<div className="p-8 min-h-screen" style={{ background: "var(--bg-app)" }}><div className="h-96 animate-pulse rounded-2xl bg-slate-200" /></div>}>
+      <Content />
     </Suspense>
   );
 }
