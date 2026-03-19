@@ -187,10 +187,9 @@ function DealCard({ deal, dt, orgName }: { deal: Deal; dt: DT; orgName: string }
 
   return (
     <Link href={`/protected/dossiers/${deal.id}`}
-      className="card"
-      style={{ display:"block", textDecoration:"none", overflow:"hidden", transition:"transform .13s, box-shadow .13s" }}
-      onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-2px)";el.style.boxShadow="var(--shadow-md)"}}
-      onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";el.style.boxShadow="var(--shadow-sm)"}}>
+      className="card deal-card"
+      style={{ display:"block", textDecoration:"none", overflow:"hidden" }}
+>
 
       {/* Barre priorité en haut */}
       <div style={{ height:3, background:pcolor, borderRadius:"14px 14px 0 0" }}/>

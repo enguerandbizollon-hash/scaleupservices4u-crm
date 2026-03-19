@@ -148,3 +148,7 @@ select.inp { cursor:pointer; }
 .type-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md) !important; }
 
 .deal-row:hover { background: var(--su-20) !important; }
+
+/* Deal card hover */
+.deal-card { transition: transform .14s ease, box-shadow .14s ease; }
+.deal-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md) !important; }
