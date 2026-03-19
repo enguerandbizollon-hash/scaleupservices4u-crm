@@ -46,8 +46,8 @@ const priorityOptions = [
 const organizationTypeOptions = [
   { value: "client", label: "Client" },
   { value: "investor", label: "Investisseur" },
-  { value: "prospect", label: "Prospect" },
-  { value: "third_party", label: "Tiers" },
+  { value: "prospect_client", label: "Prospect client" },
+  { value: "other", label: "Autre" },
   { value: "bank", label: "Banque" },
   { value: "law_firm", label: "Avocat" },
   { value: "buyer", label: "Repreneur" },

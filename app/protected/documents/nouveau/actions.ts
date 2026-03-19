@@ -1,65 +1,39 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-
-function toNullableNumber(value: FormDataEntryValue | null) {
-  if (!value) return null;
-  const str = String(value).trim().replace(/\s/g, "").replace(",", ".");
-  if (!str) return null;
-  const num = Number(str);
-  return Number.isFinite(num) ? num : null;
-}
 
 function toNullableString(value: FormDataEntryValue | null) {
   const str = String(value ?? "").trim();
   return str ? str : null;
 }
 
-export async function createDealAction(formData: FormData) {
+export async function createDocumentAction(formData: FormData) {
   const supabase = await createClient();
 
   const name = String(formData.get("name") ?? "").trim();
-  const dealType = String(formData.get("deal_type") ?? "").trim();
-  const dealStatus = String(formData.get("deal_status") ?? "").trim();
-  const dealStage = String(formData.get("deal_stage") ?? "").trim();
-  const priorityLevel = String(formData.get("priority_level") ?? "").trim();
-  const clientOrganizationId = String(
-    formData.get("client_organization_id") ?? ""
-  ).trim();
+  const dealId = toNullableString(formData.get("deal_id"));
 
-  if (!name) {
-    throw new Error("Le nom du dossier est obligatoire.");
-  }
+  if (!name) throw new Error("Le nom du document est obligatoire.");
+  if (!dealId) throw new Error("Le dossier est obligatoire.");
 
-  if (!dealType || !dealStatus || !dealStage || !priorityLevel) {
-    throw new Error("Merci de renseigner les champs obligatoires du dossier.");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!clientOrganizationId) {
-    throw new Error("Merci de sélectionner une organisation liée.");
-  }
-
-  const payload = {
+  const { error } = await supabase.from("deal_documents").insert({
     name,
-    deal_type: dealType,
-    deal_status: dealStatus,
-    deal_stage: dealStage,
-    priority_level: priorityLevel,
-    client_organization_id: clientOrganizationId,
-    sector: toNullableString(formData.get("sector")),
-    valuation_amount: toNullableNumber(formData.get("valuation_amount")),
-    fundraising_amount: toNullableNumber(formData.get("fundraising_amount")),
-    description: toNullableString(formData.get("description")),
-    start_date: toNullableString(formData.get("start_date")),
-    target_date: toNullableString(formData.get("target_date")),
-  };
+    deal_id: dealId,
+    document_type: toNullableString(formData.get("document_type")),
+    document_status: String(formData.get("document_status") ?? "received").trim(),
+    document_url: toNullableString(formData.get("document_url")),
+    version_label: toNullableString(formData.get("version_label")),
+    note: toNullableString(formData.get("note")),
+    user_id: user?.id ?? null,
+  });
 
-  const { error } = await supabase.from("deals").insert(payload);
+  if (error) throw new Error(error.message);
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  redirect("/protected/dossiers");
+  revalidatePath("/protected/documents");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  redirect("/protected/documents");
 }

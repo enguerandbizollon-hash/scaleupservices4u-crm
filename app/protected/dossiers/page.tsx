@@ -17,12 +17,12 @@ const stageColors: Record<string, string> = {
   kickoff: "bg-slate-100 text-slate-600",
   preparation: "bg-blue-100 text-blue-700",
   outreach: "bg-cyan-100 text-cyan-700",
-  "management meetings": "bg-indigo-100 text-indigo-700",
+  "management_meetings": "bg-indigo-100 text-indigo-700",
   dd: "bg-amber-100 text-amber-700",
   negotiation: "bg-orange-100 text-orange-700",
   closing: "bg-emerald-100 text-emerald-700",
-  Post_closing: "bg-green-100 text-green-700",
-  Ongoing_support: "bg-teal-100 text-teal-700",
+  post_closing: "bg-green-100 text-green-700",
+  ongoing_support: "bg-teal-100 text-teal-700",
   search: "bg-slate-100 text-slate-600",
 };
 

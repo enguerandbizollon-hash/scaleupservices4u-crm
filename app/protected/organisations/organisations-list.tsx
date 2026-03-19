@@ -59,10 +59,8 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
       o.name.toLowerCase().includes(search.toLowerCase()) ||
       o.sector.toLowerCase().includes(search.toLowerCase()) ||
       o.country.toLowerCase().includes(search.toLowerCase());
-
     const matchType = typeFilter === "all" || o.typeLabel === typeFilter;
     const matchStatus = statusFilter === "all" || o.status === statusFilter;
-
     return matchSearch && matchType && matchStatus;
   });
 
@@ -82,7 +80,6 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
         </a>
       </div>
 
-      {/* Recherche + Filtres */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -128,13 +125,13 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
       ) : (
         <div className="space-y-3">
           {filtered.map(org => (
-            <div key={org.id} className="rounded-2xl border border-[#E8E0D0] bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div key={org.id} className="rounded-2xl border border-[#E8E0D0] bg-white p-5 shadow-sm hover:shadow-md hover:border-[#C9A84C] transition-all">
               <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
+                <a href={`/protected/organisations/${org.id}`} className="flex items-start gap-4 min-w-0 flex-1">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0F1B2D] text-sm font-bold text-[#C9A84C]">
                     {org.name.charAt(0)}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-[#0F1B2D]">{org.name}</h3>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${typeColors[org.typeLabel] ?? "bg-slate-100 text-slate-600"}`}>
@@ -144,12 +141,16 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
                         {statusLabels[org.status] ?? org.statusLabel}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-sm text-slate-500">{org.sector !== "N/A" ? org.sector : ""}{org.sector !== "N/A" && org.country !== "N/A" ? " · " : ""}{org.country !== "N/A" ? org.country : ""}</p>
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      {org.sector !== "N/A" ? org.sector : ""}
+                      {org.sector !== "N/A" && org.country !== "N/A" ? " · " : ""}
+                      {org.country !== "N/A" ? org.country : ""}
+                    </p>
                     {org.dealsCount > 0 && (
                       <p className="mt-1 text-xs text-slate-400">{org.dealsCount} dossier{org.dealsCount > 1 ? "s" : ""}</p>
                     )}
                   </div>
-                </div>
+                </a>
 
                 <div className="flex shrink-0 items-center gap-2">
                   {org.website && (

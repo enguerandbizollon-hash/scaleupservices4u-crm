@@ -46,8 +46,9 @@ export async function updateContactAction(formData: FormData) {
   if (error) throw new Error(`Erreur mise à jour contact: ${error.message}`);
   if (!updatedContact) throw new Error("Aucun contact mis à jour. Vérifie la policy RLS UPDATE sur contacts.");
 
-  // Lien organisation optionnel
+  const { data: { user } } = await supabase.auth.getUser();
   const organizationId = String(formData.get("organization_id") ?? "").trim();
+
   if (organizationId) {
     const { data: existing } = await supabase
       .from("organization_contacts")
@@ -62,11 +63,11 @@ export async function updateContactAction(formData: FormData) {
         contact_id: contactId,
         role_label: toNullableString(formData.get("role_label")),
         is_primary: formData.get("is_primary") === "on",
+        user_id: user?.id ?? null,
       });
     }
   }
 
   revalidatePath("/protected/contacts");
-  revalidatePath(`/protected/contacts/${contactId}`);
-  redirect(`/protected/contacts`);
+  redirect("/protected/contacts");
 }

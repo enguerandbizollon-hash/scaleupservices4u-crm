@@ -57,7 +57,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     recruitment: "bg-rose-100 text-rose-800",
   };
 
-  const stageSteps = ["kickoff", "preparation", "outreach", "management meetings", "dd", "negotiation", "closing"];
+  const stageSteps = ["kickoff", "preparation", "outreach", "management_meetings", "dd", "negotiation", "closing"];
   const currentStepIdx = stageSteps.indexOf(deal.deal_stage);
 
   const contacts = (dealContacts ?? []).map(dc => {

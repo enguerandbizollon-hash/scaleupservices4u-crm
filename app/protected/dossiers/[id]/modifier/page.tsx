@@ -162,12 +162,12 @@ async function Content({
                   <option value="kickoff">Kickoff</option>
                   <option value="preparation">Préparation</option>
                   <option value="outreach">Outreach</option>
-                  <option value="management meetings">Management meetings</option>
+                  <option value="management_meetings">Management meetings</option>
                   <option value="dd">Due diligence</option>
                   <option value="negotiation">Négociation</option>
                   <option value="closing">Closing</option>
-                  <option value="Post_closing">Post-closing</option>
-                  <option value="Ongoing_support">Suivi en cours</option>
+                  <option value="post_closing">Post-closing</option>
+                  <option value="ongoing_support">Suivi en cours</option>
                   <option value="search">Recherche</option>
                 </select>
               </div>
