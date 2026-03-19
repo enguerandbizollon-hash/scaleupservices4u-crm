@@ -1,97 +1,225 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════
+   DESIGN SYSTEM — SCALE UP SERVICES 4U
+   Palette bleu roi, finance-grade
+═══════════════════════════════════════ */
 :root {
-  /* ── Brand Scale UP ─────────────────── */
-  --su-900: #0D1F35;   /* sidebar, texte principal */
-  --su-800: #163352;   /* sidebar hover */
-  --su-700: #1E4A73;   /* boutons primaires */
-  --su-600: #2D6EA4;   /* bleu roi — accent principal */
-  --su-500: #3D88C4;
-  --su-400: #6AADD8;
-  --su-200: #B8D8EF;
-  --su-100: #D8ECF7;
-  --su-50:  #EBF5FC;
+  /* Brand */
+  --su-900: #0D1E33;
+  --su-800: #142D4A;
+  --su-700: #1C3F68;
+  --su-600: #2558A0;
+  --su-500: #3370C4;
+  --su-400: #5B94D6;
+  --su-300: #90BBE8;
+  --su-200: #BDD7F2;
+  --su-100: #DCECf8;
+  --su-50:  #EEF5FB;
 
-  /* ── Fond & surfaces ────────────────── */
-  --bg:        #F2F5F9;   /* fond global — gris bleu très clair */
-  --surface:   #FFFFFF;   /* cartes */
-  --surface-2: #F7F9FC;   /* fond léger dans cartes */
-  --border:    #DDE5EE;   /* bordures */
-  --border-2:  #C5D4E3;   /* bordures fortes */
+  /* Surfaces */
+  --bg:        #F0F4F9;
+  --surface:   #FFFFFF;
+  --surface-2: #F7F9FC;
+  --border:    #E0E8F0;
+  --border-2:  #C4D5E8;
 
-  /* ── Texte ─────────────────────────── */
-  --text-1: #0D1F35;   /* titre */
-  --text-2: #2C4A6B;   /* corps */
-  --text-3: #5A7A9B;   /* secondaire */
-  --text-4: #8DA5BE;   /* muted */
+  /* Texte */
+  --text-1: #0D1E33;
+  --text-2: #2A4060;
+  --text-3: #527090;
+  --text-4: #8BA8C0;
 
-  /* ── Types de dossiers ─────────────── */
-  --deal-fundraising-bg:   #EEF7EE;
-  --deal-fundraising-text: #1A6B2E;
-  --deal-fundraising-dot:  #2D9B45;
+  /* Types de dossiers — codes couleurs stricts */
+  --c-fundraising: #1A6B38;
+  --c-fundraising-bg: #EAF5EE;
+  --c-ma-sell: #8A4B0A;
+  --c-ma-sell-bg: #FDF3E7;
+  --c-ma-buy: #1A4A8A;
+  --c-ma-buy-bg: #E8F0FB;
+  --c-cfo: #5A1F8A;
+  --c-cfo-bg: #F2EBF9;
+  --c-recruitment: #8A1A1A;
+  --c-recruitment-bg: #FBE8E8;
 
-  --deal-ma-sell-bg:   #FFF8EC;
-  --deal-ma-sell-text: #7A4A0A;
-  --deal-ma-sell-dot:  #D97706;
+  /* Statuts */
+  --c-active: #1A6B38;
+  --c-active-bg: #EAF5EE;
+  --c-inactive: #5A6B7A;
+  --c-inactive-bg: #EEF2F5;
+  --c-closed: #1A4A8A;
+  --c-closed-bg: #E8F0FB;
 
-  --deal-ma-buy-bg:   #EBF5FC;
-  --deal-ma-buy-text: #1A4A7A;
-  --deal-ma-buy-dot:  #2D6EA4;
-
-  --deal-cfo-bg:   #F4F0FB;
-  --deal-cfo-text: #4A2080;
-  --deal-cfo-dot:  #7C3AED;
-
-  --deal-recruitment-bg:   #FEF0F0;
-  --deal-recruitment-text: #7A1A1A;
-  --deal-recruitment-dot:  #DC2626;
+  /* Priorités */
+  --c-high: #CC2200;
+  --c-medium: #A06000;
+  --c-low: #5A6B7A;
 }
 
 @layer base {
-  * { @apply border-border; box-sizing: border-box; }
+  *, *::before, *::after { box-sizing: border-box; }
 
   body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background-color: var(--bg);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
     color: var(--text-1);
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
   }
 
-  h1, h2, h3 { letter-spacing: -0.02em; }
+  h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.025em; }
+  h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; }
+  h3 { font-size: 1rem; font-weight: 600; }
 }
 
-/* ── Scrollbar fine ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--su-400); }
 
-/* ── Focus ring ── */
-*:focus-visible { outline: 2px solid var(--su-600); outline-offset: 2px; border-radius: 4px; }
+/* ── Focus ── */
+*:focus-visible { outline: 2px solid var(--su-500); outline-offset: 2px; border-radius: 6px; }
 
-/* ── Transition globale ── */
-a, button { transition: all 0.12s ease; }
+/* ── Nav sidebar ── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  margin-bottom: 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--su-300);
+  text-decoration: none;
+  transition: background 0.1s, color 0.1s;
+}
+.nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
+.nav-item-accent { background: rgba(37,88,160,0.2); color: white; }
+.nav-item-accent:hover { background: rgba(37,88,160,0.35); }
 
-/* ── Composants réutilisables ── */
-.su-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 1px 3px rgba(13,31,53,0.06); }
-.su-input { width: 100%; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); padding: 10px 14px; font-size: 14px; color: var(--text-1); outline: none; transition: all 0.12s; }
-.su-input:focus { border-color: var(--su-600); background: var(--surface); box-shadow: 0 0 0 3px rgba(45,110,164,0.12); }
-.su-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
-.su-btn-primary { background: var(--su-700); color: white; border-radius: 10px; padding: 9px 20px; font-size: 13px; font-weight: 600; }
-.su-btn-primary:hover { background: var(--su-800); }
-.su-btn-secondary { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 500; }
-.su-btn-secondary:hover { background: var(--su-50); border-color: var(--border-2); }
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(13,30,51,0.05);
+}
 
-/* ── Badges type dossier ── */
-.badge-fundraising { background: var(--deal-fundraising-bg); color: var(--deal-fundraising-text); }
-.badge-ma-sell     { background: var(--deal-ma-sell-bg);   color: var(--deal-ma-sell-text); }
-.badge-ma-buy      { background: var(--deal-ma-buy-bg);    color: var(--deal-ma-buy-text); }
-.badge-cfo         { background: var(--deal-cfo-bg);       color: var(--deal-cfo-text); }
-.badge-recruitment { background: var(--deal-recruitment-bg); color: var(--deal-recruitment-text); }
+/* ── Inputs ── */
+.input {
+  width: 100%;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 9px 13px;
+  font-size: 13px;
+  color: var(--text-1);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  font-family: inherit;
+}
+.input:focus {
+  border-color: var(--su-500);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(37,88,160,0.1);
+}
+.input::placeholder { color: var(--text-4); }
 
-.deal-badge { border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+/* ── Labels ── */
+.label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Boutons ── */
+.btn-primary {
+  background: var(--su-700);
+  color: white;
+  border: none;
+  border-radius: 9px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary:hover { background: var(--su-800); }
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-secondary:hover { background: var(--su-50); border-color: var(--border-2); }
+
+/* ── Badges types dossiers ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-fundraising { background: var(--c-fundraising-bg); color: var(--c-fundraising); }
+.badge-ma-sell     { background: var(--c-ma-sell-bg);     color: var(--c-ma-sell); }
+.badge-ma-buy      { background: var(--c-ma-buy-bg);      color: var(--c-ma-buy); }
+.badge-cfo         { background: var(--c-cfo-bg);         color: var(--c-cfo); }
+.badge-recruitment { background: var(--c-recruitment-bg); color: var(--c-recruitment); }
+
+.badge-active   { background: var(--c-active-bg);   color: var(--c-active); }
+.badge-inactive { background: var(--c-inactive-bg); color: var(--c-inactive); }
+.badge-closed   { background: var(--c-closed-bg);   color: var(--c-closed); }
+
+.badge-high   { background: #FBE8E8; color: var(--c-high); }
+.badge-medium { background: #FDF3E7; color: var(--c-medium); }
+.badge-low    { background: var(--c-inactive-bg); color: var(--c-low); }
+
+/* ── Section headers ── */
+.section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
+/* ── Dividers ── */
+.divider { border: none; border-top: 1px solid var(--border); }
+
+/* ── Table rows ── */
+.row-hover:hover { background: var(--su-50); }
+
+/* ── Priority bar ── */
+.priority-bar-high   { background: var(--c-high); }
+.priority-bar-medium { background: var(--c-medium); }
+.priority-bar-low    { background: var(--border-2); }

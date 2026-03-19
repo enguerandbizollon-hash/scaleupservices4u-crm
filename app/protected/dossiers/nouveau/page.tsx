@@ -3,39 +3,33 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createDealAction } from "./actions";
 
-const inputCls = "w-full rounded-xl border border-[#E8E0D0] bg-[#F9F7F4] px-4 py-3 text-sm text-[#0F1B2D] outline-none focus:border-[#2D6EA4] focus:bg-white focus:ring-1 focus:ring-[#2D6EA4] transition-all";
-const labelCls = "mb-2 block text-sm font-medium text-[#0F1B2D]";
-
 async function Content() {
   const supabase = await createClient();
-  const { data: organizations } = await supabase
-    .from("organizations").select("id, name").order("name");
+  const {data:orgs} = await supabase.from("organizations").select("id,name").order("name");
 
   return (
-    <div className="p-8 min-h-screen bg-[#F5F0E8]">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center justify-between">
+    <div style={{padding:32,minHeight:"100vh",background:"var(--bg)"}}>
+      <div style={{maxWidth:720,margin:"0 auto"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
           <div>
-            <p className="text-xs font-semibold tracking-widest text-[#2D6EA4]">DOSSIERS</p>
-            <h1 className="mt-1 text-3xl font-bold text-[#0F1B2D]" style={{ letterSpacing: "-0.02em" }}>Nouveau dossier</h1>
+            <p className="section-title mb-1">Dossiers</p>
+            <h1 style={{color:"var(--text-1)"}}>Nouveau dossier</h1>
           </div>
-          <Link href="/protected/dossiers" className="rounded-xl border border-[#E8E0D0] bg-white px-4 py-2 text-sm font-medium text-[#3F6080] hover:bg-[#F5F0E8] transition-all">
-            ← Retour
-          </Link>
+          <Link href="/protected/dossiers" className="btn-secondary">← Retour</Link>
         </div>
 
-        <form action={createDealAction} className="space-y-5">
+        <form action={createDealAction} style={{display:"flex",flexDirection:"column",gap:16}}>
           {/* Infos principales */}
-          <div className="rounded-2xl border border-[#E8E0D0] bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-xs font-semibold tracking-widest text-[#7A9BB5]">INFORMATIONS PRINCIPALES</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className={labelCls}>Nom du dossier *</label>
-                <input name="name" required placeholder="Ex. Redpeaks – Série A" className={inputCls} />
+          <div className="card" style={{padding:24}}>
+            <p className="section-title mb-4">Informations principales</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div style={{gridColumn:"1/-1"}}>
+                <label className="label">Nom du dossier *</label>
+                <input name="name" required placeholder="Ex. Redpeaks – Série A" className="input"/>
               </div>
               <div>
-                <label className={labelCls}>Type de mission *</label>
-                <select name="deal_type" required defaultValue="fundraising" className={inputCls}>
+                <label className="label">Type de mission *</label>
+                <select name="deal_type" required defaultValue="fundraising" className="input">
                   <option value="fundraising">📈 Fundraising</option>
                   <option value="ma_sell">🏢 M&A Sell-side</option>
                   <option value="ma_buy">🎯 M&A Buy-side</option>
@@ -44,16 +38,24 @@ async function Content() {
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Statut *</label>
-                <select name="deal_status" required defaultValue="active" className={inputCls}>
+                <label className="label">Priorité *</label>
+                <select name="priority_level" required defaultValue="medium" className="input">
+                  <option value="high">Haute</option>
+                  <option value="medium">Moyenne</option>
+                  <option value="low">Basse</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Statut *</label>
+                <select name="deal_status" required defaultValue="active" className="input">
                   <option value="active">Actif</option>
                   <option value="inactive">Inactif</option>
                   <option value="closed">Clôturé</option>
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Étape *</label>
-                <select name="deal_stage" required defaultValue="kickoff" className={inputCls}>
+                <label className="label">Étape *</label>
+                <select name="deal_stage" required defaultValue="kickoff" className="input">
                   <option value="kickoff">Kickoff</option>
                   <option value="preparation">Préparation</option>
                   <option value="outreach">Outreach</option>
@@ -67,72 +69,62 @@ async function Content() {
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Priorité *</label>
-                <select name="priority_level" required defaultValue="medium" className={inputCls}>
-                  <option value="high">🔴 Haute</option>
-                  <option value="medium">🟡 Moyenne</option>
-                  <option value="low">⚪ Basse</option>
-                </select>
+                <label className="label">Secteur</label>
+                <input name="sector" placeholder="Ex. SaaS, FinTech…" className="input"/>
               </div>
               <div>
-                <label className={labelCls}>Secteur</label>
-                <input name="sector" placeholder="Ex. SaaS, FinTech, Santé…" className={inputCls} />
+                <label className="label">Valorisation (€)</label>
+                <input name="valuation_amount" placeholder="Ex. 5000000" className="input"/>
               </div>
               <div>
-                <label className={labelCls}>Valorisation (€)</label>
-                <input name="valuation_amount" placeholder="Ex. 5000000" className={inputCls} />
+                <label className="label">Montant levée (€)</label>
+                <input name="fundraising_amount" placeholder="Ex. 3000000" className="input"/>
               </div>
               <div>
-                <label className={labelCls}>Montant levée (€)</label>
-                <input name="fundraising_amount" placeholder="Ex. 3000000" className={inputCls} />
+                <label className="label">Date de début</label>
+                <input name="start_date" type="date" className="input"/>
               </div>
               <div>
-                <label className={labelCls}>Date de début</label>
-                <input name="start_date" type="date" className={inputCls} />
+                <label className="label">Date cible</label>
+                <input name="target_date" type="date" className="input"/>
               </div>
-              <div>
-                <label className={labelCls}>Date cible</label>
-                <input name="target_date" type="date" className={inputCls} />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Contexte / description</label>
-                <textarea name="description" rows={3} placeholder="Décrivez le contexte de l'opération…" className={inputCls + " resize-none"} />
+              <div style={{gridColumn:"1/-1"}}>
+                <label className="label">Contexte / description</label>
+                <textarea name="description" rows={3} placeholder="Décrivez le contexte de l'opération…" className="input" style={{resize:"none"}}/>
               </div>
             </div>
           </div>
 
           {/* Organisation */}
-          <div className="rounded-2xl border border-[#E8E0D0] bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-xs font-semibold tracking-widest text-[#7A9BB5]">ORGANISATION CLIENTE</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className={labelCls}>Mode *</label>
-                <select name="organization_mode" required defaultValue="existing" className={inputCls}>
+          <div className="card" style={{padding:24}}>
+            <p className="section-title mb-4">Organisation cliente</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div style={{gridColumn:"1/-1"}}>
+                <label className="label">Mode *</label>
+                <select name="organization_mode" required defaultValue="existing" className="input">
                   <option value="existing">Organisation existante</option>
                   <option value="new">Créer une nouvelle organisation</option>
                 </select>
               </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Organisation existante</label>
-                <select name="client_organization_id" defaultValue="" className={inputCls}>
+              <div style={{gridColumn:"1/-1"}}>
+                <label className="label">Organisation existante</label>
+                <select name="client_organization_id" defaultValue="" className="input">
                   <option value="">— Sélectionner —</option>
-                  {(organizations ?? []).map(org => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
+                  {(orgs??[]).map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </div>
-              <div className="md:col-span-2 rounded-xl border border-[#E8E0D0] bg-[#F9F7F4] p-4">
-                <p className="mb-3 text-xs font-semibold tracking-widest text-[#7A9BB5]">NOUVELLE ORGANISATION</p>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <label className={labelCls}>Nom</label>
-                    <input name="new_org_name" placeholder="Ex. Redpeaks" className={inputCls} />
+              <div style={{gridColumn:"1/-1",background:"var(--surface-2)",borderRadius:10,padding:16,border:"1px solid var(--border)"}}>
+                <p className="section-title mb-3">Nouvelle organisation</p>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div style={{gridColumn:"1/-1"}}>
+                    <label className="label">Nom</label>
+                    <input name="new_org_name" placeholder="Ex. Redpeaks" className="input"/>
                   </div>
                   <div>
-                    <label className={labelCls}>Type</label>
-                    <select name="new_org_type" defaultValue="client" className={inputCls}>
+                    <label className="label">Type</label>
+                    <select name="new_org_type" defaultValue="client" className="input">
                       <option value="client">Client</option>
-                      <option value="prospect_client">Prospect client</option>
+                      <option value="prospect_client">Prospect</option>
                       <option value="investor">Investisseur</option>
                       <option value="buyer">Repreneur</option>
                       <option value="target">Cible</option>
@@ -145,29 +137,25 @@ async function Content() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelCls}>Pays</label>
-                    <input name="new_org_country" className={inputCls} />
+                    <label className="label">Pays</label>
+                    <input name="new_org_country" className="input"/>
                   </div>
                   <div>
-                    <label className={labelCls}>Site web</label>
-                    <input name="new_org_website" placeholder="https://…" className={inputCls} />
+                    <label className="label">Site web</label>
+                    <input name="new_org_website" placeholder="https://…" className="input"/>
                   </div>
                   <div>
-                    <label className={labelCls}>Secteur</label>
-                    <input name="new_org_sector" className={inputCls} />
+                    <label className="label">Secteur</label>
+                    <input name="new_org_sector" className="input"/>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pb-8">
-            <Link href="/protected/dossiers" className="rounded-xl border border-[#E8E0D0] bg-white px-5 py-2.5 text-sm font-medium text-[#3F6080] hover:bg-[#F5F0E8] transition-all">
-              Annuler
-            </Link>
-            <button type="submit" className="rounded-xl bg-[#0F1B2D] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#163959] transition-all">
-              Créer le dossier
-            </button>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:10,paddingBottom:20}}>
+            <Link href="/protected/dossiers" className="btn-secondary">Annuler</Link>
+            <button type="submit" className="btn-primary">Créer le dossier</button>
           </div>
         </form>
       </div>
@@ -175,10 +163,10 @@ async function Content() {
   );
 }
 
-export default function NouveauDossierPage() {
-  return (
-    <Suspense fallback={<div className="p-8 min-h-screen bg-[#F5F0E8]"><div className="h-96 animate-pulse rounded-2xl bg-slate-200" /></div>}>
-      <Content />
+export default function NouveauDossierPage(){
+  return(
+    <Suspense fallback={<div style={{padding:32,background:"var(--bg)",minHeight:"100vh"}}><div style={{height:400,borderRadius:14,background:"var(--border)"}} /></div>}>
+      <Content/>
     </Suspense>
   );
 }
