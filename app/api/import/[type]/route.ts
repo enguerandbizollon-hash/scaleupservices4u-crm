@@ -52,13 +52,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
             if (newOrg) orgId = newOrg.id;
           }
         }
-        const { data: contact, error } = await supabase.from("contacts").insert({
+        // Upsert sur email si présent, sinon insert
+        const emailVal = ns(r.email);
+        const { data: contact, error } = await supabase.from("contacts").upsert({
           first_name: firstName, last_name: lastName,
-          email: ns(r.email), phone: ns(r.phone), title: ns(r.title),
+          email: emailVal, phone: ns(r.phone), title: ns(r.title),
           sector: ns(r.sector), country: ns(r.country),
           linkedin_url: ns(r.linkedin_url), notes: ns(r.notes),
           base_status: "to_qualify", user_id: user.id,
-        }).select("id").single();
+        }, { onConflict: emailVal ? "email" : "id", ignoreDuplicates: false }).select("id").single();
         if (error) { errors.push(`Ligne ${i+2}: ${error.message}`); continue; }
         if (orgId && contact) {
           await supabase.from("organization_contacts").insert({ organization_id: orgId, contact_id: contact.id, role_label: ns(r.role_label), is_primary: false, user_id: user.id });
@@ -109,14 +111,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
       const sector = sectorRaw ? (VALID_SECTORS.find(s => s.toLowerCase().includes(sectorRaw.toLowerCase())) ?? sectorRaw) : null;
 
       // Insérer l'organisation
-      const { data: org, error: orgErr } = await supabase.from("organizations").insert({
+      // Upsert : si le nom existe déjà, on met à jour
+      const { data: org, error: orgErr } = await supabase.from("organizations").upsert({
         name, organization_type: orgType, base_status: orgStatus,
         sector, location: ns(r.location), country: ns(r.location) ?? ns(r.country),
         website: ns(r.website), notes: ns(r.notes),
         description: ns(r.description),
         investment_ticket: ticket, investment_stage: stage,
         user_id: user.id,
-      }).select("id").single();
+      }, { onConflict: "name", ignoreDuplicates: false }).select("id").single();
 
       if (orgErr) { errors.push(`Ligne ${i+2}: ${orgErr.message}`); continue; }
 
