@@ -1,71 +1,80 @@
 import Link from "next/link";
-import {
-  FolderOpen, Users, Building2, Calendar,
-  Activity, FileText, LayoutDashboard, Sparkles, LogOut
-} from "lucide-react";
+import { LayoutDashboard, Upload, FolderOpen, Users, Building2, Calendar, MessageSquare, LogOut, Sparkles } from "lucide-react";
 
-const navItems = [
-  { href: "/protected", label: "Dashboard", icon: LayoutDashboard, color: "text-sky-300" },
-  { href: "/protected/contacts", label: "Contacts", icon: Users, color: "text-emerald-300" },
-  { href: "/protected/dossiers", label: "Dossiers", icon: FolderOpen, color: "text-amber-300" },
-  { href: "/protected/agenda", label: "Agenda", icon: Calendar, color: "text-violet-300" },
-  { href: "/protected/organisations", label: "Organisations", icon: Building2, color: "text-rose-300" },
-  { href: "/protected/activites", label: "Activités", icon: Activity, color: "text-orange-300" },
-  { href: "/protected/documents", label: "Documents", icon: FileText, color: "text-slate-400" },
-  { href: "/protected/ia", label: "Assistant IA", icon: Sparkles, color: "text-cyan-300" },
+const nav = [
+  { href: "/protected",               label: "Dashboard",      icon: LayoutDashboard },
+  { href: "/protected/dossiers",      label: "Dossiers",       icon: FolderOpen },
+  { href: "/protected/contacts",      label: "Contacts",       icon: Users },
+  { href: "/protected/organisations", label: "Organisations",  icon: Building2 },
+  { href: "/protected/agenda",        label: "Agenda",         icon: Calendar },
+  { href: "/protected/import", label: "Import CSV", icon: Upload },
+  { href: "/protected/ia",            label: "Assistant IA",   icon: Sparkles, accent: true },
 ];
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-[#F5F0E8]">
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-[#0F1B2D]">
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
+      <aside style={{
+        position: "fixed", left: 0, top: 0, zIndex: 40,
+        width: 240, height: "100vh", display: "flex", flexDirection: "column",
+        background: "var(--su-900)",
+        borderRight: "1px solid rgba(255,255,255,0.06)",
+      }}>
         {/* Logo */}
-        <div className="flex h-16 items-center gap-3 border-b border-[#1E3050] px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C9A84C]">
-            <span className="text-xs font-bold text-white">SU</span>
-          </div>
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-[#C9A84C]">SCALE UP</p>
-            <p className="text-xs text-[#6B8CAE]">CRM Platform</p>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img src="/logo-icon.png" alt="Scale UP" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover" }} />
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "white", opacity: 0.9 }}>SCALE UP</div>
+              <div style={{ fontSize: 10, color: "var(--su-400)", marginTop: 1 }}>CRM Platform</div>
+            </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-5">
-          <p className="mb-3 px-3 text-xs font-semibold tracking-widest text-[#3A5A7A]">NAVIGATION</p>
-          <ul className="space-y-0.5">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#8BACC8] transition-all duration-150 hover:bg-white/5 hover:text-white"
-                  >
-                    <Icon size={16} strokeWidth={1.8} className={item.color} />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <nav style={{ flex: 1, overflowY: "auto", padding: "12px 10px" }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--su-400)", padding: "8px 10px 10px", textTransform: "uppercase" }}>
+            Navigation
+          </div>
+          {nav.map(item => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 10px", borderRadius: 10, marginBottom: 2,
+                fontSize: 13, fontWeight: 500,
+                color: item.accent ? "white" : "var(--su-200)",
+                background: item.accent ? "rgba(45,110,164,0.25)" : "transparent",
+                textDecoration: "none",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = item.accent ? "rgba(45,110,164,0.4)" : "rgba(255,255,255,0.07)"; (e.currentTarget as HTMLElement).style.color = "white"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = item.accent ? "rgba(45,110,164,0.25)" : "transparent"; (e.currentTarget as HTMLElement).style.color = item.accent ? "white" : "var(--su-200)"; }}
+              >
+                <Icon size={15} strokeWidth={1.8} />
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {item.accent && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--su-600)", color: "white", borderRadius: 5, padding: "1px 6px" }}>IA</span>}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-[#1E3050] p-4">
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", padding: "12px 10px" }}>
           <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#6B8CAE] transition-all hover:bg-white/5 hover:text-white"
-            >
-              <LogOut size={15} />
+            <button type="submit" style={{
+              display: "flex", alignItems: "center", gap: 10, width: "100%",
+              padding: "9px 10px", borderRadius: 10, background: "transparent",
+              border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
+              color: "var(--su-300, var(--su-400))", textAlign: "left",
+            }}>
+              <LogOut size={14} />
               Se déconnecter
             </button>
           </form>
         </div>
       </aside>
 
-      <main className="ml-64 flex-1 min-w-0">
+      <main style={{ marginLeft: 240, flex: 1, minWidth: 0, minHeight: "100vh", background: "var(--bg)" }}>
         {children}
       </main>
     </div>

@@ -1,70 +1,97 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Scale UP brand */
-  --brand-blue: #2D6EA4;
-  --brand-blue-dark: #1E4F7A;
-  --brand-blue-deeper: #163959;
-  --brand-blue-light: #EBF3FB;
-  --brand-blue-mid: #5A8FC0;
+  /* ── Brand Scale UP ─────────────────── */
+  --su-900: #0D1F35;   /* sidebar, texte principal */
+  --su-800: #163352;   /* sidebar hover */
+  --su-700: #1E4A73;   /* boutons primaires */
+  --su-600: #2D6EA4;   /* bleu roi — accent principal */
+  --su-500: #3D88C4;
+  --su-400: #6AADD8;
+  --su-200: #B8D8EF;
+  --su-100: #D8ECF7;
+  --su-50:  #EBF5FC;
 
-  /* Sidebar */
-  --sidebar-bg: #163959;
-  --sidebar-hover: #1E4F7A;
-  --sidebar-active: #2D6EA4;
-  --sidebar-text: #A8C4DC;
-  --sidebar-text-active: #FFFFFF;
-  --sidebar-border: rgba(255,255,255,0.08);
+  /* ── Fond & surfaces ────────────────── */
+  --bg:        #F2F5F9;   /* fond global — gris bleu très clair */
+  --surface:   #FFFFFF;   /* cartes */
+  --surface-2: #F7F9FC;   /* fond léger dans cartes */
+  --border:    #DDE5EE;   /* bordures */
+  --border-2:  #C5D4E3;   /* bordures fortes */
 
-  /* Content */
-  --bg-app: #F4F7FB;
-  --bg-card: #FFFFFF;
-  --bg-subtle: #EBF3FB;
-  --border-default: #D8E6F2;
-  --border-strong: #B0CEEA;
+  /* ── Texte ─────────────────────────── */
+  --text-1: #0D1F35;   /* titre */
+  --text-2: #2C4A6B;   /* corps */
+  --text-3: #5A7A9B;   /* secondaire */
+  --text-4: #8DA5BE;   /* muted */
 
-  /* Text */
-  --text-primary: #0F2233;
-  --text-secondary: #3F6080;
-  --text-muted: #7A9BB5;
+  /* ── Types de dossiers ─────────────── */
+  --deal-fundraising-bg:   #EEF7EE;
+  --deal-fundraising-text: #1A6B2E;
+  --deal-fundraising-dot:  #2D9B45;
 
-  /* Accents */
-  --accent-gold: #C9941A;
-  --accent-gold-light: #FDF3DE;
+  --deal-ma-sell-bg:   #FFF8EC;
+  --deal-ma-sell-text: #7A4A0A;
+  --deal-ma-sell-dot:  #D97706;
+
+  --deal-ma-buy-bg:   #EBF5FC;
+  --deal-ma-buy-text: #1A4A7A;
+  --deal-ma-buy-dot:  #2D6EA4;
+
+  --deal-cfo-bg:   #F4F0FB;
+  --deal-cfo-text: #4A2080;
+  --deal-cfo-dot:  #7C3AED;
+
+  --deal-recruitment-bg:   #FEF0F0;
+  --deal-recruitment-text: #7A1A1A;
+  --deal-recruitment-dot:  #DC2626;
 }
 
 @layer base {
-  * { @apply border-border; }
+  * { @apply border-border; box-sizing: border-box; }
 
   body {
-    font-family: 'DM Sans', system-ui, sans-serif;
-    background-color: var(--bg-app);
-    color: var(--text-primary);
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--bg);
+    color: var(--text-1);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  h1, h2, h3 {
-    font-family: 'DM Sans', system-ui, sans-serif;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
+  h1, h2, h3 { letter-spacing: -0.02em; }
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* ── Scrollbar fine ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--brand-blue-mid); }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--su-400); }
 
-/* Focus ring */
-*:focus-visible {
-  outline: 2px solid var(--brand-blue);
-  outline-offset: 2px;
-}
+/* ── Focus ring ── */
+*:focus-visible { outline: 2px solid var(--su-600); outline-offset: 2px; border-radius: 4px; }
 
-/* Transitions globales */
-a, button { transition: all 0.15s ease; }
+/* ── Transition globale ── */
+a, button { transition: all 0.12s ease; }
+
+/* ── Composants réutilisables ── */
+.su-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 1px 3px rgba(13,31,53,0.06); }
+.su-input { width: 100%; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); padding: 10px 14px; font-size: 14px; color: var(--text-1); outline: none; transition: all 0.12s; }
+.su-input:focus { border-color: var(--su-600); background: var(--surface); box-shadow: 0 0 0 3px rgba(45,110,164,0.12); }
+.su-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.su-btn-primary { background: var(--su-700); color: white; border-radius: 10px; padding: 9px 20px; font-size: 13px; font-weight: 600; }
+.su-btn-primary:hover { background: var(--su-800); }
+.su-btn-secondary { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 500; }
+.su-btn-secondary:hover { background: var(--su-50); border-color: var(--border-2); }
+
+/* ── Badges type dossier ── */
+.badge-fundraising { background: var(--deal-fundraising-bg); color: var(--deal-fundraising-text); }
+.badge-ma-sell     { background: var(--deal-ma-sell-bg);   color: var(--deal-ma-sell-text); }
+.badge-ma-buy      { background: var(--deal-ma-buy-bg);    color: var(--deal-ma-buy-text); }
+.badge-cfo         { background: var(--deal-cfo-bg);       color: var(--deal-cfo-text); }
+.badge-recruitment { background: var(--deal-recruitment-bg); color: var(--deal-recruitment-text); }
+
+.deal-badge { border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }

@@ -1,351 +1,262 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowRight, Mail, Phone, Clock, AlertCircle, Sparkles, ChevronRight, TrendingUp, Briefcase, UserCheck, BarChart3, Search } from "lucide-react";
+import { FolderOpen, Users, Building2, ArrowRight, Mail, Phone, Clock, AlertCircle, Sparkles, Plus } from "lucide-react";
 
-const dealTypeLabels: Record<string, string> = {
-  fundraising: "Fundraising", ma_sell: "M&A Sell-side", ma_buy: "M&A Buy-side",
-  cfo_advisor: "CFO Advisor", recruitment: "Recrutement",
+// ── Helpers ──────────────────────────────────────────────────────
+const dealType: Record<string, { label: string; cls: string; dot: string }> = {
+  fundraising: { label: "Fundraising",   cls: "badge-fundraising", dot: "var(--deal-fundraising-dot)" },
+  ma_sell:     { label: "M&A Sell",      cls: "badge-ma-sell",     dot: "var(--deal-ma-sell-dot)" },
+  ma_buy:      { label: "M&A Buy",       cls: "badge-ma-buy",      dot: "var(--deal-ma-buy-dot)" },
+  cfo_advisor: { label: "CFO Advisor",   cls: "badge-cfo",         dot: "var(--deal-cfo-dot)" },
+  recruitment: { label: "Recrutement",   cls: "badge-recruitment", dot: "var(--deal-recruitment-dot)" },
 };
 
-const dealTypeIcons: Record<string, string> = {
-  fundraising: "📈", ma_sell: "🏢", ma_buy: "🎯", cfo_advisor: "💼", recruitment: "👤",
-};
-
-const dealTypeAccent: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  fundraising: { bg: "#F0FDF4", text: "#166534", border: "#BBF7D0", dot: "#16A34A" },
-  ma_sell:     { bg: "#FFFBEB", text: "#92400E", border: "#FDE68A", dot: "#D97706" },
-  ma_buy:      { bg: "#EFF6FF", text: "#1E40AF", border: "#BFDBFE", dot: "#2563EB" },
-  cfo_advisor: { bg: "#FAF5FF", text: "#6B21A8", border: "#E9D5FF", dot: "#9333EA" },
-  recruitment: { bg: "#FFF1F2", text: "#9F1239", border: "#FECDD3", dot: "#E11D48" },
-};
-
-const stageLabels: Record<string, string> = {
+const stageLabel: Record<string, string> = {
   kickoff: "Kickoff", preparation: "Préparation", outreach: "Outreach",
   management_meetings: "Mgmt meetings", dd: "Due diligence",
   negotiation: "Négociation", closing: "Closing",
   post_closing: "Post-closing", ongoing_support: "Suivi", search: "Recherche",
 };
 
-const eventTypeLabels: Record<string, string> = {
+const eventColor: Record<string, string> = {
+  meeting: "#EBF5FC", follow_up: "#FFF8EC", deadline: "#FEF0F0",
+  call: "#F4F0FB", delivery: "#EEFBF4", closing: "#EEF7EE", other: "#F2F5F9",
+};
+const eventTColor: Record<string, string> = {
+  meeting: "#1A4A7A", follow_up: "#7A4A0A", deadline: "#7A1A1A",
+  call: "#4A2080", delivery: "#1A6B3A", closing: "#1A6B2E", other: "#2C4A6B",
+};
+const eventLabel: Record<string, string> = {
   meeting: "Réunion", follow_up: "Relance", deadline: "Deadline",
   call: "Appel", delivery: "Livraison", closing: "Closing", other: "Autre",
 };
 
-const eventBg: Record<string, { bg: string; text: string }> = {
-  meeting:  { bg: "#EFF6FF", text: "#1E40AF" },
-  follow_up:{ bg: "#FFFBEB", text: "#92400E" },
-  deadline: { bg: "#FFF1F2", text: "#9F1239" },
-  call:     { bg: "#FAF5FF", text: "#6B21A8" },
-  delivery: { bg: "#ECFDF5", text: "#065F46" },
-  closing:  { bg: "#F0FDF4", text: "#166534" },
-  other:    { bg: "#F8FAFC", text: "#475569" },
-};
-
-function formatDate(v: string | null) {
+function fmtDate(v: string | null) {
   if (!v) return "—";
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" }).format(new Date(v));
 }
-
-function formatDateTime(v: string | null) {
+function fmtDT(v: string | null) {
   if (!v) return "—";
   const d = new Date(v);
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
-async function DashboardContent() {
+// ── Dashboard ─────────────────────────────────────────────────────
+async function Content() {
   const supabase = await createClient();
   const today = new Date();
-  const in10Days = new Date(); in10Days.setDate(today.getDate() + 10);
+  const in10 = new Date(); in10.setDate(today.getDate() + 10);
 
-  const [{ data: deals }, { data: tasks }, { data: events }, { count: contactsCount }, { count: orgsCount }] = await Promise.all([
-    supabase.from("deals").select("id, name, deal_type, deal_status, deal_stage, priority_level, client_organization_id").order("priority_level"),
-    supabase.from("tasks")
-      .select("id, title, task_status, priority_level, due_date, description, contacts(id, full_name, first_name, last_name, email, phone), deal_id, deals(id, name)")
-      .eq("task_status", "open").order("due_date", { ascending: true }).limit(8),
-    supabase.from("agenda_events")
-      .select("id, title, event_type, starts_at, location, meet_link, deals(name)")
-      .eq("status", "open").gte("starts_at", today.toISOString()).lte("starts_at", in10Days.toISOString()).order("starts_at").limit(8),
-    supabase.from("contacts").select("*", { count: "exact", head: true }),
-    supabase.from("organizations").select("*", { count: "exact", head: true }),
+  const [{ data: deals }, { data: tasks }, { data: events }, { count: cContacts }, { count: cOrgs }] = await Promise.all([
+    supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,client_organization_id").order("priority_level"),
+    supabase.from("tasks").select("id,title,priority_level,due_date,description,contacts(id,full_name,first_name,last_name,email,phone),deal_id,deals(id,name)").eq("task_status","open").order("due_date",{ascending:true}).limit(8),
+    supabase.from("agenda_events").select("id,title,event_type,starts_at,meet_link,deals(name)").eq("status","open").gte("starts_at",today.toISOString()).lte("starts_at",in10.toISOString()).order("starts_at").limit(8),
+    supabase.from("contacts").select("*",{count:"exact",head:true}),
+    supabase.from("organizations").select("*",{count:"exact",head:true}),
   ]);
 
-  const orgIds = [...new Set((deals ?? []).map(d => d.client_organization_id).filter(Boolean))];
-  let orgsMap: Record<string, string> = {};
-  if (orgIds.length > 0) {
-    const { data: orgs } = await supabase.from("organizations").select("id, name").in("id", orgIds);
-    orgsMap = Object.fromEntries((orgs ?? []).map(o => [o.id, o.name]));
+  const orgIds = [...new Set((deals??[]).map(d=>d.client_organization_id).filter(Boolean))];
+  let orgsMap: Record<string,string> = {};
+  if (orgIds.length) {
+    const {data:orgs} = await supabase.from("organizations").select("id,name").in("id",orgIds);
+    orgsMap = Object.fromEntries((orgs??[]).map(o=>[o.id,o.name]));
   }
 
-  const allDeals = deals ?? [];
-  const activeDeals = allDeals.filter(d => d.deal_status === "active");
-  const inactiveDeals = allDeals.filter(d => d.deal_status === "inactive");
-  const closedDeals = allDeals.filter(d => d.deal_status === "closed");
-  const overdueTasksCount = (tasks ?? []).filter(t => t.due_date && new Date(t.due_date) < today).length;
+  const all = deals??[];
+  const active = all.filter(d=>d.deal_status==="active");
+  const inactive = all.filter(d=>d.deal_status==="inactive");
+  const closed = all.filter(d=>d.deal_status==="closed");
+  const overdue = (tasks??[]).filter(t=>t.due_date && new Date(t.due_date)<today).length;
 
   // Stats par type
-  const dealTypes = ["fundraising", "ma_sell", "ma_buy", "cfo_advisor", "recruitment"];
-  const statsByType = dealTypes.map(type => ({
-    type,
-    active: activeDeals.filter(d => d.deal_type === type).length,
-    inactive: inactiveDeals.filter(d => d.deal_type === type).length,
-    closed: closedDeals.filter(d => d.deal_type === type).length,
-    total: allDeals.filter(d => d.deal_type === type).length,
-  })).filter(s => s.total > 0);
+  const types = ["fundraising","ma_sell","ma_buy","cfo_advisor","recruitment"];
+  const typeStats = types.map(t=>({
+    t, label: dealType[t]?.label??t, cls: dealType[t]?.cls??"",
+    active: active.filter(d=>d.deal_type===t).length,
+    inactive: inactive.filter(d=>d.deal_type===t).length,
+    closed: closed.filter(d=>d.deal_type===t).length,
+    total: all.filter(d=>d.deal_type===t).length,
+  })).filter(s=>s.total>0);
 
   return (
-    <div className="p-8 min-h-screen" style={{ background: "var(--bg-app)" }}>
+    <div style={{padding:32, minHeight:"100vh", background:"var(--bg)"}}>
       {/* Header */}
-      <div className="mb-8 flex items-end justify-between">
+      <div style={{display:"flex", alignItems:"flex-end", justifyContent:"space-between", marginBottom:28}}>
         <div>
-          <p className="text-xs font-semibold tracking-widest" style={{ color: "var(--brand-blue)" }}>TABLEAU DE BORD</p>
-          <h1 className="mt-1 text-3xl font-bold" style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Bonjour 👋</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-            {today.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </p>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"var(--su-600)",marginBottom:4}}>TABLEAU DE BORD</div>
+          <h1 style={{fontSize:28,fontWeight:700,color:"var(--text-1)",margin:0}}>Bonjour 👋</h1>
+          <div style={{fontSize:13,color:"var(--text-3)",marginTop:4}}>
+            {today.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+          </div>
         </div>
-        <Link href="/protected/ia" className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all hover:opacity-90" style={{ background: "var(--sidebar-bg)", color: "white" }}>
-          <Sparkles size={15} style={{ color: "#60A5FA" }} /> Assistant IA
+        <Link href="/protected/ia" style={{display:"flex",alignItems:"center",gap:8,padding:"9px 18px",borderRadius:10,background:"var(--su-700)",color:"white",textDecoration:"none",fontSize:13,fontWeight:600}}>
+          <Sparkles size={14}/> Assistant IA
         </Link>
       </div>
 
       {/* KPIs globaux */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:16}}>
         {[
-          { count: activeDeals.length, label: "Dossiers actifs", accent: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0" },
-          { count: inactiveDeals.length, label: "Dossiers inactifs", accent: "#64748B", bg: "#F8FAFC", border: "#E2E8F0" },
-          { count: closedDeals.length, label: "Dossiers clôturés", accent: "var(--brand-blue)", bg: "var(--brand-blue-light)", border: "var(--border-default)" },
-          { count: allDeals.length, label: "Total dossiers", accent: "var(--text-primary)", bg: "white", border: "var(--border-default)" },
-        ].map((kpi, i) => (
-          <Link key={i} href="/protected/dossiers"
-            className="group rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5"
-            style={{ background: kpi.bg, borderColor: kpi.border }}
-          >
-            <p className="text-xs font-semibold tracking-widest" style={{ color: "var(--text-muted)" }}>{kpi.label.toUpperCase()}</p>
-            <p className="mt-2 text-4xl font-bold" style={{ color: kpi.accent }}>{kpi.count}</p>
+          {label:"ACTIFS",  count:active.length,  color:"var(--deal-fundraising-dot)", bg:"var(--deal-fundraising-bg)"},
+          {label:"INACTIFS",count:inactive.length, color:"var(--text-3)",              bg:"var(--surface-2)"},
+          {label:"CLÔTURÉS",count:closed.length,   color:"var(--su-600)",              bg:"var(--su-50)"},
+          {label:"CONTACTS",count:cContacts??0,    color:"var(--deal-cfo-dot)",        bg:"var(--deal-cfo-bg)"},
+          {label:"ORGAS",   count:cOrgs??0,        color:"var(--deal-ma-sell-dot)",    bg:"var(--deal-ma-sell-bg)"},
+        ].map((k,i)=>(
+          <Link key={i} href="/protected/dossiers" style={{display:"block",background:k.bg,border:"1px solid var(--border)",borderRadius:14,padding:"16px 18px",textDecoration:"none",transition:"all 0.12s"}}
+            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-2px)";(e.currentTarget as HTMLElement).style.boxShadow="0 4px 12px rgba(13,31,53,0.1)"}}
+            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="";(e.currentTarget as HTMLElement).style.boxShadow=""}}>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-4)",marginBottom:8}}>{k.label}</div>
+            <div style={{fontSize:32,fontWeight:700,color:k.color,lineHeight:1}}>{k.count}</div>
           </Link>
         ))}
       </div>
 
-      {/* Stats par type de dossier */}
-      {statsByType.length > 0 && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {statsByType.map(s => {
-            const accent = dealTypeAccent[s.type] ?? { bg: "#F8FAFC", text: "#475569", border: "#E2E8F0", dot: "#64748B" };
-            return (
-              <Link key={s.type} href={`/protected/dossiers`}
-                className="group rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all"
-                style={{ background: accent.bg, borderColor: accent.border }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{dealTypeIcons[s.type]}</span>
-                    <p className="text-sm font-semibold" style={{ color: accent.text }}>{dealTypeLabels[s.type]}</p>
-                  </div>
-                  <span className="text-2xl font-bold" style={{ color: accent.dot }}>{s.total}</span>
-                </div>
-                <div className="flex gap-4 text-xs" style={{ color: accent.text }}>
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-green-500" />{s.active} actif{s.active > 1 ? "s" : ""}
-                  </span>
-                  {s.inactive > 0 && <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />{s.inactive} inactif{s.inactive > 1 ? "s" : ""}
-                  </span>}
-                  {s.closed > 0 && <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: accent.dot }} />{s.closed} clôturé{s.closed > 1 ? "s" : ""}
-                  </span>}
-                </div>
-              </Link>
-            );
-          })}
-          <div className="rounded-2xl border p-4 shadow-sm grid grid-cols-2 gap-3" style={{ background: "white", borderColor: "var(--border-default)" }}>
-            <Link href="/protected/contacts" className="rounded-xl p-3 hover:opacity-80 transition-all text-center" style={{ background: "var(--brand-blue-light)" }}>
-              <p className="text-2xl font-bold" style={{ color: "var(--brand-blue)" }}>{contactsCount ?? 0}</p>
-              <p className="text-xs font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>Contacts</p>
-            </Link>
-            <Link href="/protected/organisations" className="rounded-xl p-3 hover:opacity-80 transition-all text-center" style={{ background: "#FAF5FF" }}>
-              <p className="text-2xl font-bold" style={{ color: "#7C3AED" }}>{orgsCount ?? 0}</p>
-              <p className="text-xs font-medium mt-0.5" style={{ color: "#6B21A8" }}>Organisations</p>
-            </Link>
-          </div>
+      {/* Stats par type */}
+      {typeStats.length>0 && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:24}}>
+          {typeStats.map(s=>(
+            <div key={s.t} className={`deal-badge ${s.cls}`} style={{display:"block",borderRadius:12,padding:"14px 16px",border:"1px solid var(--border)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontSize:12,fontWeight:700}}>{s.label}</span>
+                <span style={{fontSize:22,fontWeight:700}}>{s.total}</span>
+              </div>
+              <div style={{display:"flex",gap:12,fontSize:11}}>
+                {s.active>0 && <span>●&nbsp;{s.active} actif{s.active>1?"s":""}</span>}
+                {s.inactive>0 && <span style={{opacity:0.7}}>●&nbsp;{s.inactive} inactif{s.inactive>1?"s":""}</span>}
+                {s.closed>0 && <span style={{opacity:0.6}}>●&nbsp;{s.closed} clôturé{s.closed>1?"s":""}</span>}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        {/* Dossiers actifs + Tâches */}
-        <div className="xl:col-span-2 space-y-6">
-
-          {/* Dossiers actifs */}
-          <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: "white", borderColor: "var(--border-default)" }}>
-            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--border-default)" }}>
-              <div className="flex items-center gap-2.5">
-                <Briefcase size={15} style={{ color: "var(--brand-blue)" }} />
-                <h2 className="text-sm font-semibold tracking-widest" style={{ color: "var(--text-primary)" }}>DOSSIERS ACTIFS</h2>
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "var(--brand-blue-light)", color: "var(--brand-blue)" }}>{activeDeals.length}</span>
-              </div>
-              <Link href="/protected/dossiers" className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: "var(--brand-blue)" }}>
-                Voir tous <ArrowRight size={12} />
-              </Link>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 320px",gap:20}}>
+        {/* Dossiers actifs */}
+        <div className="su-card" style={{overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid var(--border)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <FolderOpen size={14} color="var(--su-600)"/>
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:"var(--text-3)"}}>DOSSIERS ACTIFS</span>
+              <span style={{fontSize:11,fontWeight:700,background:"var(--su-50)",color:"var(--su-600)",borderRadius:20,padding:"1px 8px"}}>{active.length}</span>
             </div>
-            <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
-              {activeDeals.length === 0 ? (
-                <p className="px-6 py-8 text-sm text-center" style={{ color: "var(--text-muted)" }}>Aucun dossier actif.</p>
-              ) : activeDeals.slice(0, 6).map(deal => {
-                const accent = dealTypeAccent[deal.deal_type] ?? { bg: "#F8FAFC", text: "#475569", border: "#E2E8F0", dot: "#64748B" };
-                const priorityBar = deal.priority_level === "high" ? "#EF4444" : deal.priority_level === "medium" ? "#F59E0B" : "#CBD5E1";
-                return (
-                  <Link key={deal.id} href={`/protected/dossiers/${deal.id}`}
-                    className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50"
-                  >
-                    <div className="h-9 w-1 shrink-0 rounded-full" style={{ background: priorityBar }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{deal.name}</p>
-                      <p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{orgsMap[deal.client_organization_id] ?? "—"}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: accent.bg, color: accent.text }}>
-                        {dealTypeIcons[deal.deal_type]} {dealTypeLabels[deal.deal_type]}
-                      </span>
-                      <span className="hidden sm:block rounded-md px-2 py-0.5 text-xs" style={{ background: "var(--bg-app)", color: "var(--text-secondary)" }}>
-                        {stageLabels[deal.deal_stage] ?? deal.deal_stage}
-                      </span>
-                      <ArrowRight size={13} style={{ color: "var(--border-strong)" }} />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            <Link href="/protected/dossiers" style={{display:"flex",alignItems:"center",gap:4,fontSize:12,color:"var(--su-600)",textDecoration:"none",fontWeight:500}}>
+              Voir tous <ArrowRight size={12}/>
+            </Link>
           </div>
-
-          {/* Tâches */}
-          <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: "white", borderColor: "var(--border-default)" }}>
-            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--border-default)" }}>
-              <div className="flex items-center gap-2.5">
-                <Clock size={15} style={{ color: "var(--brand-blue)" }} />
-                <h2 className="text-sm font-semibold tracking-widest" style={{ color: "var(--text-primary)" }}>TÂCHES À RÉALISER</h2>
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "var(--brand-blue-light)", color: "var(--brand-blue)" }}>{(tasks ?? []).length}</span>
-                {overdueTasksCount > 0 && (
-                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "#FFF1F2", color: "#9F1239" }}>
-                    <AlertCircle size={10} /> {overdueTasksCount} en retard
-                  </span>
-                )}
-              </div>
-              <Link href="/protected/agenda" className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: "var(--brand-blue)" }}>
-                Agenda <ArrowRight size={12} />
-              </Link>
-            </div>
-            <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
-              {(tasks ?? []).length === 0 ? (
-                <p className="px-6 py-8 text-sm text-center" style={{ color: "var(--text-muted)" }}>Aucune tâche. ✓</p>
-              ) : (tasks ?? []).map(task => {
-                const contact = Array.isArray(task.contacts) ? task.contacts[0] : task.contacts as any;
-                const deal = Array.isArray(task.deals) ? task.deals[0] : task.deals as any;
-                const isOverdue = task.due_date && new Date(task.due_date) < today;
-                const priorityDot = task.priority_level === "high" ? "#EF4444" : task.priority_level === "medium" ? "#F59E0B" : "#CBD5E1";
-                return (
-                  <div key={task.id} className="px-5 py-4 transition-colors" style={{ background: isOverdue ? "#FFF5F5" : undefined }}>
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: priorityDot }} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{task.title}</p>
-                        {task.description && <p className="mt-0.5 text-xs truncate" style={{ color: "var(--text-muted)" }}>{task.description}</p>}
-                        <div className="mt-2 flex flex-wrap items-center gap-3">
-                          {deal && (
-                            <Link href={`/protected/dossiers/${deal.id}`} className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: "var(--brand-blue)" }}>
-                              📁 {deal.name}
-                            </Link>
-                          )}
-                          {contact && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                                {contact.full_name || `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()}
-                              </span>
-                              {contact.email && (
-                                <a href={`mailto:${contact.email}`} className="flex h-5 w-5 items-center justify-center rounded-md" style={{ background: "var(--brand-blue-light)", color: "var(--brand-blue)" }} title={contact.email}>
-                                  <Mail size={10} />
-                                </a>
-                              )}
-                              {contact.phone && (
-                                <a href={`tel:${contact.phone}`} className="flex h-5 w-5 items-center justify-center rounded-md" style={{ background: "#DCFCE7", color: "#166534" }} title={contact.phone}>
-                                  <Phone size={10} />
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <p className="shrink-0 text-xs font-medium" style={{ color: isOverdue ? "#DC2626" : "var(--text-muted)" }}>
-                        {isOverdue && "⚠ "}{formatDate(task.due_date)}
-                      </p>
-                    </div>
+          <div>
+            {active.length===0 ? (
+              <div style={{padding:"32px 20px",textAlign:"center",fontSize:13,color:"var(--text-4)"}}>Aucun dossier actif.</div>
+            ) : active.slice(0,7).map(d=>{
+              const pcolor = d.priority_level==="high"?"#DC2626":d.priority_level==="medium"?"#D97706":"var(--border-2)";
+              const dt = dealType[d.deal_type];
+              return (
+                <Link key={d.id} href={`/protected/dossiers/${d.id}`} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 20px",borderBottom:"1px solid var(--border)",textDecoration:"none",background:"var(--surface)"}}>
+                  <div style={{width:3,height:32,borderRadius:4,background:pcolor,flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"var(--text-1)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</div>
+                    <div style={{fontSize:11,color:"var(--text-4)",marginTop:1}}>{orgsMap[d.client_organization_id]??"—"}</div>
                   </div>
-                );
-              })}
+                  <div style={{display:"flex",gap:6,flexShrink:0}}>
+                    <span className={`deal-badge ${dt?.cls??""}`} style={{borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:600}}>{dt?.label??d.deal_type}</span>
+                    <span style={{fontSize:11,color:"var(--text-4)",background:"var(--surface-2)",borderRadius:6,padding:"2px 8px"}}>{stageLabel[d.deal_stage]??d.deal_stage}</span>
+                  </div>
+                  <ArrowRight size={12} color="var(--border-2)"/>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tâches */}
+        <div className="su-card" style={{overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid var(--border)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <Clock size={14} color="var(--su-600)"/>
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:"var(--text-3)"}}>TÂCHES</span>
+              <span style={{fontSize:11,fontWeight:700,background:"var(--su-50)",color:"var(--su-600)",borderRadius:20,padding:"1px 8px"}}>{(tasks??[]).length}</span>
+              {overdue>0 && <span style={{fontSize:11,fontWeight:700,background:"var(--deal-recruitment-bg)",color:"var(--deal-recruitment-text)",borderRadius:20,padding:"1px 8px",display:"flex",alignItems:"center",gap:3}}><AlertCircle size={10}/>{overdue} retard</span>}
             </div>
+            <Link href="/protected/agenda" style={{fontSize:12,color:"var(--su-600)",textDecoration:"none",fontWeight:500}}>Agenda</Link>
+          </div>
+          <div>
+            {(tasks??[]).length===0 ? (
+              <div style={{padding:"32px 20px",textAlign:"center",fontSize:13,color:"var(--text-4)"}}>Aucune tâche ouverte ✓</div>
+            ) : (tasks??[]).map(task=>{
+              const c = Array.isArray(task.contacts)?task.contacts[0]:task.contacts as any;
+              const dl = Array.isArray(task.deals)?task.deals[0]:task.deals as any;
+              const isOv = task.due_date && new Date(task.due_date)<today;
+              const pdot = task.priority_level==="high"?"#DC2626":task.priority_level==="medium"?"#D97706":"var(--border-2)";
+              return (
+                <div key={task.id} style={{padding:"12px 20px",borderBottom:"1px solid var(--border)",background:isOv?"#FEF5F5":undefined}}>
+                  <div style={{display:"flex",gap:10}}>
+                    <div style={{width:7,height:7,borderRadius:"50%",background:pdot,marginTop:5,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text-1)"}}>{task.title}</div>
+                      {task.description && <div style={{fontSize:11,color:"var(--text-4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.description}</div>}
+                      <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:6}}>
+                        {dl && <Link href={`/protected/dossiers/${dl.id}`} style={{fontSize:11,color:"var(--su-600)",fontWeight:500,textDecoration:"none"}}>📁 {dl.name}</Link>}
+                        {c && <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:11,color:"var(--text-3)"}}>{c.full_name||`${c.first_name??""} ${c.last_name??""}`.trim()}</span>
+                          {c.email && <a href={`mailto:${c.email}`} style={{display:"flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"var(--su-50)",color:"var(--su-600)"}}><Mail size={10}/></a>}
+                          {c.phone && <a href={`tel:${c.phone}`} style={{display:"flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#EEF7EE",color:"var(--deal-fundraising-dot)"}}><Phone size={10}/></a>}
+                        </div>}
+                      </div>
+                    </div>
+                    <div style={{fontSize:11,fontWeight:500,color:isOv?"#DC2626":"var(--text-4)",flexShrink:0}}>{fmtDate(task.due_date)}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Colonne droite */}
-        <div className="space-y-6">
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
           {/* Actions rapides */}
-          <div className="rounded-2xl border p-5 shadow-sm" style={{ background: "white", borderColor: "var(--border-default)" }}>
-            <h2 className="mb-4 text-xs font-semibold tracking-widest" style={{ color: "var(--text-muted)" }}>ACTIONS RAPIDES</h2>
-            <div className="space-y-2">
+          <div className="su-card" style={{padding:"16px 14px"}}>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-4)",marginBottom:12}}>ACTIONS RAPIDES</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {[
-                { href: "/protected/dossiers/nouveau", label: "Nouveau dossier", bg: "var(--brand-blue-light)", color: "var(--brand-blue-dark)" },
-                { href: "/protected/contacts/nouveau", label: "Nouveau contact", bg: "#F0FDF4", color: "#166534" },
-                { href: "/protected/organisations/nouveau", label: "Nouvelle organisation", bg: "#FAF5FF", color: "#6B21A8" },
-                { href: "/protected/agenda/nouvelle-tache", label: "Nouvelle tâche", bg: "#FFF7ED", color: "#9A3412" },
-                { href: "/protected/agenda/nouvel-evenement", label: "Nouvel événement", bg: "#F0F9FF", color: "#0369A1" },
-              ].map(a => (
-                <Link key={a.href} href={a.href}
-                  className="flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-medium transition-all hover:opacity-80"
-                  style={{ background: a.bg, color: a.color }}
-                >
-                  <span>{a.label}</span>
-                  <ChevronRight size={14} className="opacity-50" />
+                {href:"/protected/dossiers/nouveau", label:"Nouveau dossier",      bg:"var(--su-50)",    color:"var(--su-700)"},
+                {href:"/protected/contacts/nouveau", label:"Nouveau contact",      bg:"var(--deal-fundraising-bg)", color:"var(--deal-fundraising-text)"},
+                {href:"/protected/organisations/nouveau", label:"Nouvelle organisation", bg:"var(--deal-ma-sell-bg)", color:"var(--deal-ma-sell-text)"},
+                {href:"/protected/agenda/nouvelle-tache", label:"Nouvelle tâche",  bg:"var(--deal-recruitment-bg)", color:"var(--deal-recruitment-text)"},
+                {href:"/protected/agenda/nouvel-evenement", label:"Nouvel événement", bg:"var(--deal-cfo-bg)", color:"var(--deal-cfo-text)"},
+                {href:"/protected/import", label:"Import CSV",                     bg:"var(--surface-2)", color:"var(--text-2)"},
+              ].map(a=>(
+                <Link key={a.href} href={a.href} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:9,background:a.bg,color:a.color,textDecoration:"none",fontSize:12,fontWeight:600}}>
+                  {a.label} <ArrowRight size={12} style={{opacity:0.5}}/>
                 </Link>
               ))}
             </div>
           </div>
 
           {/* Agenda */}
-          <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: "white", borderColor: "var(--border-default)" }}>
-            <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--border-default)" }}>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xs font-semibold tracking-widest" style={{ color: "var(--text-muted)" }}>AGENDA — 10 JOURS</h2>
-              </div>
-              <Link href="/protected/agenda" className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: "var(--brand-blue)" }}>
-                Tout <ArrowRight size={12} />
-              </Link>
+          <div className="su-card" style={{overflow:"hidden",flex:1}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid var(--border)"}}>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"var(--text-4)"}}>AGENDA — 10 JOURS</span>
+              <Link href="/protected/agenda" style={{fontSize:11,color:"var(--su-600)",textDecoration:"none"}}>Tout →</Link>
             </div>
-            <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
-              {(events ?? []).length === 0 ? (
-                <p className="px-5 py-8 text-sm text-center" style={{ color: "var(--text-muted)" }}>Aucun événement prévu.</p>
-              ) : (events ?? []).map(event => {
-                const deal = Array.isArray(event.deals) ? event.deals[0] : event.deals as any;
-                const eb = eventBg[event.event_type] ?? { bg: "#F8FAFC", text: "#475569" };
-                return (
-                  <div key={event.id} className="px-5 py-3.5 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <span className="rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: eb.bg, color: eb.text }}>
-                          {eventTypeLabels[event.event_type] ?? event.event_type}
-                        </span>
-                        <p className="mt-1.5 text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{event.title}</p>
-                        {deal && <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>📁 {deal.name}</p>}
-                        {event.meet_link && (
-                          <a href={event.meet_link} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: "#2563EB" }}>
-                            🎥 Rejoindre Meet
-                          </a>
-                        )}
-                      </div>
-                      <p className="shrink-0 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{formatDateTime(event.starts_at)}</p>
+            {(events??[]).length===0 ? (
+              <div style={{padding:"24px 16px",textAlign:"center",fontSize:12,color:"var(--text-4)"}}>Aucun événement prévu.</div>
+            ) : (events??[]).map(ev=>{
+              const dl = Array.isArray(ev.deals)?ev.deals[0]:ev.deals as any;
+              return (
+                <div key={ev.id} style={{padding:"11px 16px",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <span style={{fontSize:10,fontWeight:700,borderRadius:5,padding:"2px 7px",background:eventColor[ev.event_type]??"#F2F5F9",color:eventTColor[ev.event_type]??"var(--text-2)"}}>{eventLabel[ev.event_type]??ev.event_type}</span>
+                      <div style={{fontSize:12,fontWeight:600,color:"var(--text-1)",marginTop:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.title}</div>
+                      {dl && <div style={{fontSize:11,color:"var(--text-4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📁 {dl.name}</div>}
+                      {ev.meet_link && <a href={ev.meet_link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#2563EB",display:"block",marginTop:2}}>🎥 Meet</a>}
                     </div>
+                    <div style={{fontSize:10,fontWeight:600,color:"var(--text-3)",flexShrink:0,textAlign:"right"}}>{fmtDT(ev.starts_at)}</div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -355,8 +266,8 @@ async function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="p-8 min-h-screen animate-pulse" style={{ background: "var(--bg-app)" }}><div className="h-10 w-64 rounded-xl bg-slate-200 mb-8" /><div className="grid gap-4 grid-cols-4 mb-6">{[1,2,3,4].map(i => <div key={i} className="h-24 rounded-2xl bg-slate-200" />)}</div></div>}>
-      <DashboardContent />
+    <Suspense fallback={<div style={{padding:32,background:"var(--bg)",minHeight:"100vh"}}><div style={{height:400,borderRadius:16,background:"#E8EEF4",animation:"pulse 1.5s infinite"}}/></div>}>
+      <Content/>
     </Suspense>
   );
 }
