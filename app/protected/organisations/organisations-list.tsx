@@ -1,50 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, Globe, Edit } from "lucide-react";
+import { Search, Globe, Edit, Plus } from "lucide-react";
 
 type Org = {
-  id: string;
-  name: string;
-  typeLabel: string;
-  statusLabel: string;
-  status: string;
-  sector: string;
-  country: string;
-  website: string | null;
-  notes: string;
-  dealsCount: number;
+  id: string; name: string; typeLabel: string; statusLabel: string; status: string;
+  sector: string; country: string; website: string | null; notes: string; dealsCount: number;
 };
 
-const typeColors: Record<string, string> = {
-  "Client": "bg-sky-100 text-sky-800",
-  "Prospect client": "bg-blue-100 text-blue-800",
-  "Investisseur": "bg-amber-100 text-amber-800",
-  "Family office": "bg-amber-100 text-amber-800",
-  "Repreneur": "bg-emerald-100 text-emerald-800",
-  "Cible": "bg-rose-100 text-rose-800",
-  "Cabinet juridique": "bg-violet-100 text-violet-800",
-  "Banque": "bg-slate-100 text-slate-700",
-  "Conseil": "bg-teal-100 text-teal-800",
-  "Cabinet comptable": "bg-indigo-100 text-indigo-800",
-  "Corporate": "bg-slate-200 text-slate-700",
-  "Cabinet de conseil": "bg-teal-100 text-teal-800",
-  "Autre": "bg-slate-100 text-slate-600",
+const typeStyle: Record<string, { bg: string; text: string }> = {
+  "Client":           { bg:"var(--deal-ma-buy-bg)",       text:"var(--deal-ma-buy-text)" },
+  "Prospect client":  { bg:"var(--su-50)",                text:"var(--su-700)" },
+  "Investisseur":     { bg:"var(--deal-fundraising-bg)",  text:"var(--deal-fundraising-text)" },
+  "Family office":    { bg:"var(--deal-fundraising-bg)",  text:"var(--deal-fundraising-text)" },
+  "Repreneur":        { bg:"var(--deal-ma-sell-bg)",      text:"var(--deal-ma-sell-text)" },
+  "Cible":            { bg:"var(--deal-recruitment-bg)",  text:"var(--deal-recruitment-text)" },
+  "Cabinet juridique":{ bg:"var(--deal-cfo-bg)",          text:"var(--deal-cfo-text)" },
+  "Banque":           { bg:"var(--surface-2)",            text:"var(--text-2)" },
+  "Conseil":          { bg:"var(--deal-ma-buy-bg)",       text:"var(--deal-ma-buy-text)" },
+  "Cabinet comptable":{ bg:"var(--deal-cfo-bg)",          text:"var(--deal-cfo-text)" },
+  "Corporate":        { bg:"var(--surface-2)",            text:"var(--text-3)" },
+  "Autre":            { bg:"var(--surface-2)",            text:"var(--text-3)" },
 };
 
-const statusColors: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-800",
-  priority: "bg-rose-100 text-rose-800",
-  qualified: "bg-amber-100 text-amber-800",
-  to_qualify: "bg-slate-100 text-slate-600",
-  dormant: "bg-blue-100 text-blue-800",
-  inactive: "bg-slate-200 text-slate-500",
-  excluded: "bg-red-100 text-red-700",
-};
-
-const statusLabels: Record<string, string> = {
-  active: "Actif", priority: "Prioritaire", qualified: "Qualifié",
-  to_qualify: "À qualifier", dormant: "Dormant", inactive: "Inactif", excluded: "Exclu",
+const statusStyle: Record<string, { bg: string; text: string; label: string }> = {
+  active:    { bg:"var(--deal-fundraising-bg)", text:"var(--deal-fundraising-text)", label:"Actif" },
+  priority:  { bg:"var(--deal-recruitment-bg)", text:"var(--deal-recruitment-text)", label:"Prioritaire" },
+  qualified: { bg:"var(--deal-ma-sell-bg)",     text:"var(--deal-ma-sell-text)",     label:"Qualifié" },
+  to_qualify:{ bg:"var(--surface-2)",           text:"var(--text-4)",                label:"À qualifier" },
+  dormant:   { bg:"var(--deal-ma-buy-bg)",      text:"var(--deal-ma-buy-text)",      label:"Dormant" },
+  inactive:  { bg:"var(--surface-2)",           text:"var(--text-4)",                label:"Inactif" },
+  excluded:  { bg:"var(--deal-recruitment-bg)", text:"var(--deal-recruitment-text)", label:"Exclu" },
 };
 
 export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total: number } }) {
@@ -55,124 +41,99 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
   const types = [...new Set(orgs.map(o => o.typeLabel))].sort();
 
   const filtered = orgs.filter(o => {
-    const matchSearch = search === "" ||
-      o.name.toLowerCase().includes(search.toLowerCase()) ||
-      o.sector.toLowerCase().includes(search.toLowerCase()) ||
-      o.country.toLowerCase().includes(search.toLowerCase());
+    const s = search.toLowerCase();
+    const matchSearch = !s || o.name.toLowerCase().includes(s) || o.sector.toLowerCase().includes(s) || o.country.toLowerCase().includes(s);
     const matchType = typeFilter === "all" || o.typeLabel === typeFilter;
     const matchStatus = statusFilter === "all" || o.status === statusFilter;
     return matchSearch && matchType && matchStatus;
   });
 
   return (
-    <div className="min-h-screen p-8 bg-[#F5F0E8]">
-      <div className="mb-8 flex items-center justify-between">
+    <div style={{ padding:32, minHeight:"100vh", background:"var(--bg)" }}>
+
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", marginBottom:24 }}>
         <div>
-          <p className="text-sm font-semibold tracking-widest text-[#C9A84C]">MODULE CRM</p>
-          <h1 className="mt-1 text-4xl font-bold tracking-tight text-[#0F1B2D]">Organisations</h1>
-          <p className="mt-1 text-sm text-[#6B8CAE]">{stats.total} organisations</p>
+          <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", color:"var(--su-600)", marginBottom:4 }}>MODULE CRM</div>
+          <h1 style={{ fontSize:28, fontWeight:700, color:"var(--text-1)", margin:0, letterSpacing:"-0.02em" }}>Organisations</h1>
+          <p style={{ fontSize:13, color:"var(--text-3)", marginTop:4 }}>{stats.total} organisations</p>
         </div>
-        <a
-          href="/protected/organisations/nouveau"
-          className="rounded-xl bg-[#0F1B2D] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1B2A4A] transition-colors"
-        >
-          + Nouvelle organisation
+        <a href="/protected/organisations/nouveau"
+          style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"9px 20px", borderRadius:10, background:"var(--su-700)", color:"white", textDecoration:"none", fontSize:13, fontWeight:600 }}>
+          <Plus size={14}/> Nouvelle organisation
         </a>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher par nom, secteur, pays…"
-            className="w-full rounded-xl border border-[#E8E0D0] bg-white py-2.5 pl-10 pr-4 text-sm text-[#0F1B2D] outline-none focus:border-[#0F1B2D] focus:ring-1 focus:ring-[#0F1B2D] transition-all"
-          />
+      {/* Filtres */}
+      <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:1, minWidth:220 }}>
+          <Search size={14} style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--text-4)" }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Rechercher nom, secteur, pays…"
+            style={{ width:"100%", borderRadius:10, border:"1px solid var(--border)", background:"var(--surface)", padding:"9px 12px 9px 36px", fontSize:13, color:"var(--text-1)", outline:"none", boxSizing:"border-box" }}/>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={15} className="text-slate-400" />
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            className="rounded-xl border border-[#E8E0D0] bg-white px-4 py-2.5 text-sm text-[#0F1B2D] outline-none focus:border-[#0F1B2D] transition-all"
-          >
-            <option value="all">Tous les types</option>
-            {types.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-[#E8E0D0] bg-white px-4 py-2.5 text-sm text-[#0F1B2D] outline-none focus:border-[#0F1B2D] transition-all"
-          >
-            <option value="all">Tous les statuts</option>
-            <option value="active">Actif</option>
-            <option value="priority">Prioritaire</option>
-            <option value="qualified">Qualifié</option>
-            <option value="to_qualify">À qualifier</option>
-            <option value="dormant">Dormant</option>
-            <option value="inactive">Inactif</option>
-          </select>
-        </div>
+        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}
+          style={{ borderRadius:10, border:"1px solid var(--border)", background:"var(--surface)", padding:"9px 14px", fontSize:13, color:"var(--text-1)", outline:"none" }}>
+          <option value="all">Tous les types</option>
+          {types.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
+          style={{ borderRadius:10, border:"1px solid var(--border)", background:"var(--surface)", padding:"9px 14px", fontSize:13, color:"var(--text-1)", outline:"none" }}>
+          <option value="all">Tous les statuts</option>
+          {Object.entries(statusStyle).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
       </div>
 
-      <p className="mb-4 text-xs text-slate-400">{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</p>
+      <p style={{ fontSize:12, color:"var(--text-4)", marginBottom:12 }}>{filtered.length} résultat{filtered.length>1?"s":""}</p>
 
+      {/* Liste */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#E8E0D0] bg-white p-12 text-center">
-          <p className="text-sm text-slate-400">Aucune organisation trouvée.</p>
+        <div style={{ borderRadius:16, border:"2px dashed var(--border)", padding:48, textAlign:"center" }}>
+          <p style={{ fontSize:13, color:"var(--text-4)" }}>Aucune organisation trouvée.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(org => (
-            <div key={org.id} className="rounded-2xl border border-[#E8E0D0] bg-white p-5 shadow-sm hover:shadow-md hover:border-[#C9A84C] transition-all">
-              <div className="flex items-start justify-between gap-4">
-                <a href={`/protected/organisations/${org.id}`} className="flex items-start gap-4 min-w-0 flex-1">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0F1B2D] text-sm font-bold text-[#C9A84C]">
-                    {org.name.charAt(0)}
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {filtered.map(org => {
+            const ts = typeStyle[org.typeLabel] ?? { bg:"var(--surface-2)", text:"var(--text-3)" };
+            const ss = statusStyle[org.status] ?? statusStyle.to_qualify;
+            return (
+              <div key={org.id} className="su-card" style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:14 }}>
+                {/* Initial */}
+                <div style={{ width:36, height:36, borderRadius:10, background:ts.bg, border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:ts.text, flexShrink:0 }}>
+                  {org.name.charAt(0).toUpperCase()}
+                </div>
+
+                {/* Infos */}
+                <a href={`/protected/organisations/${org.id}`} style={{ flex:1, minWidth:0, textDecoration:"none" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:14, fontWeight:700, color:"var(--text-1)" }}>{org.name}</span>
+                    <span style={{ fontSize:11, fontWeight:600, borderRadius:6, padding:"2px 8px", background:ts.bg, color:ts.text }}>{org.typeLabel}</span>
+                    <span style={{ fontSize:11, fontWeight:600, borderRadius:6, padding:"2px 8px", background:ss.bg, color:ss.text }}>{ss.label}</span>
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-[#0F1B2D]">{org.name}</h3>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${typeColors[org.typeLabel] ?? "bg-slate-100 text-slate-600"}`}>
-                        {org.typeLabel}
-                      </span>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusColors[org.status] ?? "bg-slate-100 text-slate-600"}`}>
-                        {statusLabels[org.status] ?? org.statusLabel}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-sm text-slate-500">
-                      {org.sector !== "N/A" ? org.sector : ""}
-                      {org.sector !== "N/A" && org.country !== "N/A" ? " · " : ""}
-                      {org.country !== "N/A" ? org.country : ""}
-                    </p>
-                    {org.dealsCount > 0 && (
-                      <p className="mt-1 text-xs text-slate-400">{org.dealsCount} dossier{org.dealsCount > 1 ? "s" : ""}</p>
-                    )}
+                  <div style={{ fontSize:12, color:"var(--text-3)", marginTop:2 }}>
+                    {org.sector && org.sector !== "N/A" && <span>{org.sector}</span>}
+                    {org.sector && org.sector !== "N/A" && org.country && org.country !== "N/A" && <span style={{ margin:"0 5px", color:"var(--border-2)" }}>·</span>}
+                    {org.country && org.country !== "N/A" && <span>📍 {org.country}</span>}
+                    {org.dealsCount > 0 && <span style={{ marginLeft:8, color:"var(--su-600)", fontWeight:500 }}>· {org.dealsCount} dossier{org.dealsCount>1?"s":""}</span>}
                   </div>
                 </a>
 
-                <div className="flex shrink-0 items-center gap-2">
+                {/* Actions */}
+                <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                   {org.website && (
-                    <a
-                      href={org.website}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E8E0D0] text-slate-400 hover:border-[#0F1B2D] hover:text-[#0F1B2D] transition-colors"
-                    >
-                      <Globe size={14} />
+                    <a href={org.website} target="_blank" rel="noreferrer"
+                      style={{ display:"flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--su-600)" }}>
+                      <Globe size={13}/>
                     </a>
                   )}
-                  <a
-                    href={`/protected/organisations/${org.id}/modifier`}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E8E0D0] text-slate-400 hover:border-[#0F1B2D] hover:text-[#0F1B2D] transition-colors"
-                  >
-                    <Edit size={14} />
+                  <a href={`/protected/organisations/${org.id}/modifier`}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-3)" }}>
+                    <Edit size={13}/>
                   </a>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
