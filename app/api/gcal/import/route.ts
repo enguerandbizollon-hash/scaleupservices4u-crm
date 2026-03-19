@@ -40,11 +40,15 @@ export async function POST(req: NextRequest) {
       meet_link: meetLink,
       event_type: item.hangoutLink ? "meeting" : "other",
       status: "open",
+      deal_id: null,      // ← optionnel, pas de dossier associé par défaut
       user_id: user.id,
     });
 
-    if (error && !error.message.includes("duplicate")) errors.push(`${item.summary}: ${error.message}`);
-    else if (!error) imported++;
+    if (error) {
+      errors.push(`${item.summary}: ${error.message}`);
+    } else {
+      imported++;
+    }
   }
 
   return NextResponse.json({ imported, errors, total: gcal.items?.length ?? 0 });

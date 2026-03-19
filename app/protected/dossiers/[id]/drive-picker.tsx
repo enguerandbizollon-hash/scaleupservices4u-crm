@@ -1,13 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { HardDrive, Loader2, ExternalLink } from "lucide-react";
+import { HardDrive, Loader2 } from "lucide-react";
 
 declare global {
-  interface Window {
-    google?: any;
-    gapi?: any;
-  }
+  interface Window { gapi?: any; google?: any; }
 }
 
 export function DrivePicker({ onSelect }: { onSelect: (url: string, name: string) => void }) {
@@ -18,53 +15,83 @@ export function DrivePicker({ onSelect }: { onSelect: (url: string, name: string
     setLoading(true);
     setError("");
     try {
-      // Récupérer le token Google
+      // Récupérer le token Google depuis la session NextAuth
       const sessionRes = await fetch("/api/auth/session");
       const session = await sessionRes.json();
       const token = session?.access_token;
 
       if (!token) {
-        setError("Connecte-toi à Google d'abord (menu Connecteurs).");
+        setError("Connecte-toi à Google dans le menu Connecteurs.");
         setLoading(false);
         return;
       }
 
-      // Charger le script Google Picker si pas déjà chargé
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        setError("NEXT_PUBLIC_GOOGLE_CLIENT_ID manquant dans .env.local");
+        setLoading(false);
+        return;
+      }
+
+      // Charger l'API Google Picker
       await new Promise<void>((resolve, reject) => {
         if (window.gapi?.picker) { resolve(); return; }
         const s = document.createElement("script");
         s.src = "https://apis.google.com/js/api.js";
-        s.onload = () => window.gapi.load("picker", () => resolve());
-        s.onerror = reject;
-        document.body.appendChild(s);
+        s.onload = () => {
+          window.gapi!.load("picker", { callback: resolve });
+        };
+        s.onerror = () => reject(new Error("Impossible de charger l'API Google"));
+        document.head.appendChild(s);
       });
 
       const picker = new window.gapi.picker.PickerBuilder()
         .addView(window.gapi.picker.ViewId.DOCS)
+        .addView(window.gapi.picker.ViewId.SPREADSHEETS)
+        .addView(window.gapi.picker.ViewId.PRESENTATIONS)
+        .addView(window.gapi.picker.ViewId.PDFS)
         .setOAuthToken(token)
+        .setDeveloperKey(clientId)
         .setCallback((data: any) => {
-          if (data.action === "picked") {
+          if (data.action === window.gapi.picker.Action.PICKED) {
             const doc = data.docs[0];
-            onSelect(doc.url, doc.name);
+            const url = doc.url ?? `https://drive.google.com/file/d/${doc.id}/view`;
+            onSelect(url, doc.name);
+            setLoading(false);
+          } else if (data.action === window.gapi.picker.Action.CANCEL) {
+            setLoading(false);
           }
-          setLoading(false);
         })
         .build();
+
       picker.setVisible(true);
     } catch (e: any) {
-      setError("Erreur lors de l'ouverture de Drive.");
+      setError(e.message ?? "Erreur Drive Picker");
       setLoading(false);
     }
   }
 
   return (
     <div>
-      <button onClick={openPicker} disabled={loading}
-        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--su-50)", color: "var(--su-700)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-        {loading ? <Loader2 size={13} className="animate-spin" /> : <HardDrive size={13} />}
-        {loading ? "Ouverture…" : "Choisir depuis Drive"}
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={loading}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "7px 14px", borderRadius: 9,
+          border: "1px solid var(--border)",
+          background: "var(--su-50)", color: "var(--su-700)",
+          fontSize: 12, fontWeight: 600, cursor: "pointer",
+        }}
+      >
+        {loading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <HardDrive size={13} />}
+        {loading ? "Ouverture Drive…" : "Choisir depuis Drive"}
       </button>
-      {error && <p style={{ fontSize: 11, color: "var(--deal-recruitment-text)", marginTop: 6 }}>{error}</p>}
+      {error && (
+        <p style={{ fontSize: 11, color: "var(--deal-recruitment-text)", marginTop: 5 }}>{error}</p>
+      )}
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
