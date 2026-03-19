@@ -2,55 +2,51 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { ContactsList } from "./contacts-list";
 
+export const revalidate = 60; // cache 60s
+
 async function Content() {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("contacts")
-    .select(`
-      id,
-      first_name,
-      last_name,
-      full_name,
-      email,
-      phone,
-      title,
-      linkedin_url,
-      sector,
-      investment_ticket_label,
-      notes,
-      base_status,
-      organization_contacts (
-        organizations ( id, name )
-      )
-    `)
-    .order("last_name", { ascending: true });
+  // Requête légère : pas de JOIN lourd
+  const [{ data: contacts }, { data: orgContacts }] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select("id, first_name, last_name, full_name, email, phone, title, linkedin_url, sector, investment_ticket_label, base_status, notes")
+      .order("last_name", { ascending: true }),
+    supabase
+      .from("organization_contacts")
+      .select("contact_id, organizations(id, name)")
+  ]);
 
-  if (error) throw new Error(error.message);
+  // Map org par contact_id côté JS — plus rapide qu'un JOIN Supabase
+  const orgMap = new Map<string, string>();
+  for (const oc of orgContacts ?? []) {
+    if (!orgMap.has(oc.contact_id)) {
+      const org = Array.isArray(oc.organizations) ? oc.organizations[0] : oc.organizations as any;
+      if (org?.name) orgMap.set(oc.contact_id, org.name);
+    }
+  }
 
-  const contacts = (data ?? []).map(c => {
-    const org = c.organization_contacts?.[0]?.organizations as { id: string; name: string } | null;
-    return {
-      id: c.id,
-      fullName: c.full_name || `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
-      title: c.title ?? "—",
-      email: c.email ?? "—",
-      phone: c.phone ?? "—",
-      linkedinUrl: c.linkedin_url ?? null,
-      sector: c.sector ?? "N/A",
-      ticket: c.investment_ticket_label ?? "N/A",
-      organisation: org?.name ?? "—",
-      status: c.base_status ?? "active",
-      notes: c.notes ?? "—",
-    };
-  });
-
-  const active = contacts.filter(c => c.status === "active" || c.status === "priority").length;
+  const list = (contacts ?? []).map(c => ({
+    id: c.id,
+    fullName: c.full_name || `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
+    firstName: c.first_name ?? "",
+    lastName: c.last_name ?? "",
+    title: c.title ?? "",
+    email: c.email ?? "",
+    phone: c.phone ?? "",
+    linkedinUrl: c.linkedin_url ?? null,
+    sector: c.sector ?? "",
+    ticket: c.investment_ticket_label ?? "",
+    organisation: orgMap.get(c.id) ?? "",
+    status: c.base_status ?? "to_qualify",
+    notes: c.notes ?? "",
+  }));
 
   return (
     <ContactsList
-      contacts={contacts}
-      stats={{ total: contacts.length, active }}
+      contacts={list}
+      stats={{ total: list.length, active: list.filter(c => ["active","priority"].includes(c.status)).length }}
     />
   );
 }
@@ -58,10 +54,10 @@ async function Content() {
 export default function ContactsPage() {
   return (
     <Suspense fallback={
-      <div className="p-8">
-        <div className="h-10 w-48 animate-pulse rounded-lg bg-slate-200 mb-8" />
-        <div className="space-y-3">
-          {[1,2,3,4,5].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-200" />)}
+      <div style={{ padding:32, background:"var(--bg)", minHeight:"100vh" }}>
+        <div style={{ height:40, width:200, borderRadius:10, background:"var(--border)", marginBottom:24, animation:"pulse 1.5s infinite" }}/>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {[1,2,3,4,5].map(i => <div key={i} style={{ height:60, borderRadius:12, background:"var(--border)", animation:"pulse 1.5s infinite" }}/>)}
         </div>
       </div>
     }>
