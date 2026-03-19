@@ -54,11 +54,11 @@ async function AgendaContent() {
   const priorityClass: Record<string, string> = {
     high: "bg-rose-100 text-rose-800",
     medium: "bg-amber-100 text-amber-800",
-    low: "bg-slate-100 text-slate-700",
+    low: "bg-[#F5F0E8] text-slate-700",
   };
 
   const statusClass: Record<string, string> = {
-    open: "bg-slate-100 text-slate-700",
+    open: "bg-[#F5F0E8] text-slate-700",
     done: "bg-emerald-100 text-emerald-800",
     cancelled: "bg-rose-100 text-rose-800",
   };
@@ -74,10 +74,10 @@ async function AgendaContent() {
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Agenda</h1>
         </div>
         <div className="flex gap-3">
-          <Link href="/protected/agenda/nouvelle-tache" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <Link href="/protected/agenda/nouvelle-tache" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]">
             + Tâche
           </Link>
-          <Link href="/protected/agenda/nouvel-evenement" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+          <Link href="/protected/agenda/nouvel-evenement" className="rounded-xl bg-[#0F1B2D] px-4 py-2 text-sm font-medium text-white hover:bg-[#163959]">
             + Événement
           </Link>
         </div>
@@ -87,7 +87,7 @@ async function AgendaContent() {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Événements</h2>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{upcomingEvents.length}</span>
+            <span className="rounded-full bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-slate-700">{upcomingEvents.length}</span>
           </div>
           <div className="space-y-3">
             {upcomingEvents.length === 0 ? (
@@ -104,11 +104,11 @@ async function AgendaContent() {
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-slate-50 p-2.5">
+                  <div className="rounded-xl bg-[#F5F0E8] p-2.5">
                     <p className="text-xs text-slate-500">Début</p>
                     <p className="mt-0.5 text-sm font-medium">{formatDate(event.starts_at)}</p>
                   </div>
-                  <div className="rounded-xl bg-slate-50 p-2.5">
+                  <div className="rounded-xl bg-[#F5F0E8] p-2.5">
                     <p className="text-xs text-slate-500">Lieu</p>
                     <p className="mt-0.5 text-sm font-medium">{event.location ?? "—"}</p>
                   </div>
@@ -140,7 +140,7 @@ async function AgendaContent() {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Tâches</h2>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{pendingTasks.length}</span>
+            <span className="rounded-full bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-slate-700">{pendingTasks.length}</span>
           </div>
           <div className="space-y-3">
             {pendingTasks.length === 0 ? (
@@ -153,17 +153,17 @@ async function AgendaContent() {
                     {task.deal_id && <p className="mt-0.5 text-xs text-slate-500">{dealsMap[task.deal_id] ?? "—"}</p>}
                   </div>
                   <div className="flex shrink-0 gap-1.5">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${priorityClass[task.priority_level] ?? "bg-slate-100 text-slate-700"}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${priorityClass[task.priority_level] ?? "bg-[#F5F0E8] text-slate-700"}`}>
                       {task.priority_level === "high" ? "Haute" : task.priority_level === "medium" ? "Moyenne" : "Basse"}
                     </span>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[task.task_status] ?? "bg-slate-100 text-slate-700"}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[task.task_status] ?? "bg-[#F5F0E8] text-slate-700"}`}>
                       {taskStatusLabels[task.task_status] ?? task.task_status}
                     </span>
                   </div>
                 </div>
                 {task.description && <p className="mt-2 text-xs text-slate-500">{task.description}</p>}
                 <div className="mt-3 flex items-center justify-between">
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="rounded-xl bg-[#F5F0E8] px-3 py-2">
                     <p className="text-xs text-slate-500">Échéance : <span className="font-medium text-slate-900">{formatDateOnly(task.due_date)}</span></p>
                   </div>
                   <form action={deleteTaskAction}>

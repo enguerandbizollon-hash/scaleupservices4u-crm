@@ -11,13 +11,13 @@ function documentStatusClass(status: string) {
   if (status === "Reçu") return "bg-blue-100 text-blue-800";
   if (status === "Modélisé") return "bg-violet-100 text-violet-800";
   if (status === "Finalisé") return "bg-emerald-100 text-emerald-800";
-  return "bg-slate-100 text-slate-700";
+  return "bg-[#F5F0E8] text-slate-700";
 }
 
 function priorityClass(priority: string) {
   if (priority === "Haute") return "bg-rose-100 text-rose-800";
   if (priority === "Moyenne") return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-700";
+  return "bg-[#F5F0E8] text-slate-700";
 }
 
 function DocumentCard({ doc }: { doc: DocumentView }) {
@@ -41,15 +41,15 @@ function DocumentCard({ doc }: { doc: DocumentView }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Version</p>
           <p className="mt-1 text-sm font-medium">{doc.versionLabel}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
           <p className="mt-1 text-sm font-medium">{doc.addedAt}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3 md:col-span-2">
+        <div className="rounded-xl bg-[#F5F0E8] p-3 md:col-span-2">
           <p className="text-xs uppercase tracking-wide text-slate-500">Note</p>
           <p className="mt-1 text-sm text-slate-700">{doc.note}</p>
         </div>
@@ -61,7 +61,7 @@ function DocumentCard({ doc }: { doc: DocumentView }) {
             href={doc.documentUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            className="inline-flex rounded-xl bg-[#0F1B2D] px-4 py-2 text-sm font-medium text-white hover:bg-[#163959]"
           >
             Accéder au document
           </a>
@@ -109,7 +109,7 @@ function ChecklistCard({ group }: { group: ChecklistGroupView }) {
 
       <div className="space-y-3">
         {group.items.map((item) => (
-          <div key={item.id} className="rounded-xl bg-slate-50 p-3">
+          <div key={item.id} className="rounded-xl bg-[#F5F0E8] p-3">
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
@@ -144,7 +144,7 @@ function ChecklistCard({ group }: { group: ChecklistGroupView }) {
 
 function DocumentsLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <p className="text-sm font-medium text-slate-500">Module CRM</p>
@@ -172,7 +172,7 @@ async function DocumentsContent() {
     await getDocumentsView();
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <p className="text-sm font-medium text-slate-500">Module CRM</p>

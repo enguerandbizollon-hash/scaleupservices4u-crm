@@ -56,7 +56,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             <p className="text-sm font-medium text-slate-500">Modifier une organisation</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">{org.name}</h1>
           </div>
-          <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Retour</Link>
+          <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]">Retour</Link>
         </div>
 
         <form action={updateOrganizationAction} className="space-y-5">
@@ -106,8 +106,8 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               </button>
             </form>
             <div className="flex gap-3">
-              <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Annuler</Link>
-              <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Enregistrer</button>
+              <Link href="/protected/organisations" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]">Annuler</Link>
+              <button type="submit" className="rounded-xl bg-[#0F1B2D] px-4 py-2 text-sm font-medium text-white hover:bg-[#163959]">Enregistrer</button>
             </div>
           </div>
         </form>

@@ -65,7 +65,7 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
   });
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 bg-[#F5F0E8]">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold tracking-widest text-[#C9A84C]">MODULE CRM</p>

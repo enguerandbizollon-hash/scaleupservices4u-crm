@@ -54,7 +54,7 @@ export function ContactsList({ contacts, stats }: { contacts: Contact[]; stats: 
   });
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 bg-[#F5F0E8]">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>

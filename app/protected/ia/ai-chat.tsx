@@ -74,7 +74,7 @@ export function AIChat({ stats }: { stats: Stats }) {
       <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-6">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0F1B2D]">
               <Bot size={24} className="text-white" />
             </div>
             <div className="text-center">
@@ -97,13 +97,13 @@ export function AIChat({ stats }: { stats: Stats }) {
           <div className="space-y-4">
             {messages.map((m, i) => (
               <div key={i} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${m.role === "user" ? "bg-slate-900" : "bg-slate-100"}`}>
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${m.role === "user" ? "bg-[#0F1B2D]" : "bg-slate-100"}`}>
                   {m.role === "user"
                     ? <User size={14} className="text-white" />
                     : <Bot size={14} className="text-slate-600" />
                   }
                 </div>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${m.role === "user" ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-800 border border-slate-200"}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${m.role === "user" ? "bg-[#0F1B2D] text-white" : "bg-[#F5F0E8] text-[#0F1B2D] border border-[#E8E0D0]"}`}>
                   <pre className="whitespace-pre-wrap font-sans">{m.content}</pre>
                 </div>
               </div>

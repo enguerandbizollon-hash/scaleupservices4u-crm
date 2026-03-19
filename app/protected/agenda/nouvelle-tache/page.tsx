@@ -18,7 +18,7 @@ async function Content() {
             <p className="text-sm font-medium text-slate-500">Agenda</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Nouvelle tâche</h1>
           </div>
-          <Link href="/protected/agenda" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <Link href="/protected/agenda" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]">
             Retour
           </Link>
         </div>
@@ -76,10 +76,10 @@ async function Content() {
           </div>
 
           <div className="flex justify-end gap-3">
-            <Link href="/protected/agenda" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <Link href="/protected/agenda" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]">
               Annuler
             </Link>
-            <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+            <button type="submit" className="rounded-xl bg-[#0F1B2D] px-4 py-2 text-sm font-medium text-white hover:bg-[#163959]">
               Créer la tâche
             </button>
           </div>

@@ -7,17 +7,17 @@ import {
 } from "@/lib/crm/get-activities";
 
 function sourceBadgeClass(source: string) {
-  if (source === "Manuel") return "bg-slate-100 text-slate-700";
+  if (source === "Manuel") return "bg-[#F5F0E8] text-slate-700";
   if (source === "Calendrier") return "bg-blue-100 text-blue-800";
   if (source === "Drive") return "bg-emerald-100 text-emerald-800";
   if (source === "Gmail") return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-700";
+  return "bg-[#F5F0E8] text-slate-700";
 }
 
 function priorityBadgeClass(priority: string) {
   if (priority === "Haute") return "bg-rose-100 text-rose-800";
   if (priority === "Moyenne") return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-700";
+  return "bg-[#F5F0E8] text-slate-700";
 }
 
 function ActivityCard({ activity }: { activity: ActivityView }) {
@@ -39,19 +39,19 @@ function ActivityCard({ activity }: { activity: ActivityView }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Dossier</p>
           <p className="mt-1 text-sm font-medium">{activity.dealName}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Contact</p>
           <p className="mt-1 text-sm font-medium">{activity.contactName}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Organisation</p>
           <p className="mt-1 text-sm font-medium">{activity.organizationName}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
           <p className="mt-1 text-sm font-medium">{activity.activityDate}</p>
         </div>
@@ -84,11 +84,11 @@ function TaskCard({ task }: { task: TaskView }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Dossier</p>
           <p className="mt-1 text-sm font-medium">{task.dealName}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Échéance</p>
           <p className="mt-1 text-sm font-medium">{task.dueDate}</p>
         </div>
@@ -115,11 +115,11 @@ function AgendaCard({ event }: { event: AgendaEventView }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Début</p>
           <p className="mt-1 text-sm font-medium">{event.startsAt}</p>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-[#F5F0E8] p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Lieu</p>
           <p className="mt-1 text-sm font-medium">{event.location}</p>
         </div>
@@ -130,7 +130,7 @@ function AgendaCard({ event }: { event: AgendaEventView }) {
         <p className="mt-1 text-sm text-slate-700">{event.description}</p>
       </div>
 
-      <div className="mt-4 rounded-xl bg-slate-50 p-3">
+      <div className="mt-4 rounded-xl bg-[#F5F0E8] p-3">
         <p className="text-xs uppercase tracking-wide text-slate-500">Participants</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {event.attendees.length > 0 ? (
@@ -153,7 +153,7 @@ function AgendaCard({ event }: { event: AgendaEventView }) {
 
 function ActivitesLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <p className="text-sm font-medium text-slate-500">Module CRM</p>
@@ -178,7 +178,7 @@ async function ActivitesContent() {
   const { activities, tasks, agendaEvents } = await getActivitiesView();
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <p className="text-sm font-medium text-slate-500">Module CRM</p>

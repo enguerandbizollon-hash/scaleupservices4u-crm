@@ -6,7 +6,7 @@ import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
 
 function Loading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 lg:p-8">
       <div className="mx-auto max-w-4xl">
         <div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white" />
       </div>
@@ -60,7 +60,7 @@ async function Content({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
@@ -69,7 +69,7 @@ async function Content({
           </div>
           <Link
             href={`/protected/dossiers/${id}`}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]"
           >
             Retour à la fiche
           </Link>
@@ -267,13 +267,13 @@ async function Content({
           <div className="flex items-center justify-end gap-3">
             <Link
               href={`/protected/dossiers/${id}`}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]"
             >
               Annuler
             </Link>
             <button
               type="submit"
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              className="rounded-xl bg-[#0F1B2D] px-4 py-2 text-sm font-medium text-white hover:bg-[#163959]"
             >
               Enregistrer
             </button>

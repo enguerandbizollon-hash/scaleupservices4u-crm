@@ -20,7 +20,7 @@ const statusLabels: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-800", priority: "bg-rose-100 text-rose-800",
-  qualified: "bg-amber-100 text-amber-800", to_qualify: "bg-slate-100 text-slate-600",
+  qualified: "bg-amber-100 text-amber-800", to_qualify: "bg-[#F5F0E8] text-slate-600",
   dormant: "bg-blue-100 text-blue-700", inactive: "bg-slate-200 text-slate-500",
   excluded: "bg-red-100 text-red-700",
 };
@@ -113,7 +113,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
                 {typeLabels[org.organization_type] ?? org.organization_type}
               </span>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColors[org.base_status] ?? "bg-slate-100 text-slate-600"}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusColors[org.base_status] ?? "bg-[#F5F0E8] text-slate-600"}`}>
                 {statusLabels[org.base_status] ?? org.base_status}
               </span>
             </div>

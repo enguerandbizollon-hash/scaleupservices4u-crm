@@ -30,7 +30,7 @@ const organizationStatusOptions = [
 
 function NouvelleOrganisationLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
           <p className="text-sm font-medium text-slate-500">Module CRM</p>
@@ -45,7 +45,7 @@ function NouvelleOrganisationLoading() {
 
 async function NouvelleOrganisationContent() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-900 lg:p-8">
+    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
@@ -55,7 +55,7 @@ async function NouvelleOrganisationContent() {
           </div>
           <Link
             href="/protected/organisations"
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]"
           >
             Retour aux organisations
           </Link>
@@ -167,13 +167,13 @@ async function NouvelleOrganisationContent() {
           <div className="mt-8 flex items-center justify-end gap-3">
             <Link
               href="/protected/organisations"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]"
             >
               Annuler
             </Link>
             <button
               type="submit"
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
+              className="rounded-xl bg-[#0F1B2D] px-5 py-3 text-sm font-medium text-white hover:bg-[#163959]"
             >
               Créer l'organisation
             </button>
