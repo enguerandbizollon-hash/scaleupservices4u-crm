@@ -12,44 +12,37 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const now = new Date().toISOString();
-  const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Réception : liste des events sélectionnés + deal_id optionnel
+  const { events, deal_id } = await req.json() as {
+    events: Array<{
+      id: string; title: string; starts_at: string; ends_at: string | null;
+      location: string | null; meet_link: string | null; description: string | null; event_type: string;
+    }>;
+    deal_id?: string | null;
+  };
 
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${now}&timeMax=${in30}&singleEvents=true&orderBy=startTime&maxResults=50`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const gcal = await res.json();
-  if (gcal.error) return NextResponse.json({ error: gcal.error.message }, { status: 500 });
+  if (!events?.length) return NextResponse.json({ imported: 0, errors: [] });
 
   let imported = 0;
   const errors: string[] = [];
 
-  for (const item of gcal.items ?? []) {
-    if (!item.summary) continue;
-    const startsAt = item.start?.dateTime ?? item.start?.date;
-    const endsAt = item.end?.dateTime ?? item.end?.date;
-    const meetLink = item.hangoutLink ?? item.conferenceData?.entryPoints?.[0]?.uri ?? null;
-
+  for (const item of events) {
     const { error } = await supabase.from("agenda_events").insert({
-      title: item.summary,
+      title: item.title,
       description: item.description ?? null,
       location: item.location ?? null,
-      starts_at: startsAt,
-      ends_at: endsAt ?? null,
-      meet_link: meetLink,
-      event_type: item.hangoutLink ? "meeting" : "other",
+      starts_at: item.starts_at,
+      ends_at: item.ends_at ?? null,
+      meet_link: item.meet_link ?? null,
+      event_type: item.event_type,
       status: "open",
-      deal_id: null,      // ← optionnel, pas de dossier associé par défaut
+      deal_id: deal_id ?? null,
       user_id: user.id,
     });
 
-    if (error) {
-      errors.push(`${item.summary}: ${error.message}`);
-    } else {
-      imported++;
-    }
+    if (error) errors.push(`${item.title}: ${error.message}`);
+    else imported++;
   }
 
-  return NextResponse.json({ imported, errors, total: gcal.items?.length ?? 0 });
+  return NextResponse.json({ imported, errors, total: events.length });
 }
