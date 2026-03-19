@@ -58,13 +58,34 @@ const MODE_COLORS: Record<Mode,{bg:string;tx:string}> = {
   dossiers:      { bg:"var(--buy-bg)", tx:"var(--buy-tx)" },
 };
 
+// Parser CSV RFC 4180 — gère les champs entre guillemets avec virgules internes
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i+1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
 function parseCSV(text: string): Record<string,string>[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,"").trim());
-  return lines.slice(1).filter(l=>l.trim()).map(line=>{
-    const vals = line.split(",").map(v=>v.trim().replace(/^"|"$/g,"").trim());
-    return Object.fromEntries(headers.map((h,i)=>[h,vals[i]??""]));
+  const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g,"").trim());
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const vals = parseCSVLine(line).map(v => v.replace(/^"|"$/g,"").trim());
+    return Object.fromEntries(headers.map((h,i) => [h, vals[i] ?? ""]));
   });
 }
 
