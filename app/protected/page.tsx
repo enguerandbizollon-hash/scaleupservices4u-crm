@@ -81,9 +81,7 @@ async function Content() {
       {/* Modules par type de dossier */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:24 }}>
         {typeStats.map(s=>(
-          <Link key={s.t} href="/protected/dossiers" style={{ display:"block", padding:"14px 16px", borderRadius:12, background:s.dt.bg, border:`1px solid ${s.dt.border}`, transition:"transform .12s,box-shadow .12s", boxShadow:"var(--shadow-xs)" }}
-            onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-2px)";el.style.boxShadow="var(--shadow-md)"}}
-            onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";el.style.boxShadow="var(--shadow-xs)"}}>
+          <Link key={s.t} href="/protected/dossiers" className="type-card" style={{ display:"block", padding:"14px 16px", borderRadius:12, background:s.dt.bg, border:`1px solid ${s.dt.border}`, boxShadow:"var(--shadow-xs)" }}
             <div style={{ fontSize:18, marginBottom:6 }}>{s.dt.icon}</div>
             <div style={{ fontSize:11.5, fontWeight:700, color:s.dt.tx, marginBottom:8 }}>{s.dt.label}</div>
             <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>

@@ -142,3 +142,9 @@ select.inp { cursor:pointer; }
 .animate-spin    { animation:spin .7s linear infinite; }
 .animate-fadeup  { animation:fadeUp .2s ease-out; }
 .animate-scalein { animation:scaleIn .18s ease-out; }
+
+/* Hover effects via CSS (pas de JS handlers) */
+.type-card { transition: transform .14s ease, box-shadow .14s ease; }
+.type-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md) !important; }
+
+.deal-row:hover { background: var(--su-20) !important; }
