@@ -41,6 +41,7 @@ export async function deleteTaskAction(formData: FormData) {
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/protected/agenda");
+  revalidatePath("/protected/dossiers");
   redirect("/protected/agenda");
 }
 
@@ -52,4 +53,27 @@ export async function deleteEventAction(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/protected/agenda");
   redirect("/protected/agenda");
+}
+
+export async function updateTaskStatusAction(formData: FormData) {
+  const supabase = await createClient();
+  const id = String(formData.get("id") ?? "").trim();
+  const status = String(formData.get("status") ?? "").trim();
+  const dealId = String(formData.get("deal_id") ?? "").trim();
+  if (!id || !status) throw new Error("ID et statut obligatoires.");
+  const { error } = await supabase.from("tasks").update({ task_status: status }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/protected/agenda");
+  if (dealId) revalidatePath(`/protected/dossiers/${dealId}`);
+  revalidatePath("/protected/dossiers");
+}
+
+export async function updateDealStageAction(formData: FormData) {
+  const supabase = await createClient();
+  const dealId = String(formData.get("deal_id") ?? "").trim();
+  const stage = String(formData.get("stage") ?? "").trim();
+  if (!dealId || !stage) throw new Error("ID et étape obligatoires.");
+  const { error } = await supabase.from("deals").update({ deal_stage: stage }).eq("id", dealId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/protected/dossiers/${dealId}`);
 }
