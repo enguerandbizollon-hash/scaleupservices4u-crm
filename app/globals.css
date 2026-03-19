@@ -4,277 +4,141 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ════════════════════════════════════════
-   SCALE UP CRM — DESIGN SYSTEM
-   ════════════════════════════════════════ */
+/* ══════════════════════════════════════════════
+   SCALE UP SERVICES 4U — DESIGN SYSTEM
+   ══════════════════════════════════════════════ */
 :root {
-  /* Brand blue */
-  --su-950: #050E1A;
-  --su-900: #0A1828;
-  --su-800: #102238;
-  --su-700: #173050;
-  --su-600: #1E4070;
-  --su-500: #2555A0;
-  --su-400: #3B72C0;
-  --su-300: #6498D8;
-  --su-200: #A0C0E8;
-  --su-100: #CDDFF5;
-  --su-50:  #E6F0FA;
-  --su-20:  #F2F7FD;
+  /* ─ Brand blue ─ */
+  --su-950:#040D18; --su-900:#091628; --su-800:#0F213C;
+  --su-700:#162E55; --su-600:#1D3D72; --su-500:#245090;
+  --su-400:#3468B0; --su-300:#5A8CD0; --su-200:#98B8E4;
+  --su-100:#CCDEF4; --su-50:#E5EFF9; --su-20:#F1F7FC;
 
-  /* Surfaces */
-  --bg:        #EEF3F8;
-  --surface:   #FFFFFF;
-  --surface-2: #F6F9FC;
-  --surface-3: #EDF1F6;
+  /* ─ Surfaces ─ */
+  --bg:#EBF0F6; --surface:#FFFFFF;
+  --surface-2:#F5F8FB; --surface-3:#EAF0F6;
 
-  /* Borders */
-  --border:    #DDE6EF;
-  --border-2:  #C2D2E2;
+  /* ─ Borders ─ */
+  --border:#DDE6F0; --border-2:#BDD0E4;
 
-  /* Typography */
-  --text-1: #091728;
-  --text-2: #223448;
-  --text-3: #445E78;
-  --text-4: #728FA8;
-  --text-5: #A0B8CC;
+  /* ─ Text ─ */
+  --text-1:#091628; --text-2:#1E3550;
+  --text-3:#42607E; --text-4:#6F90A8; --text-5:#A0B8CC;
 
-  /* Deal types */
-  --fund-bg: #EDFAF2; --fund-tx: #0A5C28; --fund-dot: #16A34A;
-  --sell-bg: #FFF8EC; --sell-tx: #854D0E; --sell-dot: #D97706;
-  --buy-bg:  #EAF1FB; --buy-tx:  #1E3A7A; --buy-dot:  #2563EB;
-  --cfo-bg:  #F5F0FB; --cfo-tx:  #5B21B6; --cfo-dot:  #7C3AED;
-  --rec-bg:  #FEF2F2; --rec-tx:  #991B1B; --rec-dot:  #DC2626;
+  /* ─ Pastel nav item colors ─ */
+  --nav-dashboard:#E8F0FB;  --nav-dash-tx:#1D3D72;
+  --nav-dossiers:#EAF8F0;   --nav-dos-tx:#1A6B3E;
+  --nav-contacts:#FFF0FA;   --nav-con-tx:#8B1E6A;
+  --nav-orgs:#FFF5E8;       --nav-org-tx:#8B4A0A;
+  --nav-agenda:#F0EDFF;     --nav-age-tx:#4C2BAA;
+  --nav-import:#E8FAF0;     --nav-imp-tx:#1E7A4A;
+  --nav-connect:#FFF0F0;    --nav-cnn-tx:#991B1B;
+  --nav-ia:#E8F4FF;         --nav-ia-tx:#1A4888;
 
-  /* Status */
-  --st-active-bg:   #EDFAF2; --st-active-tx:   #0A5C28;
-  --st-priority-bg: #FEF2F2; --st-priority-tx: #991B1B;
-  --st-qualified-bg:#FFF8EC; --st-qualified-tx:#854D0E;
-  --st-qualify-bg:  #F2F5F8; --st-qualify-tx:  #728FA8;
-  --st-dormant-bg:  #EAF1FB; --st-dormant-tx:  #1E3A7A;
-  --st-inactive-bg: #F2F5F8; --st-inactive-tx: #A0B8CC;
-  --st-excluded-bg: #FEF2F2; --st-excluded-tx: #B91C1C;
+  /* ─ Deal types ─ */
+  --fund-bg:#E8F8ED; --fund-tx:#0D5C2A; --fund-dot:#15A348; --fund-mid:#B6E8C4;
+  --sell-bg:#FFF7E6; --sell-tx:#864E00; --sell-dot:#D97706; --sell-mid:#FAD98A;
+  --buy-bg:#E8F0FC;  --buy-tx:#193A82;  --buy-dot:#2355B0;  --buy-mid:#B4C8F0;
+  --cfo-bg:#F2EDFC;  --cfo-tx:#4E1A9E;  --cfo-dot:#6D28D9;  --cfo-mid:#D2C4F8;
+  --rec-bg:#FEF0F0;  --rec-tx:#921A1A;  --rec-dot:#DC2626;  --rec-mid:#FCA5A5;
 
-  /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(9,23,40,0.05);
-  --shadow-sm: 0 1px 3px rgba(9,23,40,0.07), 0 2px 6px rgba(9,23,40,0.04);
-  --shadow-md: 0 4px 12px rgba(9,23,40,0.09), 0 1px 4px rgba(9,23,40,0.05);
-  --shadow-lg: 0 8px 28px rgba(9,23,40,0.12), 0 2px 8px rgba(9,23,40,0.06);
-  --shadow-xl: 0 20px 60px rgba(9,23,40,0.18), 0 4px 16px rgba(9,23,40,0.08);
+  /* ─ Org status ─ */
+  --os-rencontre-bg:#E8F8ED;  --os-rencontre-tx:#0D5C2A;
+  --os-arencontrer-bg:#E8F0FC; --os-arencontrer-tx:#193A82;
+  --os-contacte-bg:#FFF7E6;   --os-contacte-tx:#864E00;
+  --os-arelancer-bg:#FEF0F0;  --os-arelancer-tx:#921A1A;
+  --os-qualify-bg:#F2F6FA;    --os-qualify-tx:#6F90A8;
+  --os-excluded-bg:#FEF0F0;   --os-excluded-tx:#921A1A;
+
+  /* ─ Contact status ─ */
+  --cs-active-bg:#E8F8ED;   --cs-active-tx:#0D5C2A;
+  --cs-priority-bg:#FEF0F0; --cs-priority-tx:#921A1A;
+  --cs-qualified-bg:#FFF7E6; --cs-qualified-tx:#864E00;
+  --cs-qualify-bg:#F2F6FA;   --cs-qualify-tx:#6F90A8;
+  --cs-dormant-bg:#E8F0FC;   --cs-dormant-tx:#193A82;
+  --cs-inactive-bg:#F2F6FA;  --cs-inactive-tx:#A0B8CC;
+  --cs-excluded-bg:#FEF0F0;  --cs-excluded-tx:#921A1A;
+
+  /* ─ Shadows ─ */
+  --shadow-xs:0 1px 2px rgba(9,22,40,0.05);
+  --shadow-sm:0 1px 4px rgba(9,22,40,0.07),0 2px 8px rgba(9,22,40,0.04);
+  --shadow-md:0 3px 12px rgba(9,22,40,0.09),0 1px 4px rgba(9,22,40,0.05);
+  --shadow-lg:0 8px 32px rgba(9,22,40,0.12),0 2px 8px rgba(9,22,40,0.06);
+  --shadow-xl:0 20px 60px rgba(9,22,40,0.18),0 4px 16px rgba(9,22,40,0.08);
 }
 
-/* ─── BASE ─────────────────────────────── */
+/* ── BASE ──────────────────────────────────────── */
 @layer base {
-  *, *::before, *::after { box-sizing: border-box; margin: 0; }
-
-  body {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text-1);
-    font-size: 13.5px;
-    line-height: 1.55;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  a { text-decoration: none; color: inherit; }
-  button { font-family: inherit; }
+  *,*::before,*::after { box-sizing:border-box; margin:0; }
+  body { font-family:'Plus Jakarta Sans',system-ui,sans-serif; background:var(--bg); color:var(--text-1); font-size:13.5px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+  a { text-decoration:none; color:inherit; }
+  button,select,input,textarea { font-family:inherit; }
 }
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:10px; }
+:focus-visible { outline:2px solid var(--su-400); outline-offset:2px; border-radius:6px; }
 
-/* ─── SCROLLBAR ─────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 10px; }
+/* ── COMPONENTS ────────────────────────────────── */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-sm); }
 
-/* ─── FOCUS ─────────────────────────────── */
-:focus-visible {
-  outline: 2px solid var(--su-400);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
+.inp { width:100%; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); padding:10px 13px; font-size:13px; color:var(--text-1); outline:none; transition:border-color .12s,box-shadow .12s,background .12s; }
+.inp:focus { border-color:var(--su-400); background:var(--surface); box-shadow:0 0 0 3px rgba(52,104,176,.1); }
+.inp::placeholder { color:var(--text-5); }
+textarea.inp { resize:vertical; }
+select.inp { cursor:pointer; }
 
-/* ══════════════════════════════════════════
-   COMPONENTS
-   ══════════════════════════════════════════ */
+.lbl { display:block; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-4); margin-bottom:5px; }
 
-/* Card */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-sm);
-}
+.btn { display:inline-flex; align-items:center; gap:7px; padding:9px 18px; border-radius:9px; font-size:13px; font-weight:600; border:none; cursor:pointer; transition:all .13s; white-space:nowrap; }
+.btn-primary { background:var(--su-600); color:#fff; box-shadow:0 1px 4px rgba(29,61,114,.25); }
+.btn-primary:hover { background:var(--su-700); box-shadow:0 3px 12px rgba(29,61,114,.3); }
+.btn-secondary { background:var(--surface); color:var(--text-2); border:1px solid var(--border); }
+.btn-secondary:hover { background:var(--su-20); border-color:var(--border-2); }
+.btn-ghost { background:transparent; color:var(--text-3); border:none; padding:8px 12px; }
+.btn-ghost:hover { background:var(--surface-3); color:var(--text-2); }
+.btn-sm { padding:6px 12px; font-size:12px; border-radius:7px; gap:5px; }
+.btn-icon { display:flex; align-items:center; justify-content:center; width:32px; height:32px; padding:0; border-radius:9px; border:1px solid var(--border); background:var(--surface); color:var(--text-4); cursor:pointer; transition:all .12s; }
+.btn-icon:hover { border-color:var(--border-2); color:var(--text-2); background:var(--su-20); }
 
-/* Input */
-.inp {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-2);
-  padding: 10px 13px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--text-1);
-  outline: none;
-  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
-}
-.inp:focus {
-  border-color: var(--su-400);
-  background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(59,114,192,0.12);
-}
-.inp::placeholder { color: var(--text-5); }
-textarea.inp { resize: vertical; min-height: 80px; }
-select.inp { cursor: pointer; }
+.badge { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:600; white-space:nowrap; }
+.badge::before { content:''; display:inline-block; width:5px; height:5px; border-radius:50%; background:currentColor; opacity:.55; flex-shrink:0; }
 
-/* Label */
-.lbl {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-4);
-  margin-bottom: 5px;
-}
+/* Deal type badges */
+.dt-fundraising { background:var(--fund-bg); color:var(--fund-tx); }
+.dt-ma_sell     { background:var(--sell-bg); color:var(--sell-tx); }
+.dt-ma_buy      { background:var(--buy-bg);  color:var(--buy-tx); }
+.dt-cfo_advisor { background:var(--cfo-bg);  color:var(--cfo-tx); }
+.dt-recruitment { background:var(--rec-bg);  color:var(--rec-tx); }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 18px;
-  border-radius: 9px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  border: none;
-  cursor: pointer;
-  transition: all 0.13s ease;
-  white-space: nowrap;
-}
-.btn-primary {
-  background: var(--su-600);
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(30,64,112,0.3);
-}
-.btn-primary:hover { background: var(--su-700); box-shadow: 0 3px 10px rgba(30,64,112,0.35); }
-.btn-secondary {
-  background: var(--surface);
-  color: var(--text-2);
-  border: 1px solid var(--border);
-}
-.btn-secondary:hover { background: var(--su-20); border-color: var(--border-2); }
-.btn-ghost { background: transparent; color: var(--text-3); border: none; padding: 8px 12px; }
-.btn-ghost:hover { background: var(--surface-3); color: var(--text-2); }
-.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 7px; gap: 5px; }
-.btn-icon {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; padding: 0;
-  border-radius: 9px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--text-4); cursor: pointer;
-  transition: all 0.12s; font-family: inherit;
-}
-.btn-icon:hover { border-color: var(--border-2); color: var(--text-2); background: var(--su-20); }
+/* Contact status badges */
+.cs-active     { background:var(--cs-active-bg);    color:var(--cs-active-tx); }
+.cs-priority   { background:var(--cs-priority-bg);  color:var(--cs-priority-tx); }
+.cs-qualified  { background:var(--cs-qualified-bg); color:var(--cs-qualified-tx); }
+.cs-to_qualify { background:var(--cs-qualify-bg);   color:var(--cs-qualify-tx); }
+.cs-dormant    { background:var(--cs-dormant-bg);   color:var(--cs-dormant-tx); }
+.cs-inactive   { background:var(--cs-inactive-bg);  color:var(--cs-inactive-tx); }
+.cs-excluded   { background:var(--cs-excluded-bg);  color:var(--cs-excluded-tx); }
 
-/* Badge */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  letter-spacing: 0.01em;
-}
-.badge::before {
-  content: '';
-  display: inline-block;
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.6;
-  flex-shrink: 0;
-}
+/* Org status */
+.os-rencontre  { background:var(--os-rencontre-bg);    color:var(--os-rencontre-tx); }
+.os-arencontrer{ background:var(--os-arencontrer-bg);  color:var(--os-arencontrer-tx); }
+.os-contacte   { background:var(--os-contacte-bg);     color:var(--os-contacte-tx); }
+.os-arelancer  { background:var(--os-arelancer-bg);    color:var(--os-arelancer-tx); }
+.os-to_qualify { background:var(--os-qualify-bg);      color:var(--os-qualify-tx); }
+.os-excluded   { background:var(--os-excluded-bg);     color:var(--os-excluded-tx); }
 
-/* Deal type */
-.dt-fundraising { background: var(--fund-bg); color: var(--fund-tx); }
-.dt-ma_sell     { background: var(--sell-bg); color: var(--sell-tx); }
-.dt-ma_buy      { background: var(--buy-bg);  color: var(--buy-tx); }
-.dt-cfo_advisor { background: var(--cfo-bg);  color: var(--cfo-tx); }
-.dt-recruitment { background: var(--rec-bg);  color: var(--rec-tx); }
+.section-label { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--su-500); }
+.page-header { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:28px; gap:16px; flex-wrap:wrap; }
+.divider { height:1px; background:var(--border); }
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 32px; text-align:center; border:2px dashed var(--border); border-radius:16px; color:var(--text-5); }
 
-/* Status */
-.st-active     { background: var(--st-active-bg);    color: var(--st-active-tx); }
-.st-priority   { background: var(--st-priority-bg);  color: var(--st-priority-tx); }
-.st-qualified  { background: var(--st-qualified-bg); color: var(--st-qualified-tx); }
-.st-to_qualify { background: var(--st-qualify-bg);   color: var(--st-qualify-tx); }
-.st-dormant    { background: var(--st-dormant-bg);   color: var(--st-dormant-tx); }
-.st-inactive   { background: var(--st-inactive-bg);  color: var(--st-inactive-tx); }
-.st-excluded   { background: var(--st-excluded-bg);  color: var(--st-excluded-tx); }
-
-/* Section heading */
-.section-label {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--su-500);
-}
-
-/* Page header */
-.page-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 28px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-/* Stat pill */
-.stat-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  border-radius: 20px;
-  font-size: 11.5px;
-  font-weight: 600;
-  background: var(--su-20);
-  color: var(--su-600);
-  border: 1px solid var(--su-100);
-}
-
-/* Divider */
-.divider { height: 1px; background: var(--border); }
-
-/* Empty state */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 32px;
-  text-align: center;
-  border: 2px dashed var(--border);
-  border-radius: 16px;
-  color: var(--text-5);
-}
-
-/* Skeleton */
-.skeleton {
-  background: linear-gradient(90deg, var(--border) 25%, var(--surface-3) 50%, var(--border) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
-}
 @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
-@keyframes scaleIn { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
+@keyframes spin    { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes fadeUp  { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+@keyframes scaleIn { from{opacity:0;transform:scale(.97)} to{opacity:1;transform:scale(1)} }
 
-.animate-spin { animation: spin 0.7s linear infinite; }
-.animate-fadeup { animation: fadeUp 0.2s ease-out; }
-.animate-scalein { animation: scaleIn 0.18s ease-out; }
+.skeleton { background:linear-gradient(90deg,var(--border) 25%,var(--surface-3) 50%,var(--border) 75%); background-size:200% 100%; animation:shimmer 1.5s infinite; border-radius:8px; }
+.animate-spin    { animation:spin .7s linear infinite; }
+.animate-fadeup  { animation:fadeUp .2s ease-out; }
+.animate-scalein { animation:scaleIn .18s ease-out; }
