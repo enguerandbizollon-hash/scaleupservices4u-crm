@@ -110,6 +110,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
       const sectorRaw = ns(r.sector);
       const sector = sectorRaw ? (VALID_SECTORS.find(s => s.toLowerCase().includes(sectorRaw.toLowerCase())) ?? sectorRaw) : null;
 
+      // Fallback secteur : types généralistes → "Généraliste"
+      const GENERALIST_TYPES = ["family_office","bank","advisor","law_firm","accounting_firm","other"];
+      if (!sector && GENERALIST_TYPES.includes(orgType)) sector = "Généraliste";
+      if (!sector) sector = "Généraliste";
+
       // Insérer l'organisation
       // Upsert : si le nom existe déjà, on met à jour
       const { data: org, error: orgErr } = await supabase.from("organizations").upsert({
