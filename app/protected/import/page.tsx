@@ -44,8 +44,8 @@ const COLUMNS: Record<Mode, { key: string; label: string; required?: boolean; hi
     { key:"deal_status",       label:"Statut",          hint:"active, inactive, closed" },
     { key:"deal_stage",        label:"Étape",           hint:"kickoff, outreach, dd, negotiation, closing…" },
     { key:"priority_level",    label:"Priorité",        hint:"high, medium, low" },
-    { key:"organisation_name", label:"Organisation" },
-    { key:"sector",            label:"Secteur" },
+    { key:"sector",            label:"Secteur",         type:"select" as const, options:SECTORS },
+    { key:"location",          label:"Localisation",    hint:"Ex. Paris (FR), Lyon (FR)" },
     { key:"description",       label:"Description" },
   ],
 };

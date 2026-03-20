@@ -227,10 +227,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
         orgId = existing?.id ?? null;
       }
 
+      // Ajouter location si fourni
+      const dealLocation = ns(r.location);
       const { error } = await supabase.from("deals").insert({
         name, deal_type: dealType, deal_status: dealStatus, deal_stage: dealStage,
-        priority_level: priority, client_organization_id: orgId,
-        sector: ns(r.sector), description: ns(r.description), user_id: user.id,
+        priority_level: priority,
+        client_organization_id: null,  // Les orgs se lient aux dossiers, pas l'inverse
+        sector: ns(r.sector), location: dealLocation,
+        description: ns(r.description), user_id: user.id,
       });
       if (error) { errors.push(`Ligne ${i+2}: ${error.message}`); continue; }
       ok++;

@@ -33,7 +33,7 @@ async function Content() {
   const supabase = await createClient();
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,client_organization_id,sector,target_date")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,client_organization_id,sector,location,target_date")
     .order("priority_level");
 
   // Résoudre les noms d'organisation
@@ -205,12 +205,12 @@ function DealCard({ deal, dt, orgName }: { deal: Deal; dt: DT; orgName: string }
           </span>
         </div>
 
-        {/* Organisation + secteur */}
-        {(orgName || deal.sector) && (
+        {/* Secteur + Localisation */}
+        {(deal.sector || (deal as any).location) && (
           <div style={{ fontSize:11.5, color:"var(--text-4)", marginBottom:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-            {orgName && <span style={{ color:"var(--su-500)", fontWeight:500 }}>{orgName}</span>}
-            {orgName && deal.sector && <span style={{ margin:"0 4px" }}>·</span>}
-            {deal.sector && <span>{deal.sector}</span>}
+            {deal.sector && <span style={{ color:"var(--su-600)", fontWeight:500 }}>{deal.sector}</span>}
+            {deal.sector && (deal as any).location && <span style={{ margin:"0 4px" }}>·</span>}
+            {(deal as any).location && <span>📍 {(deal as any).location}</span>}
           </div>
         )}
 

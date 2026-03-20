@@ -26,7 +26,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal, error } = await supabase
     .from("deals")
-    .select("id, name, deal_type, deal_status, deal_stage, priority_level, client_organization_id, sector, valuation_amount, fundraising_amount, description, start_date, target_date")
+    .select("id, name, deal_type, deal_status, deal_stage, priority_level, client_organization_id, sector, location, valuation_amount, fundraising_amount, description, start_date, target_date")
     .eq("id", id)
     .maybeSingle();
 
