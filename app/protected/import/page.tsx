@@ -22,6 +22,8 @@ const COLUMNS: Record<Mode, { key: string; label: string; required?: boolean; hi
     { key:"sector",            label:"Secteur" },
     { key:"country",           label:"Pays" },
     { key:"linkedin_url",      label:"LinkedIn" },
+    { key:"base_status",       label:"Statut",          hint:"active, qualified, to_qualify, dormant, excluded" },
+    { key:"last_contact_date", label:"Date dernier contact", type:"date" as const, hint:"JJ/MM/AAAA ou AAAA-MM-JJ" },
     { key:"notes",             label:"Notes" },
   ],
   organisations: [
