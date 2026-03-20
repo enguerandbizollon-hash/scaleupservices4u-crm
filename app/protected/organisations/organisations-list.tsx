@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { StatusDropdown } from "../components/status-dropdown";
+import { FieldDropdown } from "../components/field-dropdown";
 import { Search, Globe, Edit2, Plus, X, Loader2, CheckCircle, ExternalLink, ArrowRight } from "lucide-react";
 
 type Org = { id:string; name:string; typeKey:string; typeLabel:string; status:string; sector:string; location:string; website:string|null; notes:string; dealsCount:number; investmentTicket:string; investmentStage:string; description:string; };
@@ -58,11 +59,13 @@ function OrgCard({org,onEdit}:{org:Org;onEdit:()=>void}) {
             <button className="btn-icon" style={{width:26,height:26,flexShrink:0}} onClick={e=>{e.preventDefault();e.stopPropagation();onEdit()}}><Edit2 size={11}/></button>
           </div>
           <div className="divider" style={{marginBottom:10}}/>
-          {/* Infos */}
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {org.sector&&<Row icon="🏭" v={org.sector}/>}
-            {isInvestor&&org.investmentTicket&&<Row icon="💰" v={org.investmentTicket}/>}
-            {isInvestor&&org.investmentStage&&<Row icon="📊" v={org.investmentStage}/>}
+          {/* Infos — dropdowns inline */}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <FieldDropdown id={org.id} value={org.sector} field="sector"/>
+            {isInvestor&&<>
+              <FieldDropdown id={org.id} value={org.investmentTicket} field="investment_ticket"/>
+              <FieldDropdown id={org.id} value={org.investmentStage}  field="investment_stage"/>
+            </>}
             {org.location&&<Row icon="📍" v={org.location}/>}
             {org.dealsCount>0&&<Row icon="📁" v={`${org.dealsCount} dossier${org.dealsCount>1?"s":""}`} tx="var(--su-500)"/>}
             {org.description&&<div style={{fontSize:11,color:"var(--text-4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{org.description}</div>}
