@@ -5,23 +5,33 @@ import { authOptions } from "@/lib/auth";
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const token = (session as any)?.access_token;
-  if (!token) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
+  if (!token) return NextResponse.json({ error: "Non connecté à Google" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
 
-  // Recherche dans Drive — tous les fichiers ou par nom
   const query = q
     ? `name contains '${q.replace(/'/g, "\\'")}' and trashed=false`
     : "trashed=false";
 
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,modifiedTime,webViewLink,iconLink,size)&orderBy=modifiedTime desc&pageSize=30`;
-
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+  const params = new URLSearchParams({
+    q: query,
+    fields: "files(id,name,mimeType,modifiedTime,webViewLink,size)",
+    orderBy: "modifiedTime desc",
+    pageSize: "30",
   });
+
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
   const data = await res.json();
-  if (data.error) return NextResponse.json({ error: data.error.message }, { status: 500 });
+  
+  if (data.error) {
+    console.error("[Drive] Error:", data.error);
+    return NextResponse.json({ error: data.error.message ?? "Erreur Drive", files: [] }, { status: 500 });
+  }
 
   const files = (data.files ?? []).map((f: any) => ({
     id: f.id,
@@ -29,8 +39,7 @@ export async function GET(req: NextRequest) {
     mimeType: f.mimeType,
     modifiedTime: f.modifiedTime,
     url: f.webViewLink,
-    icon: f.iconLink,
-    size: f.size ? Math.round(f.size / 1024) + " Ko" : null,
+    size: f.size ? Math.round(Number(f.size) / 1024) + " Ko" : null,
     type: mimeToType(f.mimeType),
   }));
 

@@ -52,15 +52,43 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
             if (newOrg) orgId = newOrg.id;
           }
         }
-        // Upsert sur email si présent, sinon insert
         const emailVal = ns(r.email);
-        const { data: contact, error } = await supabase.from("contacts").upsert({
+        
+        // Si email fourni, vérifier doublon avant d'insérer
+        if (emailVal) {
+          const { data: existing } = await supabase.from("contacts")
+            .select("id").eq("email", emailVal).maybeSingle();
+          if (existing) {
+            // Mettre à jour le contact existant
+            await supabase.from("contacts").update({
+              first_name: firstName, last_name: lastName,
+              phone: ns(r.phone), title: ns(r.title),
+              sector: ns(r.sector), country: ns(r.country),
+              linkedin_url: ns(r.linkedin_url), notes: ns(r.notes),
+            }).eq("id", existing.id);
+            // Lier à l'organisation si nécessaire
+            if (orgId) {
+              const { data: oc } = await supabase.from("organization_contacts")
+                .select("id").eq("contact_id", existing.id).eq("organization_id", orgId).maybeSingle();
+              if (!oc) {
+                await supabase.from("organization_contacts").insert({
+                  organization_id: orgId, contact_id: existing.id,
+                  role_label: ns(r.role_label), is_primary: false, user_id: user.id,
+                });
+              }
+            }
+            ok++;
+            continue;
+          }
+        }
+
+        const { data: contact, error } = await supabase.from("contacts").insert({
           first_name: firstName, last_name: lastName,
           email: emailVal, phone: ns(r.phone), title: ns(r.title),
           sector: ns(r.sector), country: ns(r.country),
           linkedin_url: ns(r.linkedin_url), notes: ns(r.notes),
           base_status: "to_qualify", user_id: user.id,
-        }, { onConflict: emailVal ? "email" : "id", ignoreDuplicates: false }).select("id").single();
+        }).select("id").single();
         if (error) { errors.push(`Ligne ${i+2}: ${error.message}`); continue; }
         if (orgId && contact) {
           await supabase.from("organization_contacts").insert({ organization_id: orgId, contact_id: contact.id, role_label: ns(r.role_label), is_primary: false, user_id: user.id });
