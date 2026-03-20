@@ -166,15 +166,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
       const sector = sectorMatched || (GENERALIST_TYPES.includes(orgType) ? "Généraliste" : "Généraliste");
 
       // Insérer l'organisation
-      // Upsert : si le nom existe déjà, on met à jour
-      const { data: org, error: orgErr } = await supabase.from("organizations").upsert({
-        name, organization_type: orgType, base_status: orgStatus,
-        sector, location: ns(r.location), country: ns(r.location) ?? ns(r.country),
-        website: ns(r.website), notes: ns(r.notes),
-        description: ns(r.description),
-        investment_ticket: ticket, investment_stage: stage,
-        user_id: user.id,
-      }, { onConflict: "name", ignoreDuplicates: false }).select("id").single();
+      // Vérifier si l'org existe déjà par nom (sans upsert)
+      const { data: existingOrg } = await supabase
+        .from("organizations").select("id").ilike("name", name).limit(1).maybeSingle();
+
+      let org: { id: string } | null = null;
+      let orgErr: any = null;
+
+      if (existingOrg) {
+        // Mettre à jour l'organisation existante
+        const { error: upErr } = await supabase.from("organizations").update({
+          organization_type: orgType, base_status: orgStatus,
+          sector, location: ns(r.location), country: ns(r.location) ?? ns(r.country),
+          website: ns(r.website), notes: ns(r.notes),
+          description: ns(r.description),
+          investment_ticket: ticket, investment_stage: stage,
+        }).eq("id", existingOrg.id);
+        org = existingOrg;
+        orgErr = upErr;
+      } else {
+        // Insérer nouvelle organisation
+        const { data: newOrg, error: insErr } = await supabase.from("organizations").insert({
+          name, organization_type: orgType, base_status: orgStatus,
+          sector, location: ns(r.location), country: ns(r.location) ?? ns(r.country),
+          website: ns(r.website), notes: ns(r.notes),
+          description: ns(r.description),
+          investment_ticket: ticket, investment_stage: stage,
+          user_id: user.id,
+        }).select("id").single();
+        org = newOrg;
+        orgErr = insErr;
+      }
 
       if (orgErr) { errors.push(`Ligne ${i+2}: ${orgErr.message}`); continue; }
 
