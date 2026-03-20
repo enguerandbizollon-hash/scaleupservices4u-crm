@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { StatusDropdown } from "../components/status-dropdown";
 import { Search, Mail, Phone, Linkedin, Edit2, Plus, X, Loader2, CheckCircle } from "lucide-react";
 
 type Contact = { id:string; fullName:string; firstName:string; lastName:string; title:string; email:string; phone:string; linkedinUrl:string|null; sector:string; ticket:string; organisation:string; status:string; notes:string; };
@@ -121,7 +122,7 @@ export function ContactsList({contacts:init,stats}:{contacts:Contact[];stats:{to
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                     <span style={{fontWeight:700,color:"var(--text-1)",fontSize:13.5}}>{c.fullName}</span>
-                    <span className={`badge ${st.cls}`}>{st.label}</span>
+                    <StatusDropdown id={c.id} status={c.status} entity="contacts" size="sm"/>
                   </div>
                   <div style={{fontSize:12,color:"var(--text-3)",marginTop:1.5,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
                     {c.title&&<span>{c.title}</span>}

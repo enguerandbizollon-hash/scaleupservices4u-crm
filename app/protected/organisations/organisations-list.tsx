@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { StatusDropdown } from "../components/status-dropdown";
 import { Search, Globe, Edit2, Plus, X, Loader2, CheckCircle, ExternalLink, ArrowRight } from "lucide-react";
 
 type Org = { id:string; name:string; typeKey:string; typeLabel:string; status:string; sector:string; location:string; website:string|null; notes:string; dealsCount:number; investmentTicket:string; investmentStage:string; description:string; };

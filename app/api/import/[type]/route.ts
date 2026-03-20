@@ -100,12 +100,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
         }
 
         // Nouveau contact
+        const validStatuses = ["to_qualify","qualified","active","priority","dormant","inactive","excluded"];
+        const contactStatus = validStatuses.includes(r.base_status) ? r.base_status : "to_qualify";
+        const lastContactDate = ns(r.last_contact_date) ? 
+          (() => { const p=ns(r.last_contact_date)!.split("/"); return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:null; })() : null;
+        
         const { data: contact, error } = await supabase.from("contacts").insert({
           first_name: firstName, last_name: lastName,
           email: emailVal, phone: ns(r.phone), title: ns(r.title),
           sector: ns(r.sector), country: ns(r.country),
           linkedin_url: ns(r.linkedin_url), notes: ns(r.notes),
-          base_status: "to_qualify", user_id: user.id,
+          base_status: contactStatus,
+          last_contact_date: lastContactDate,
+          user_id: user.id,
         }).select("id").single();
         if (error) { errors.push(`Ligne ${i+2}: ${error.message}`); continue; }
         if (orgId && contact) {

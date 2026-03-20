@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { DealContacts } from "./deal-contacts";
 import { Users, FileText, CheckSquare, Activity, Mail, ExternalLink, Plus, Check, X, Clock } from "lucide-react";
 
 type Contact = { id: string; contactId: string; name: string; title: string; email: string | null; organisation: string; role: string; status: string; lastContact: string; nextFollowUp: string; notes: string };
@@ -130,9 +131,9 @@ export function DealTabs({ dealId, contacts, docs, tasks, activities, descriptio
   const cancelledTasks = tasks.filter(t => t.status === "cancelled");
 
   return (
-    <div className="rounded-2xl border border-[#E8E0D0] bg-white shadow-sm overflow-hidden">
+    <div className="card" style={{ overflow:"hidden" }}>
       {/* Tab bar */}
-      <div className="flex border-b border-[#E8E0D0] bg-[#F5F0E8]/50 overflow-x-auto">
+      <div style={{ display:"flex", borderBottom:"1px solid var(--border)", background:"var(--surface-2)", overflowX:"auto" }}>
         {tabs.map(tab => {
           const Icon = tab.icon;
           return (
@@ -157,48 +158,7 @@ export function DealTabs({ dealId, contacts, docs, tasks, activities, descriptio
 
         {/* CONTACTS */}
         {activeTab === "contacts" && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs font-semibold tracking-widest text-slate-400">PARTIES PRENANTES</p>
-              <a href={`/protected/dossiers/${dealId}/ajouter-contact`} className="flex items-center gap-1.5 rounded-xl bg-[#0F1B2D] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1B2A4A] transition-colors">
-                <Plus size={12} /> Ajouter
-              </a>
-            </div>
-            {contacts.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">Aucun contact lié.</p>
-            ) : (
-              <div className="space-y-2">
-                {contacts.map(c => (
-                  <div key={c.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#E8E0D0] p-3 hover:bg-[#F5F0E8]/50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0F1B2D] text-xs font-bold text-[#C9A84C]">
-                        {c.name.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-[#0F1B2D] text-sm">{c.name}</span>
-                          {c.status && c.status !== "—" && (
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${contactStatusColors[c.status] ?? "bg-slate-100 text-slate-600"}`}>
-                              {contactStatusLabels[c.status] ?? c.status}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 truncate">{c.title} · {c.role !== "—" ? c.role : c.organisation}</p>
-                        <p className="text-xs text-slate-400">Relance : {c.nextFollowUp}</p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {c.email && (
-                        <a href={`mailto:${c.email}`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#E8E0D0] text-slate-400 hover:border-[#0F1B2D] hover:text-[#0F1B2D] transition-colors">
-                          <Mail size={13} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <DealContacts dealId={dealId} />
         )}
 
         {/* DOCUMENTS */}
