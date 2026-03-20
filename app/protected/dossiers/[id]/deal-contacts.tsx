@@ -29,6 +29,21 @@ export function DealContacts({ dealId }: { dealId: string }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [relinking, setRelinking] = useState(false);
+  const [relinked, setRelinked] = useState<number | null>(null);
+
+  async function handleRetroLink() {
+    setRelinking(true);
+    const res = await fetch(`/api/deals/${dealId}/retrolink`, { method: "POST" });
+    const d = await res.json();
+    setRelinked(d.linked ?? 0);
+    setRelinking(false);
+    // Recharger
+    const res2 = await fetch(`/api/deals/${dealId}/contacts`);
+    const d2 = await res2.json();
+    setGroups(d2.groups ?? []);
+  }
+
   useEffect(() => {
     fetch(`/api/deals/${dealId}/contacts`)
       .then(r => r.json())
@@ -54,6 +69,24 @@ export function DealContacts({ dealId }: { dealId: string }) {
 
   return (
     <div style={{ padding:"16px 0" }}>
+      {/* Bouton liaison rétroactive */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+        <div style={{ fontSize:12.5, color:"var(--text-4)" }}>
+          Contacts et organisations liés à ce dossier
+        </div>
+        <button onClick={handleRetroLink} disabled={relinking}
+          className="btn btn-secondary btn-sm"
+          style={{ fontSize:11.5, display:"flex", alignItems:"center", gap:5 }}>
+          {relinking ? <Loader2 size={12} className="animate-spin"/> : "🔗"}
+          {relinking ? "Liaison en cours…" : "Lier les organisations"}
+        </button>
+        {relinked !== null && (
+          <span style={{ fontSize:11.5, color:"var(--fund-tx)", fontWeight:600 }}>
+            ✓ {relinked} organisation{relinked > 1 ? "s" : ""} liée{relinked > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
       {/* Summary bar */}
       <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap" }}>
         <span className="stat-pill">{totalContacts} contact{totalContacts > 1 ? "s" : ""}</span>

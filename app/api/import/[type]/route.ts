@@ -200,27 +200,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
 
       if (orgErr) { errors.push(`Ligne ${i+2}: ${orgErr.message}`); continue; }
 
-      // Lien avec dossier existant
+      // Lien avec dossier existant via deal_organizations (many-to-many)
       const dealName = ns(r.deal_name);
       const contactDate = parseDate(r.contact_date);
 
       if (dealName && org) {
         const { data: deal } = await supabase.from("deals").select("id").ilike("name", dealName).limit(1).maybeSingle();
         if (deal) {
-          // Mettre à jour le dossier pour lier l'organisation
-          await supabase.from("deals").update({ client_organization_id: org.id }).eq("id", deal.id);
+          // Lier org au deal via deal_organizations (upsert pour éviter doublons)
+          await supabase.from("deal_organizations").upsert({
+            deal_id: deal.id,
+            organization_id: org.id,
+            user_id: user.id,
+          }, { onConflict: "deal_id,organization_id", ignoreDuplicates: true });
 
           // Créer une activité "prise de contact" si date fournie
           if (contactDate) {
-            await supabase.from("activities").insert({
-              title: `Prise de contact — ${name}`,
-              activity_type: "email",
-              activity_date: contactDate,
-              organization_id: org.id,
-              deal_id: deal.id,
-              summary: `Import CSV — premier contact avec ${name}`,
-              user_id: user.id,
-            }).single();
+            // Vérifier qu'elle n'existe pas déjà
+            const { data: existAct } = await supabase.from("activities")
+              .select("id").eq("organization_id", org.id).eq("deal_id", deal.id).limit(1).maybeSingle();
+            if (!existAct) {
+              await supabase.from("activities").insert({
+                title: `Prise de contact — ${name}`,
+                activity_type: "email",
+                activity_date: contactDate,
+                organization_id: org.id,
+                deal_id: deal.id,
+                summary: `Import CSV — premier contact avec ${name}`,
+                user_id: user.id,
+              });
+            }
           }
         }
       }

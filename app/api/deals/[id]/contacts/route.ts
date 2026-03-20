@@ -2,60 +2,57 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: dealId } = await params;
   const supabase = await createClient();
 
-  // Récupérer l'organisation liée au dossier
-  const { data: deal } = await supabase
-    .from("deals")
-    .select("id, name, client_organization_id")
-    .eq("id", id)
-    .maybeSingle();
+  // 1. Orgs liées via deal_organizations
+  const { data: dealOrgs } = await supabase
+    .from("deal_organizations")
+    .select("organization_id, organizations(id, name, base_status, organization_type, location, website)")
+    .eq("deal_id", dealId);
 
-  if (!deal) return NextResponse.json({ groups: [] });
-
-  // Toutes les organisations contactées pour ce dossier
-  // On prend les orgs liées via activities ou organization_contacts
-  const { data: activities } = await supabase
+  // 2. Orgs liées via activities (compatibilité avec l'ancien système)
+  const { data: actOrgs } = await supabase
     .from("activities")
-    .select("organization_id, organizations(id, name, base_status, organization_type)")
-    .eq("deal_id", id)
+    .select("organization_id, organizations(id, name, base_status, organization_type, location, website)")
+    .eq("deal_id", dealId)
     .not("organization_id", "is", null);
 
-  // Orgs uniques depuis les activités
+  // Fusionner et dédupliquer
   const orgMap = new Map<string, any>();
-  for (const a of activities ?? []) {
-    const org = Array.isArray(a.organizations) ? a.organizations[0] : a.organizations as any;
+
+  for (const row of [...(dealOrgs ?? []), ...(actOrgs ?? [])]) {
+    const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations as any;
     if (org && !orgMap.has(org.id)) orgMap.set(org.id, org);
   }
 
-  // Ajouter l'org principale du deal
-  if (deal.client_organization_id) {
-    const { data: mainOrg } = await supabase
-      .from("organizations")
-      .select("id, name, base_status, organization_type")
-      .eq("id", deal.client_organization_id)
-      .maybeSingle();
-    if (mainOrg) orgMap.set(mainOrg.id, mainOrg);
-  }
+  if (orgMap.size === 0) return NextResponse.json({ groups: [], deal: null });
 
-  // Pour chaque org, récupérer les contacts + leur dernière activité sur ce dossier
+  // 3. Pour chaque org, récupérer les contacts
   const groups = [];
   for (const [orgId, org] of orgMap) {
     const { data: orgContacts } = await supabase
       .from("organization_contacts")
-      .select("contact_id, role_label, contacts(id, first_name, last_name, full_name, email, phone, title, base_status, last_contact_date, linkedin_url)")
+      .select(`
+        contact_id, role_label,
+        contacts(id, first_name, last_name, email, phone, title, base_status, last_contact_date, linkedin_url)
+      `)
       .eq("organization_id", orgId);
 
-    const contacts = (orgContacts ?? []).map(oc => {
-      const c = Array.isArray(oc.contacts) ? oc.contacts[0] : oc.contacts as any;
-      return { ...c, role_label: oc.role_label };
-    }).filter(Boolean);
+    const contacts = (orgContacts ?? [])
+      .map(oc => {
+        const c = Array.isArray(oc.contacts) ? oc.contacts[0] : oc.contacts as any;
+        return c ? { ...c, role_label: oc.role_label } : null;
+      })
+      .filter(Boolean);
 
     if (contacts.length > 0) {
       groups.push({ org, contacts });
     }
   }
 
-  return NextResponse.json({ groups, deal });
+  // Trier : orgs avec contacts en premier
+  groups.sort((a, b) => b.contacts.length - a.contacts.length);
+
+  return NextResponse.json({ groups, total_orgs: orgMap.size });
 }
