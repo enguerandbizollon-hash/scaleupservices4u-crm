@@ -53,35 +53,53 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
           }
         }
         const emailVal = ns(r.email);
-        
-        // Si email fourni, vérifier doublon avant d'insérer
+
+        // ── Recherche doublon : email > prénom+nom+org > prénom+nom ──
+        let existingContact: { id: string; email: string|null; phone: string|null; title: string|null; sector: string|null; country: string|null; linkedin_url: string|null; notes: string|null } | null = null;
+
         if (emailVal) {
-          const { data: existing } = await supabase.from("contacts")
-            .select("id").eq("email", emailVal).maybeSingle();
-          if (existing) {
-            // Mettre à jour le contact existant
-            await supabase.from("contacts").update({
-              first_name: firstName, last_name: lastName,
-              phone: ns(r.phone), title: ns(r.title),
-              sector: ns(r.sector), country: ns(r.country),
-              linkedin_url: ns(r.linkedin_url), notes: ns(r.notes),
-            }).eq("id", existing.id);
-            // Lier à l'organisation si nécessaire
-            if (orgId) {
-              const { data: oc } = await supabase.from("organization_contacts")
-                .select("id").eq("contact_id", existing.id).eq("organization_id", orgId).maybeSingle();
-              if (!oc) {
-                await supabase.from("organization_contacts").insert({
-                  organization_id: orgId, contact_id: existing.id,
-                  role_label: ns(r.role_label), is_primary: false, user_id: user.id,
-                });
-              }
-            }
-            ok++;
-            continue;
-          }
+          const { data } = await supabase.from("contacts").select("id,email,phone,title,sector,country,linkedin_url,notes").eq("email", emailVal).maybeSingle();
+          existingContact = data;
+        }
+        if (!existingContact) {
+          const orgName = ns(r.organisation_name);
+          const { data } = await supabase.from("contacts")
+            .select("id,email,phone,title,sector,country,linkedin_url,notes")
+            .ilike("first_name", firstName).ilike("last_name", lastName)
+            .limit(1).maybeSingle();
+          existingContact = data;
         }
 
+        if (existingContact) {
+          // Enrichissement non-destructif : ne complète que les champs vides
+          const updates: Record<string, string|null> = {};
+          if (!existingContact.phone    && ns(r.phone))        updates.phone        = ns(r.phone);
+          if (!existingContact.title    && ns(r.title))        updates.title        = ns(r.title);
+          if (!existingContact.sector   && ns(r.sector))       updates.sector       = ns(r.sector);
+          if (!existingContact.country  && ns(r.country))      updates.country      = ns(r.country);
+          if (!existingContact.linkedin_url && ns(r.linkedin_url)) updates.linkedin_url = ns(r.linkedin_url);
+          if (!existingContact.email    && emailVal)            updates.email        = emailVal;
+          if (!existingContact.notes    && ns(r.notes))        updates.notes        = ns(r.notes);
+
+          if (Object.keys(updates).length > 0) {
+            await supabase.from("contacts").update(updates).eq("id", existingContact.id);
+          }
+          // Lier à l'organisation si pas déjà fait
+          if (orgId) {
+            const { data: oc } = await supabase.from("organization_contacts")
+              .select("id").eq("contact_id", existingContact.id).eq("organization_id", orgId).maybeSingle();
+            if (!oc) {
+              await supabase.from("organization_contacts").insert({
+                organization_id: orgId, contact_id: existingContact.id,
+                role_label: ns(r.role_label), is_primary: false, user_id: user.id,
+              });
+            }
+          }
+          ok++;
+          continue;
+        }
+
+        // Nouveau contact
         const { data: contact, error } = await supabase.from("contacts").insert({
           first_name: firstName, last_name: lastName,
           email: emailVal, phone: ns(r.phone), title: ns(r.title),
