@@ -1,4 +1,5 @@
 "use client";
+import { GlobalSearch } from "./components/global-search";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FolderOpen, Users, Building2, CalendarDays, Sparkles, LogOut, Upload, Plug } from "lucide-react";
@@ -18,7 +19,10 @@ export function SidebarNav() {
 
   return (
     <>
-      <nav style={{ flex:1, overflowY:"auto", padding:"14px 10px" }}>
+      {/* Recherche globale */}
+      <div style={{ padding:"0 10px 8px 10px" }}><GlobalSearch/></div>
+
+      <nav style={{ flex:1, overflowY:"auto", padding:"4px 10px" }}>
         <div style={{ fontSize:9, fontWeight:800, letterSpacing:".14em", color:"rgba(255,255,255,.2)", padding:"0 8px 10px", textTransform:"uppercase" }}>Navigation</div>
         {NAV.map(item => {
           const Icon = item.icon;
