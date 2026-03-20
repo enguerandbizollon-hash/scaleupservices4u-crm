@@ -33,15 +33,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   if (error || !deal) notFound();
 
   const [
-    { data: org },
     { data: dealContacts },
     { data: dealDocs },
     { data: tasks },
     { data: activities },
   ] = await Promise.all([
-    deal.client_organization_id
-      ? supabase.from("organizations").select("id, name, organization_type, country, website").eq("id", deal.client_organization_id).maybeSingle()
-      : Promise.resolve({ data: null }),
     supabase.from("deal_contacts").select(`
       id, role_in_deal, status_in_deal, contacted, last_contact_at, next_follow_up_at, notes,
       contact:contacts(id, first_name, last_name, full_name, title, email, phone,
@@ -75,7 +71,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       name: c?.full_name || `${c?.first_name ?? ""} ${c?.last_name ?? ""}`.trim(),
       title: c?.title ?? "—",
       email: c?.email ?? null,
-      organisation: orgName ?? org?.name ?? "—",
+      organisation: orgName ?? — ?? "—",
       role: dc.role_in_deal ?? "—",
       status: dc.status_in_deal ?? "—",
       lastContact: formatDate(dc.last_contact_at),
@@ -129,10 +125,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             <h1 className="text-3xl font-bold tracking-tight text-[#0F1B2D]">{deal.name}</h1>
 
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[#6B8CAE]">
-              {org && (
-                <a href={`/protected/organisations/${deal.client_organization_id}`} className="font-medium text-[#0F1B2D] hover:text-[#C9A84C] transition-colors">
-                  {org.name}
-                </a>
+                              </a>
               )}
               {deal.sector && <span>· {deal.sector}</span>}
               {org?.country && <span>📍 {org.country}</span>}

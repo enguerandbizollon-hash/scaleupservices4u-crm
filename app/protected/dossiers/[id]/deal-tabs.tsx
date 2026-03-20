@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { DealContacts } from "./deal-contacts";
-import { Users, FileText, CheckSquare, Activity, Mail, ExternalLink, Plus, Check, X, Clock } from "lucide-react";
+import { DealOrganisations } from "./deal-organisations";
+import { Users, FileText, CheckSquare, Activity, Building2, Mail, ExternalLink, Plus, Check, X, Clock } from "lucide-react";
 
 type Contact = { id: string; contactId: string; name: string; title: string; email: string | null; organisation: string; role: string; status: string; lastContact: string; nextFollowUp: string; notes: string };
 type Doc = { id: string; name: string; type: string; status: string; url: string | null; version: string; date: string; note: string };
@@ -117,9 +118,10 @@ export function DealTabs({ dealId, contacts, docs, tasks, activities, descriptio
   dealId: string; contacts: Contact[]; docs: Doc[]; tasks: Task[]; activities: ActivityItem[];
   description: string; openTasksCount: number; contactsCount: number; docsCount: number;
 }) {
-  const [activeTab, setActiveTab] = useState<"contacts" | "docs" | "tasks" | "activities">("contacts");
+  const [activeTab, setActiveTab] = useState<"organisations" | "contacts" | "docs" | "tasks" | "activities">("organisations");
 
   const tabs = [
+    { id: "organisations" as const, label: "Organisations", icon: Building2, count: 0 },
     { id: "contacts" as const, label: "Contacts", icon: Users, count: contactsCount },
     { id: "docs" as const, label: "Documents", icon: FileText, count: docsCount },
     { id: "tasks" as const, label: "Tâches", icon: CheckSquare, count: openTasksCount, alert: openTasksCount > 0 },
@@ -155,6 +157,11 @@ export function DealTabs({ dealId, contacts, docs, tasks, activities, descriptio
       </div>
 
       <div className="p-6">
+
+        {/* ORGANISATIONS */}
+        {activeTab === "organisations" && (
+          <DealOrganisations dealId={dealId} />
+        )}
 
         {/* CONTACTS */}
         {activeTab === "contacts" && (
