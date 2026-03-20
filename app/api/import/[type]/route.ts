@@ -12,7 +12,6 @@ const VALID_STAGES    = ["Pre-seed","Seed","Série A","Série B","Growth","PE / 
 const VALID_SECTORS   = ["Généraliste","Technologie / SaaS","Intelligence Artificielle","Fintech / Insurtech","Santé / Medtech","Industrie / Manufacturing","Énergie / CleanTech","Immobilier","Distribution / Retail","Médias / Entertainment","Transport / Logistique","Agroalimentaire","Éducation / EdTech","Défense / Sécurité","Tourisme / Hospitality","Services B2B","Conseil / Advisory","Juridique","Finance / Investissement","Ressources Humaines","Luxe / Premium","Construction / BTP","Télécommunications","Agriculture / AgriTech","Chimie / Matériaux","Aérospatial","Environnement","Sport / Loisirs","Bien-être / Beauté","Cybersécurité","Autre"];
 const GENERALIST_TYPES = ["family_office","bank","advisor","law_firm","accounting_firm","other"];
 
-// Mapping statuts CSV → enum Supabase
 const STATUS_MAP: Record<string,string> = {
   rencontre:"qualified", arencontrer:"to_qualify", contacte:"active",
   arelancer:"active", qualified:"qualified", active:"active",
@@ -29,68 +28,38 @@ function parseDate(v: string | undefined): string | null {
   return null;
 }
 
-function matchTicket(raw: string | null): string | null {
+function matchVal(raw: string|null, list: string[]): string|null {
   if (!raw) return null;
-  return VALID_TICKETS.find(t => t === raw || t.replace(/[€\s–]/g,"").includes(raw.replace(/[€\s–]/g,""))) ?? raw;
+  return list.find(v => v.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(v.toLowerCase())) ?? raw;
 }
 
-function matchStage(raw: string | null): string | null {
-  if (!raw) return null;
-  const r = raw.toLowerCase();
-  return VALID_STAGES.find(s => s.toLowerCase().includes(r) || r.includes(s.toLowerCase())) ?? raw;
-}
-
-function matchSector(raw: string | null, orgType: string): string {
-  if (!raw) return GENERALIST_TYPES.includes(orgType) ? "Généraliste" : "Généraliste";
+function matchSector(raw: string|null, orgType: string): string {
+  if (!raw) return "Généraliste";
   return VALID_SECTORS.find(s => s.toLowerCase().includes(raw.toLowerCase())) ?? raw;
 }
 
-// ── Liaison org → deal via deal_organizations ────────────────────
-async function linkOrgToDeal(
-  supabase: any,
-  orgId: string,
-  dealName: string,
-  contactDate: string | null,
-  orgName: string,
-  userId: string,
-): Promise<boolean> {
-  const { data: deal } = await supabase
-    .from("deals").select("id").ilike("name", dealName).limit(1).maybeSingle();
-  if (!deal) return false;
+async function linkOrgToDeal(supabase: any, orgId: string, dealName: string, contactDate: string|null, orgName: string, userId: string) {
+  const { data: deal } = await supabase.from("deals").select("id").ilike("name", dealName).limit(1).maybeSingle();
+  if (!deal) return;
 
-  // Liaison deal_organizations
-  const { error: linkErr } = await supabase
-    .from("deal_organizations")
-    .insert({ deal_id: deal.id, organization_id: orgId, user_id: userId })
-    .select("id")
-    .single();
-  // Ignore si déjà lié (duplicate key)
-  if (linkErr && !linkErr.message.includes("duplicate") && !linkErr.message.includes("unique")) {
-    console.error("deal_organizations insert error:", linkErr.message);
-  }
+  // INSERT avec ON CONFLICT ignoré — pas besoin de contrainte unique préalable
+  await supabase.from("deal_organizations").upsert(
+    { deal_id: deal.id, organization_id: orgId, user_id: userId },
+    { onConflict: "deal_id,organization_id", ignoreDuplicates: true }
+  );
 
-  // Activité de prise de contact si date fournie
   if (contactDate) {
-    const { data: existAct } = await supabase
-      .from("activities")
-      .select("id")
-      .eq("organization_id", orgId)
-      .eq("deal_id", deal.id)
-      .limit(1).maybeSingle();
-
-    if (!existAct) {
+    const { data: exist } = await supabase.from("activities")
+      .select("id").eq("organization_id", orgId).eq("deal_id", deal.id).limit(1).maybeSingle();
+    if (!exist) {
       await supabase.from("activities").insert({
         title: `Prise de contact — ${orgName}`,
-        activity_type: "email",
-        activity_date: contactDate,
-        organization_id: orgId,
-        deal_id: deal.id,
-        summary: `Import CSV — premier contact`,
-        user_id: userId,
+        activity_type: "email", activity_date: contactDate,
+        organization_id: orgId, deal_id: deal.id,
+        summary: `Import CSV`, user_id: userId,
       });
     }
   }
-  return true;
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ type: string }> }) {
@@ -99,110 +68,86 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
-  const { rows } = await req.json() as { rows: Record<string, string>[] };
-  if (!rows?.length) return NextResponse.json({ ok: 0, errors: [] });
+  const { rows } = await req.json() as { rows: Record<string,string>[] };
+  if (!rows?.length) return NextResponse.json({ ok:0, errors:[] });
 
   let ok = 0;
   const errors: string[] = [];
 
-  /* ═══════════════════════════════════════════════
-     CONTACTS
-  ═══════════════════════════════════════════════ */
+  /* ═══ CONTACTS ═══ */
   if (type === "contacts") {
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const firstName = ns(r.first_name);
       const lastName  = ns(r.last_name);
       if (!firstName || !lastName) { errors.push(`Ligne ${i+2}: prénom/nom manquant`); continue; }
-
       try {
-        // 1. Résoudre l'organisation
-        let orgId: string | null = null;
+        // Résoudre org
+        let orgId: string|null = null;
         const orgName = ns(r.organisation_name);
         if (orgName) {
-          const { data: existOrg } = await supabase.from("organizations")
-            .select("id").ilike("name", orgName).limit(1).maybeSingle();
-          if (existOrg) {
-            orgId = existOrg.id;
-          } else {
-            const { data: newOrg } = await supabase.from("organizations")
-              .insert({ name: orgName, organization_type: "other", base_status: "to_qualify", user_id: user.id })
+          const { data: eo } = await supabase.from("organizations").select("id").ilike("name", orgName).limit(1).maybeSingle();
+          orgId = eo?.id ?? null;
+          if (!orgId) {
+            const { data: no } = await supabase.from("organizations")
+              .insert({ name: orgName, organization_type:"other", base_status:"to_qualify", user_id: user.id })
               .select("id").single();
-            if (newOrg) orgId = newOrg.id;
+            orgId = no?.id ?? null;
           }
         }
 
-        // 2. Statut et date
+        const emailVal = ns(r.email);
         const contactStatus = VALID_STATUSES.includes(r.base_status) ? r.base_status : "to_qualify";
         const lastContactDate = parseDate(r.last_contact_date);
-        const emailVal = ns(r.email);
 
-        // 3. Déduplication : email → prénom+nom
-        let existingId: string | null = null;
+        // Déduplication email → prénom+nom
+        let existingId: string|null = null;
         if (emailVal) {
-          const { data } = await supabase.from("contacts")
-            .select("id").eq("email", emailVal).maybeSingle();
+          const { data } = await supabase.from("contacts").select("id").eq("email", emailVal).maybeSingle();
           if (data) existingId = data.id;
         }
         if (!existingId) {
-          const { data } = await supabase.from("contacts")
-            .select("id")
-            .ilike("first_name", firstName)
-            .ilike("last_name", lastName)
-            .limit(1).maybeSingle();
+          const { data } = await supabase.from("contacts").select("id")
+            .ilike("first_name", firstName).ilike("last_name", lastName).limit(1).maybeSingle();
           if (data) existingId = data.id;
         }
 
         if (existingId) {
-          // Enrichissement non-destructif + mise à jour statut/date si plus récent
+          // Enrichissement non-destructif
           const { data: cur } = await supabase.from("contacts")
-            .select("email,phone,title,sector,country,linkedin_url,notes,base_status,last_contact_date")
-            .eq("id", existingId).single();
-
+            .select("email,phone,title,sector,country,linkedin_url,notes,base_status,last_contact_date").eq("id", existingId).single();
           const upd: Record<string,any> = {};
-          if (!cur.email        && emailVal)            upd.email = emailVal;
-          if (!cur.phone        && ns(r.phone))         upd.phone = ns(r.phone);
-          if (!cur.title        && ns(r.title))         upd.title = ns(r.title);
-          if (!cur.sector       && ns(r.sector))        upd.sector = ns(r.sector);
-          if (!cur.country      && ns(r.country))       upd.country = ns(r.country);
-          if (!cur.linkedin_url && ns(r.linkedin_url))  upd.linkedin_url = ns(r.linkedin_url);
-          if (!cur.notes        && ns(r.notes))         upd.notes = ns(r.notes);
-          // Toujours mettre à jour statut si fourni
+          if (!cur.email        && emailVal)           upd.email = emailVal;
+          if (!cur.phone        && ns(r.phone))        upd.phone = ns(r.phone);
+          if (!cur.title        && ns(r.title))        upd.title = ns(r.title);
+          if (!cur.sector       && ns(r.sector))       upd.sector = ns(r.sector);
+          if (!cur.country      && ns(r.country))      upd.country = ns(r.country);
+          if (!cur.linkedin_url && ns(r.linkedin_url)) upd.linkedin_url = ns(r.linkedin_url);
+          if (!cur.notes        && ns(r.notes))        upd.notes = ns(r.notes);
           if (r.base_status && VALID_STATUSES.includes(r.base_status)) upd.base_status = r.base_status;
-          // Toujours mettre à jour la date si fournie
           if (lastContactDate) upd.last_contact_date = lastContactDate;
+          if (Object.keys(upd).length) await supabase.from("contacts").update(upd).eq("id", existingId);
 
-          if (Object.keys(upd).length) {
-            await supabase.from("contacts").update(upd).eq("id", existingId);
-          }
-
-          // Lier à l'org si pas encore fait
           if (orgId) {
             const { data: oc } = await supabase.from("organization_contacts")
               .select("id").eq("contact_id", existingId).eq("organization_id", orgId).maybeSingle();
-            if (!oc) {
-              await supabase.from("organization_contacts").insert({
-                organization_id: orgId, contact_id: existingId,
-                role_label: ns(r.role_label), is_primary: false, user_id: user.id,
-              });
-            }
+            if (!oc) await supabase.from("organization_contacts").insert({
+              organization_id: orgId, contact_id: existingId,
+              role_label: ns(r.role_label), is_primary: false, user_id: user.id,
+            });
           }
           ok++; continue;
         }
 
-        // 4. Nouveau contact
         const { data: contact, error: cErr } = await supabase.from("contacts").insert({
           first_name: firstName, last_name: lastName,
           email: emailVal, phone: ns(r.phone), title: ns(r.title),
           sector: ns(r.sector), country: ns(r.country),
           linkedin_url: ns(r.linkedin_url), notes: ns(r.notes),
-          base_status: contactStatus,
-          last_contact_date: lastContactDate,
+          base_status: contactStatus, last_contact_date: lastContactDate,
           user_id: user.id,
         }).select("id").single();
-
         if (cErr) { errors.push(`Ligne ${i+2}: ${cErr.message}`); continue; }
-
         if (orgId && contact) {
           await supabase.from("organization_contacts").insert({
             organization_id: orgId, contact_id: contact.id,
@@ -210,112 +155,92 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
           });
         }
         ok++;
-      } catch (e: any) { errors.push(`Ligne ${i+2}: ${e.message}`); }
+      } catch(e: any) { errors.push(`Ligne ${i+2}: ${e.message}`); }
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     ORGANISATIONS
-  ═══════════════════════════════════════════════ */
+  /* ═══ ORGANISATIONS ═══ */
   else if (type === "organisations") {
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const name = ns(r.name);
       if (!name) { errors.push(`Ligne ${i+2}: nom manquant`); continue; }
-
       try {
         const orgType   = VALID_ORG_TYPES.includes(r.organization_type) ? r.organization_type : "other";
-        const rawStatus = (r.base_status || "").toLowerCase().replace(/\s/g,"");
+        const rawStatus = (r.base_status||"").toLowerCase().replace(/\s/g,"");
         const orgStatus = STATUS_MAP[rawStatus] ?? "to_qualify";
-        const ticket    = matchTicket(ns(r.investment_ticket));
-        const stage     = matchStage(ns(r.investment_stage));
+        const ticket    = matchVal(ns(r.investment_ticket), VALID_TICKETS);
+        const stage     = matchVal(ns(r.investment_stage), VALID_STAGES);
         const sector    = matchSector(ns(r.sector), orgType);
         const dealName  = ns(r.deal_name);
         const contactDate = parseDate(r.contact_date);
 
-        // Insérer ou mettre à jour l'org
+        const orgData = {
+          organization_type: orgType, base_status: orgStatus,
+          sector, location: ns(r.location),
+          website: ns(r.website), notes: ns(r.notes),
+          description: ns(r.description),
+          investment_ticket: ticket, investment_stage: stage,
+          deal_name_hint: dealName, // ← stocker le hint pour le retrolink
+        };
+
         const { data: existOrg } = await supabase.from("organizations")
           .select("id").ilike("name", name).limit(1).maybeSingle();
 
-        let orgId: string | null = null;
-
+        let orgId: string|null = null;
         if (existOrg) {
-          await supabase.from("organizations").update({
-            organization_type: orgType, base_status: orgStatus,
-            sector, location: ns(r.location),
-            website: ns(r.website), notes: ns(r.notes),
-            description: ns(r.description),
-            investment_ticket: ticket, investment_stage: stage,
-          }).eq("id", existOrg.id);
+          await supabase.from("organizations").update(orgData).eq("id", existOrg.id);
           orgId = existOrg.id;
         } else {
-          const { data: newOrg, error: insErr } = await supabase.from("organizations").insert({
-            name, organization_type: orgType, base_status: orgStatus,
-            sector, location: ns(r.location),
-            website: ns(r.website), notes: ns(r.notes),
-            description: ns(r.description),
-            investment_ticket: ticket, investment_stage: stage,
-            user_id: user.id,
-          }).select("id").single();
+          const { data: newOrg, error: insErr } = await supabase.from("organizations")
+            .insert({ name, ...orgData, user_id: user.id }).select("id").single();
           if (insErr) { errors.push(`Ligne ${i+2}: ${insErr.message}`); continue; }
           orgId = newOrg?.id ?? null;
         }
 
-        // Lier au dossier
+        // Lier au dossier immédiatement si possible
         if (orgId && dealName) {
           await linkOrgToDeal(supabase, orgId, dealName, contactDate, name, user.id);
         }
-
         ok++;
-      } catch (e: any) { errors.push(`Ligne ${i+2}: ${e.message}`); }
+      } catch(e: any) { errors.push(`Ligne ${i+2}: ${e.message}`); }
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     DOSSIERS
-  ═══════════════════════════════════════════════ */
+  /* ═══ DOSSIERS ═══ */
   else if (type === "dossiers") {
     const DEAL_TYPES  = ["fundraising","ma_sell","ma_buy","cfo_advisor","recruitment"];
     const DEAL_STAGES = ["kickoff","preparation","outreach","management_meetings","dd","negotiation","closing","post_closing","ongoing_support","search"];
-
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const name = ns(r.name);
       if (!name) { errors.push(`Ligne ${i+2}: nom manquant`); continue; }
-
       try {
-        // Vérifier si le dossier existe déjà
-        const { data: existDeal } = await supabase.from("deals")
-          .select("id").ilike("name", name).limit(1).maybeSingle();
-
-        if (existDeal) {
-          // Mettre à jour
+        const { data: exist } = await supabase.from("deals").select("id").ilike("name", name).limit(1).maybeSingle();
+        if (exist) {
           await supabase.from("deals").update({
             deal_type:  DEAL_TYPES.includes(r.deal_type)   ? r.deal_type   : undefined,
             deal_stage: DEAL_STAGES.includes(r.deal_stage) ? r.deal_stage  : undefined,
             deal_status: ["active","inactive","closed"].includes(r.deal_status) ? r.deal_status : undefined,
             priority_level: ["high","medium","low"].includes(r.priority_level) ? r.priority_level : undefined,
-            sector: ns(r.sector), location: ns(r.location),
-            description: ns(r.description),
-          }).eq("id", existDeal.id);
+            sector: ns(r.sector)||undefined, location: ns(r.location)||undefined,
+            description: ns(r.description)||undefined,
+          }).eq("id", exist.id);
           ok++; continue;
         }
-
         const { error } = await supabase.from("deals").insert({
           name,
-          deal_type:      DEAL_TYPES.includes(r.deal_type)    ? r.deal_type   : "fundraising",
+          deal_type:      DEAL_TYPES.includes(r.deal_type)   ? r.deal_type   : "fundraising",
           deal_status:    ["active","inactive","closed"].includes(r.deal_status) ? r.deal_status : "active",
-          deal_stage:     DEAL_STAGES.includes(r.deal_stage)  ? r.deal_stage  : "kickoff",
+          deal_stage:     DEAL_STAGES.includes(r.deal_stage) ? r.deal_stage  : "kickoff",
           priority_level: ["high","medium","low"].includes(r.priority_level) ? r.priority_level : "medium",
           client_organization_id: null,
-          sector:      ns(r.sector),
-          location:    ns(r.location),
-          description: ns(r.description),
-          user_id: user.id,
+          sector: ns(r.sector), location: ns(r.location),
+          description: ns(r.description), user_id: user.id,
         });
         if (error) { errors.push(`Ligne ${i+2}: ${error.message}`); continue; }
         ok++;
-      } catch (e: any) { errors.push(`Ligne ${i+2}: ${e.message}`); }
+      } catch(e: any) { errors.push(`Ligne ${i+2}: ${e.message}`); }
     }
   }
 
