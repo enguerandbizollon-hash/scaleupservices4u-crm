@@ -21,7 +21,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       .eq("deal_id", id),
     supabase.from("deal_documents").select("id,name,document_type,document_status,document_url,version_label,added_at,note").eq("deal_id", id).order("added_at",{ascending:false}),
     supabase.from("tasks").select("id,title,task_status,priority_level,due_date,description,contact_id").eq("deal_id",id).order("due_date",{ascending:true}),
-    supabase.from("activities").select("id,title,activity_type,activity_date,summary,organization_id,contact_id,organizations(name),contacts(first_name,last_name)").eq("deal_id",id).order("activity_date",{ascending:false}).limit(30),
+    supabase.from("activities").select("id,title,activity_type,activity_date,summary,activity_contacts(contacts(id,first_name,last_name))").eq("deal_id",id).order("activity_date",{ascending:false}).limit(30),
     supabase.from("investor_commitments").select("id,amount,currency,status,committed_at,notes,organization_id,organizations(name)").eq("deal_id",id).order("committed_at",{ascending:false}),
   ]);
 
@@ -48,11 +48,18 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     }
   }
 
-  const acts = (activitiesRes.data ?? []).map(a => ({
-    ...a,
-    org_name: Array.isArray(a.organizations) ? a.organizations[0]?.name : (a.organizations as any)?.name,
-    contact_name: (() => { const c = Array.isArray(a.contacts) ? a.contacts[0] : a.contacts as any; return c ? `${c.first_name} ${c.last_name}` : undefined; })(),
-  }));
+  const acts = (activitiesRes.data ?? []).map((a: any) => {
+    const acLinks = a.activity_contacts ?? [];
+    const contactNames = acLinks.map((ac: any) => {
+      const c = Array.isArray(ac.contacts) ? ac.contacts[0] : ac.contacts;
+      return c ? `${c.first_name} ${c.last_name}` : null;
+    }).filter(Boolean);
+    const contactIds = acLinks.map((ac: any) => {
+      const c = Array.isArray(ac.contacts) ? ac.contacts[0] : ac.contacts;
+      return c?.id ?? null;
+    }).filter(Boolean);
+    return { ...a, contact_names: contactNames, contact_ids: contactIds };
+  });
 
   const comms = (commitmentsRes.data ?? []).map(c => ({
     ...c,

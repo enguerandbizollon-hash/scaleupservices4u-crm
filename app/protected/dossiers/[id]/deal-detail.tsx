@@ -15,7 +15,7 @@ type Org = { id:string; name:string; organization_type:string; base_status:strin
 type Contact = { id:string; first_name:string; last_name:string; email?:string; phone?:string; title?:string; linkedin_url?:string; base_status:string; last_contact_date?:string; role_label?:string; org_id?:string; org_name?:string };
 type Commitment = { id:string; amount?:number; currency:string; status:string; committed_at?:string; notes?:string; organization_id?:string; org_name?:string };
 type Task = { id:string; title:string; task_status:string; priority_level:string; due_date?:string; description?:string; contact_id?:string; contact_name?:string };
-type Act = { id:string; title:string; activity_type:string; activity_date:string; summary?:string; organization_id?:string; contact_id?:string; org_name?:string; contact_name?:string };
+type Act = { id:string; title:string; activity_type:string; activity_date:string; summary?:string; contact_ids?:string[]; contact_names?:string[] };
 type Doc = { id:string; name:string; document_type:string; document_status:string; document_url?:string; version_label?:string; added_at:string };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [activities, setActivities] = useState<Act[]>(initialActivities);
-  const [docs] = useState<Doc[]>(initialDocs);
+  const [docs, setDocs] = useState<Doc[]>(initialDocs);
 
   // Expanded sections
   const [expOrgs, setExpOrgs] = useState(true);
@@ -213,19 +213,20 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   async function saveActivity() {
     setLoading(true);
     try {
-      const orgId = orgs.find(o=>o.name===form.org_name)?.id || form.organization_id || null;
-      const contactId = contacts.find(c=>`${c.first_name} ${c.last_name}`===form.contact_name)?.id || form.contact_id || null;
-      const payload = {...form, organization_id:orgId, contact_id:contactId};
+      const contactIds: string[] = Array.isArray(form.contact_ids_arr) ? form.contact_ids_arr as unknown as string[] : [];
+      const payload = {
+        title: form.title,
+        activity_type: form.activity_type || "email_sent",
+        activity_date: form.activity_date || new Date().toISOString().split("T")[0],
+        summary: form.summary || null,
+        contact_ids: contactIds,
+      };
       if (editing) {
         const d = await api("activities-crud","PATCH",{activity_id:editing.id,...payload});
-        const on = Array.isArray(d.organizations)?d.organizations[0]?.name:d.organizations?.name;
-        const cn = Array.isArray(d.contacts)?d.contacts[0]:d.contacts;
-        setActivities(p=>p.map(a=>a.id===editing.id?{...d,org_name:on,contact_name:cn?`${cn.first_name} ${cn.last_name}`:undefined}:a));
+        setActivities(p=>p.map(a=>a.id===editing.id?{...d}:a));
       } else {
         const d = await api("activities-crud","POST",payload);
-        const on = Array.isArray(d.organizations)?d.organizations[0]?.name:d.organizations?.name;
-        const cn = Array.isArray(d.contacts)?d.contacts[0]:d.contacts;
-        setActivities(p=>[{...d,org_name:on,contact_name:cn?`${cn.first_name} ${cn.last_name}`:undefined},...p]);
+        setActivities(p=>[{...d},...p]);
       }
       closeModal();
     } catch(e:any){ alert(e.message); } finally { setLoading(false); }
@@ -234,6 +235,36 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     if(!confirm("Supprimer cette activité ?")) return;
     await api("activities-crud","DELETE",{activity_id:id});
     setActivities(p=>p.filter(a=>a.id!==id));
+  }
+
+  async function saveDocument() {
+    if (!form.doc_name) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.doc_name,
+          document_url: form.doc_url || null,
+          version_label: form.doc_version || null,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Erreur");
+      setDocs(p => [...p, d]);
+      closeModal();
+    } catch(e:any) { alert(e.message); } finally { setLoading(false); }
+  }
+
+  async function deleteDoc(id:string) {
+    if (!confirm("Supprimer ce document ?")) return;
+    await fetch(`/api/deals/${deal.id}/documents`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_id: id }),
+    });
+    setDocs(p => p.filter(d => d.id !== id));
   }
 
   const cardStyle: React.CSSProperties = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", marginBottom:10 };
@@ -419,14 +450,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{a.title}</div>
-                    <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:1 }}>
-                      {a.org_name && <span>{a.org_name}</span>}
-                      {a.contact_name && <span>{a.org_name?" · ":""}{a.contact_name}</span>}
-                    </div>
+                    {(a.contact_names && (a.contact_names as string[]).length > 0) && (
+                      <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:1 }}>
+                        {(a.contact_names as string[]).join(", ")}
+                      </div>
+                    )}
                   </div>
                   <span style={{ fontSize:11.5, color:"var(--text-5)", flexShrink:0 }}>{fmt(a.activity_date)}</span>
                   <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                    <button onClick={()=>openModal("activity",{...a,org_name:a.org_name,contact_name:a.contact_name})} style={{...actionBtn}}><Pencil size={11}/></button>
+                    <button onClick={()=>openModal("activity",{...a,contact_ids_arr:a.contact_ids||[]})} style={{...actionBtn}}><Pencil size={11}/></button>
                     <button onClick={()=>deleteActivity(a.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                   </div>
                 </div>
@@ -437,7 +469,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* DOCUMENTS */}
             <div style={cardStyle}>
-              <SectionHeader icon={FileText} title="Documents" count={docs.length} expanded={expDocs} onToggle={()=>setExpDocs(p=>!p)} onAdd={()=>window.location.href=`/protected/dossiers/${deal.id}/ajouter-document`} addLabel="Ajouter"/>
+              <SectionHeader icon={FileText} title="Documents" count={docs.length} expanded={expDocs} onToggle={()=>setExpDocs(p=>!p)} onAdd={()=>openModal("document")} addLabel="Ajouter"/>
               {expDocs && docs.slice(0,5).map((d,i) => (
                 <div key={d.id} style={{ ...rowStyle, borderBottom: i<Math.min(docs.length,5)-1?"1px solid var(--border)":"none" }}>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -448,6 +480,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                   {d.document_url && (
                     <a href={d.document_url} target="_blank" rel="noreferrer" style={{...actionBtn, textDecoration:"none"}}><ExternalLink size={11}/></a>
                   )}
+                  <button onClick={()=>deleteDoc(d.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                 </div>
               ))}
               {expDocs && docs.length===0 && <div style={{ padding:"20px 16px", fontSize:13, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>Aucun document</div>}
@@ -528,31 +561,47 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
       {modal==="activity" && (
         <Modal title={editing?"Modifier l'activité":"Nouvelle activité"} onClose={closeModal}>
           <Field label="Titre *">
-            <input style={inp} placeholder="Titre de l'activité…" value={form.title||""} onChange={setF("title")}/>
+            <input style={inp} placeholder="ex: Email de présentation, Call de suivi…" value={form.title||""} onChange={setF("title")}/>
           </Field>
           <Field label="Type">
-            <select style={sel} value={form.activity_type||"email"} onChange={setF("activity_type")}>
-              <option value="email">✉️ Email</option><option value="call">📞 Appel</option>
-              <option value="meeting">🤝 Réunion</option><option value="note">📝 Note</option><option value="other">📌 Autre</option>
+            <select style={sel} value={form.activity_type||"email_sent"} onChange={setF("activity_type")}>
+              <option value="email_sent">✉️ Email envoyé</option>
+              <option value="email_received">📩 Email reçu</option>
+              <option value="call">📞 Appel</option>
+              <option value="meeting">🤝 Réunion</option>
+              <option value="follow_up">🔔 Relance</option>
+              <option value="intro">👋 Introduction</option>
+              <option value="deck_sent">📊 Deck envoyé</option>
+              <option value="nda">📋 NDA</option>
+              <option value="note">📝 Note</option>
+              <option value="other">📌 Autre</option>
             </select>
           </Field>
           <Field label="Date">
             <input style={inp} type="date" value={form.activity_date||new Date().toISOString().split("T")[0]} onChange={setF("activity_date")}/>
           </Field>
-          <Field label="Organisation">
-            <select style={sel} value={form.org_name||""} onChange={setF("org_name")}>
-              <option value="">— Aucune —</option>
-              {orgs.map(o=><option key={o.id} value={o.name}>{o.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Contact">
-            <select style={sel} value={form.contact_name||""} onChange={setF("contact_name")}>
-              <option value="">— Aucun —</option>
-              {contacts.map(c=><option key={c.id} value={`${c.first_name} ${c.last_name}`}>{c.first_name} {c.last_name} {c.org_name?`(${c.org_name})`:""}</option>)}
-            </select>
+          <Field label="Contacts associés">
+            <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:160, overflowY:"auto", padding:"4px 0" }}>
+              {contacts.map(c => {
+                const cid = c.id;
+                const selected = (Array.isArray(form.contact_ids_arr) ? form.contact_ids_arr as unknown as string[] : []).includes(cid);
+                return (
+                  <label key={cid} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", borderRadius:7, border:`1px solid ${selected?"var(--accent,#1a56db)":"var(--border)"}`, background:selected?"rgba(26,86,219,.06)":"var(--surface-2)", cursor:"pointer" }}>
+                    <input type="checkbox" checked={selected} onChange={() => {
+                      const cur: string[] = Array.isArray(form.contact_ids_arr) ? form.contact_ids_arr as unknown as string[] : [];
+                      const next = selected ? cur.filter(x=>x!==cid) : [...cur, cid];
+                      setForm((p: Record<string,string>) => ({...p, contact_ids_arr: next as unknown as string}));
+                    }} style={{ accentColor:"var(--accent,#1a56db)" }}/>
+                    <span style={{ fontSize:13, color:"var(--text-2)" }}>{c.first_name} {c.last_name}</span>
+                    {c.org_name && <span style={{ fontSize:11.5, color:"var(--text-5)" }}>— {c.org_name}</span>}
+                  </label>
+                );
+              })}
+              {contacts.length === 0 && <span style={{ fontSize:13, color:"var(--text-5)" }}>Aucun contact dans ce dossier</span>}
+            </div>
           </Field>
           <Field label="Résumé">
-            <textarea style={{...inp, height:70, resize:"vertical"}} placeholder="Résumé…" value={form.summary||""} onChange={setF("summary")}/>
+            <textarea style={{...inp, height:70, resize:"vertical"}} placeholder="Résumé, notes…" value={form.summary||""} onChange={setF("summary")}/>
           </Field>
           <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
             <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
@@ -604,6 +653,28 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                 closeModal();
               } catch(e:any){ alert(e.message); } finally { setLoading(false); }
             }} loading={loading}>Ajouter</BtnPrimary>
+          </div>
+        </Modal>
+      )}
+
+      {/* Document */}
+      {modal==="document" && (
+        <Modal title="Ajouter un document" onClose={closeModal}>
+          <Field label="Nom du document *">
+            <input style={inp} placeholder="ex: Teaser Redpeaks v1, NDA signé…" value={form.doc_name||""} onChange={setF("doc_name")}/>
+          </Field>
+          <Field label="Lien (URL ou Google Drive)">
+            <input style={inp} type="url" placeholder="https://drive.google.com/…" value={form.doc_url||""} onChange={setF("doc_url")}/>
+            <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:4 }}>
+              Colle le lien de partage Google Drive ou toute autre URL.
+            </div>
+          </Field>
+          <Field label="Version">
+            <input style={inp} placeholder="ex: v1.0" value={form.doc_version||""} onChange={setF("doc_version")}/>
+          </Field>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
+            <BtnPrimary onClick={saveDocument} loading={loading}>Ajouter</BtnPrimary>
           </div>
         </Modal>
       )}
