@@ -437,7 +437,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* DOCUMENTS */}
             <div style={cardStyle}>
-              <SectionHeader icon={FileText} title="Documents" count={docs.length} expanded={expDocs} onToggle={()=>setExpDocs(p=>!p)} onAdd={undefined}/>
+              <SectionHeader icon={FileText} title="Documents" count={docs.length} expanded={expDocs} onToggle={()=>setExpDocs(p=>!p)} onAdd={()=>window.location.href=`/protected/dossiers/${deal.id}/ajouter-document`} addLabel="Ajouter"/>
               {expDocs && docs.slice(0,5).map((d,i) => (
                 <div key={d.id} style={{ ...rowStyle, borderBottom: i<Math.min(docs.length,5)-1?"1px solid var(--border)":"none" }}>
                   <div style={{ flex:1, minWidth:0 }}>

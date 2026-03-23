@@ -46,17 +46,21 @@ export async function updateDealAction(formData: FormData) {
   const dealId = ns(formData.get("deal_id"));
   if (!dealId) throw new Error("ID manquant");
 
+  const targetAmount = formData.get("target_amount");
+
   const { error } = await supabase.from("deals").update({
-    name:        ns(formData.get("name")),
-    deal_type:   ns(formData.get("deal_type")),
-    deal_status: ns(formData.get("deal_status")),
-    deal_stage:  ns(formData.get("deal_stage")),
+    name:           ns(formData.get("name")),
+    deal_type:      ns(formData.get("deal_type")),
+    deal_status:    ns(formData.get("deal_status")),
+    deal_stage:     ns(formData.get("deal_stage")),
     priority_level: ns(formData.get("priority_level")),
-    sector:      ns(formData.get("sector")),
-    location:    ns(formData.get("location")),
-    description: ns(formData.get("description")),
-    start_date:  ns(formData.get("start_date")),
-    target_date: ns(formData.get("target_date")),
+    sector:         ns(formData.get("sector")),
+    location:       ns(formData.get("location")),
+    description:    ns(formData.get("description")),
+    start_date:     ns(formData.get("start_date")),
+    target_date:    ns(formData.get("target_date")),
+    target_amount:  targetAmount ? Number(targetAmount) : null,
+    currency:       ns(formData.get("currency")) ?? "EUR",
   }).eq("id", dealId);
 
   if (error) throw new Error(error.message);

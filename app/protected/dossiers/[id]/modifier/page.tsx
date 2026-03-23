@@ -4,129 +4,52 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
 
-function Loading() {
-  return (
-    <div className="min-h-screen bg-[#F5F0E8] p-6 lg:p-8">
-      <div className="mx-auto max-w-4xl">
-        <div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white" />
-      </div>
-    </div>
-  );
-}
-
-async function Content({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: deal, error } = await supabase
+  const { data: deal } = await supabase
     .from("deals")
-    .select(`
-      id,
-      name,
-      deal_type,
-      deal_status,
-      deal_stage,
-      priority_level,
-      client_organization_id,
-      sector,
-      valuation_amount,
-      fundraising_amount,
-      target_amount,
-      currency,
-      description,
-      start_date,
-      target_date
-    `)
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date")
     .eq("id", id)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(`Erreur chargement dossier: ${error.message}`);
-  }
+  if (!deal) notFound();
 
-  if (!deal) {
-    notFound();
-  }
-
-  const { data: organizations, error: organizationsError } = await supabase
-    .from("organizations")
-    .select("id, name")
-    .order("name", { ascending: true });
-
-  if (organizationsError) {
-    throw new Error(`Erreur chargement organisations: ${organizationsError.message}`);
-  }
+  const inp = "width:100%;padding:9px 13px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:#111";
+  const sel = inp;
+  const lbl = "display:block;font-size:12.5px;font-weight:600;color:#374151;margin-bottom:5px";
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] p-6 text-slate-900 lg:p-8">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
+    <div style={{ minHeight:"100vh", background:"var(--bg,#f8f7f4)", padding:"32px 24px" }}>
+      <div style={{ maxWidth:700, margin:"0 auto" }}>
+
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:28 }}>
           <div>
-            <p className="text-sm font-medium text-slate-500">Modifier un dossier</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">{deal.name}</h1>
+            <div style={{ fontSize:12, color:"#6b7280", fontWeight:600, letterSpacing:".05em", textTransform:"uppercase", marginBottom:4 }}>Modifier le dossier</div>
+            <h1 style={{ fontSize:22, fontWeight:700, color:"#111", margin:0 }}>{deal.name}</h1>
           </div>
-          <Link
-            href={`/protected/dossiers/${id}`}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]"
-          >
-            Retour à la fiche
+          <Link href={`/protected/dossiers/${id}`} style={{ fontSize:13, padding:"8px 16px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", color:"#374151", textDecoration:"none" }}>
+            ← Retour
           </Link>
         </div>
 
-        <form action={updateDealAction} className="space-y-8">
-          <input type="hidden" name="deal_id" value={deal.id} />
-          <input type="hidden" name="organization_mode" value="existing" />
+        <form action={updateDealAction}>
+          <input type="hidden" name="deal_id" value={deal.id}/>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Informations principales</h2>
+          <div style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:14, padding:24, marginBottom:16 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#111", marginBottom:18 }}>Informations principales</div>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Nom du dossier
-                </label>
-                <input
-                  name="name"
-                  defaultValue={deal.name ?? ""}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+              <div style={{ gridColumn:"1 / -1" }}>
+                <label style={{ cssText: lbl } as any}>Nom du dossier *</label>
+                <input name="name" defaultValue={deal.name ?? ""} required style={{ cssText: inp } as any}/>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Organisation
-                </label>
-                <select
-                  name="client_organization_id"
-                  defaultValue={deal.client_organization_id ?? ""}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="">Sélectionner une organisation</option>
-                  {(organizations ?? []).map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Type de mission
-                </label>
-                <select
-                  name="deal_type"
-                  defaultValue={deal.deal_type}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
+                <label style={{ cssText: lbl } as any}>Type de mission</label>
+                <select name="deal_type" defaultValue={deal.deal_type} style={{ cssText: sel } as any}>
                   <option value="fundraising">Fundraising</option>
                   <option value="ma_sell">M&A Sell-side</option>
                   <option value="ma_buy">M&A Buy-side</option>
@@ -136,15 +59,8 @@ async function Content({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Statut
-                </label>
-                <select
-                  name="deal_status"
-                  defaultValue={deal.deal_status}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
+                <label style={{ cssText: lbl } as any}>Statut</label>
+                <select name="deal_status" defaultValue={deal.deal_status} style={{ cssText: sel } as any}>
                   <option value="active">Actif</option>
                   <option value="inactive">Inactif</option>
                   <option value="closed">Clôturé</option>
@@ -152,15 +68,8 @@ async function Content({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Étape
-                </label>
-                <select
-                  name="deal_stage"
-                  defaultValue={deal.deal_stage}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
+                <label style={{ cssText: lbl } as any}>Étape</label>
+                <select name="deal_stage" defaultValue={deal.deal_stage} style={{ cssText: sel } as any}>
                   <option value="kickoff">Kickoff</option>
                   <option value="preparation">Préparation</option>
                   <option value="outreach">Outreach</option>
@@ -175,15 +84,8 @@ async function Content({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Priorité
-                </label>
-                <select
-                  name="priority_level"
-                  defaultValue={deal.priority_level}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
+                <label style={{ cssText: lbl } as any}>Priorité</label>
+                <select name="priority_level" defaultValue={deal.priority_level} style={{ cssText: sel } as any}>
                   <option value="high">Haute</option>
                   <option value="medium">Moyenne</option>
                   <option value="low">Basse</option>
@@ -191,112 +93,53 @@ async function Content({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Secteur
-                </label>
-                <input
-                  name="sector"
-                  defaultValue={deal.sector ?? ""}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+                <label style={{ cssText: lbl } as any}>Secteur</label>
+                <input name="sector" defaultValue={deal.sector ?? ""} style={{ cssText: inp } as any} placeholder="ex: Technologie / SaaS"/>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Valorisation (€)
-                </label>
-                <input
-                  name="valuation_amount"
-                  type="number"
-                  step="any"
-                  defaultValue={deal.valuation_amount ?? ""}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+                <label style={{ cssText: lbl } as any}>Localisation</label>
+                <input name="location" defaultValue={deal.location ?? ""} style={{ cssText: inp } as any} placeholder="ex: Paris (FR)"/>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Montant fundraising (€)
-                </label>
-                <input
-                  name="fundraising_amount"
-                  type="number"
-                  step="any"
-                  defaultValue={deal.fundraising_amount ?? ""}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+                <label style={{ cssText: lbl } as any}>Date de lancement</label>
+                <input name="start_date" type="date" defaultValue={deal.start_date ?? ""} style={{ cssText: inp } as any}/>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Date lancement
-                </label>
-                <input
-                  name="start_date"
-                  type="date"
-                  defaultValue={deal.start_date ?? ""}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+                <label style={{ cssText: lbl } as any}>Date cible de closing</label>
+                <input name="target_date" type="date" defaultValue={deal.target_date ?? ""} style={{ cssText: inp } as any}/>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Date cible
-                </label>
-                <input
-                  name="target_date"
-                  type="date"
-                  defaultValue={deal.target_date ?? ""}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+                <label style={{ cssText: lbl } as any}>Montant cible</label>
+                <input name="target_amount" type="number" defaultValue={deal.target_amount ?? ""} style={{ cssText: inp } as any} placeholder="ex: 3000000"/>
+              </div>
+
+              <div>
+                <label style={{ cssText: lbl } as any}>Devise</label>
+                <select name="currency" defaultValue={deal.currency ?? "EUR"} style={{ cssText: sel } as any}>
+                  <option value="EUR">EUR</option>
+                  <option value="CHF">CHF</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+
+              <div style={{ gridColumn:"1 / -1" }}>
+                <label style={{ cssText: lbl } as any}>Description</label>
+                <textarea name="description" defaultValue={deal.description ?? ""} rows={4}
+                  style={{ cssText: inp + ";resize:vertical;height:90px" } as any}/>
               </div>
 
             </div>
-
-            <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Description
-              </label>
-              <textarea
-                name="description"
-                defaultValue={deal.description ?? ""}
-                rows={6}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-              />
-            </div>
-
-                {/* Montant cible */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Montant cible</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      name="target_amount"
-                      defaultValue={deal.target_amount ?? ""}
-                      className="flex-1 rounded-xl border border-[#E8E0D0] bg-[#FDFBF7] px-4 py-2.5 text-sm"
-                      placeholder="ex: 3000000"
-                    />
-                    <select name="currency" defaultValue={deal.currency ?? "EUR"}
-                      className="rounded-xl border border-[#E8E0D0] bg-[#FDFBF7] px-3 py-2.5 text-sm">
-                      <option value="EUR">EUR</option>
-                      <option value="CHF">CHF</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  </div>
-                </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3">
-            <Link
-              href={`/protected/dossiers/${id}`}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[#F5F0E8]"
-            >
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+            <Link href={`/protected/dossiers/${id}`} style={{ fontSize:13.5, padding:"9px 18px", borderRadius:9, border:"1px solid #d1d5db", background:"#fff", color:"#374151", textDecoration:"none" }}>
               Annuler
             </Link>
-            <button
-              type="submit"
-              className="rounded-xl bg-[#0F1B2D] px-4 py-2 text-sm font-medium text-white hover:bg-[#163959]"
-            >
+            <button type="submit" style={{ fontSize:13.5, padding:"9px 22px", borderRadius:9, background:"#1a56db", color:"#fff", border:"none", fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
               Enregistrer
             </button>
           </div>
@@ -306,14 +149,10 @@ async function Content({
   );
 }
 
-export default function EditDealPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense fallback={<Loading />}>
-      <Content params={params} />
+    <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:300, borderRadius:14, background:"#f3f4f6" }}/></div>}>
+      <Content params={params}/>
     </Suspense>
   );
 }
