@@ -26,6 +26,8 @@ export async function createDealAction(formData: FormData) {
     sector:      ns(formData.get("sector")),
     location:    ns(formData.get("location")),
     description: ns(formData.get("description")),
+    target_amount: ns(formData.get("target_amount")) ? Number(formData.get("target_amount")) : null,
+    currency: ns(formData.get("currency")) ?? "EUR",
     start_date:  ns(formData.get("start_date")),
     target_date: ns(formData.get("target_date")),
     client_organization_id: null,  // Les orgs se lient aux dossiers, pas l'inverse

@@ -9,13 +9,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { contact_id, organization_id, role_label } = await req.json();
   if (!contact_id || !organization_id) return NextResponse.json({ error: "contact_id et organization_id requis" }, { status: 400 });
 
-  // S'assurer que l'org est liée au deal
-  await supabase.from("deal_organizations").insert({ deal_id: id, organization_id, user_id: user.id }).onConflict("deal_id,organization_id").ignore();
+  await supabase.from("deal_organizations").upsert(
+    { deal_id: id, organization_id, user_id: user.id },
+    { onConflict: "deal_id,organization_id", ignoreDuplicates: true }
+  );
 
-  // Lier contact à l'org
-  const { error } = await supabase.from("organization_contacts")
-    .insert({ organization_id, contact_id, role_label: role_label || null, is_primary: false, user_id: user.id })
-    .onConflict("organization_id,contact_id").ignore();
+  const { error } = await supabase.from("organization_contacts").upsert(
+    { organization_id, contact_id, role_label: role_label || null, is_primary: false, user_id: user.id },
+    { onConflict: "organization_id,contact_id", ignoreDuplicates: true }
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

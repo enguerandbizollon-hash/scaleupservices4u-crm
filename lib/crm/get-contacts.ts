@@ -45,7 +45,7 @@ export async function getContactsView() {
 
   const allContacts: ContactView[] = (contacts ?? []).map((c) => {
     const orgContact = c.organization_contacts?.[0];
-    const org = orgContact?.organizations as { id: string; name: string } | null;
+    const org = orgContact?.organizations as unknown as { id: string; name: string } | null;
 
     return {
       id: c.id,

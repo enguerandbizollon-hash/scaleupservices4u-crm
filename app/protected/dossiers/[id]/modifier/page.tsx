@@ -262,6 +262,26 @@ async function Content({
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
               />
             </div>
+
+                {/* Montant cible */}
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Montant cible</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      name="target_amount"
+                      defaultValue={deal.target_amount ?? ""}
+                      className="flex-1 rounded-xl border border-[#E8E0D0] bg-[#FDFBF7] px-4 py-2.5 text-sm"
+                      placeholder="ex: 3000000"
+                    />
+                    <select name="currency" defaultValue={deal.currency ?? "EUR"}
+                      className="rounded-xl border border-[#E8E0D0] bg-[#FDFBF7] px-3 py-2.5 text-sm">
+                      <option value="EUR">EUR</option>
+                      <option value="CHF">CHF</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
+                </div>
           </div>
 
           <div className="flex items-center justify-end gap-3">
