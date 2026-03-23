@@ -15,7 +15,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
           </div>
           <Link href={`/protected/dossiers/${id}`} className="su-btn-secondary" style={{ textDecoration: "none" }}>← Retour</Link>
         </div>
-        <DocumentFormClient dealId={id} />
+        <DocumentFormClient dealId={id} action={addDocumentAction} />
       </div>
     </div>
   );
