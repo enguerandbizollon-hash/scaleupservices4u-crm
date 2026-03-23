@@ -177,7 +177,9 @@ export default function ImportPage() {
       const batch=mapped.slice(i,i+50);
       const res=await fetch(`/api/import/${mode}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rows:batch})});
       const d=await res.json();
-      ok+=d.ok??0; errs.push(...(d.errors??[]));
+      ok+=d.ok??0;
+      const rawErrors = d.errors??[];
+      errs.push(...rawErrors.map((e: any) => typeof e === 'string' ? e : `Ligne ${e.ligne}: ${e.erreur}`));
       setProgress(Math.round(((i+batch.length)/mapped.length)*100));
     }
     setResults({ok,errors:errs}); setLoading(false); setStep("done");
@@ -387,7 +389,7 @@ export default function ImportPage() {
                   <AlertCircle size={13}/> {results.errors.length} erreur{results.errors.length>1?"s":""}
                 </div>
                 <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:3 }}>
-                  {results.errors.map((e,i)=><div key={i} style={{ fontSize:11.5, color:"var(--rec-tx)" }}>• {e}</div>)}
+                  {results.errors.map((e,i)=><div key={i} style={{ fontSize:11.5, color:"var(--rec-tx)" }}>• {typeof e === "string" ? e : JSON.stringify(e)}</div>)}
                 </div>
               </div>
             )}
