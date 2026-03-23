@@ -66,8 +66,7 @@ async function Content() {
         ].map(({ label, val, href, color }) => (
           <Link key={label} href={href} style={{ textDecoration:"none" }}>
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", transition:"border-color .12s" }}
-              onMouseEnter={(e:any)=>e.currentTarget.style.borderColor="var(--border-2)"}
-              onMouseLeave={(e:any)=>e.currentTarget.style.borderColor="var(--border)"}
+
             >
               <div style={{ fontSize:26, fontWeight:800, color, lineHeight:1.1 }}>{val}</div>
               <div style={{ fontSize:12.5, color:"var(--text-4)", marginTop:3 }}>{label}</div>
@@ -91,8 +90,7 @@ async function Content() {
             const dt = DT[d.deal_type] ?? DT.fundraising;
             return (
               <Link key={d.id} href={`/protected/dossiers/${d.id}`} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 16px", borderBottom: i<deals.length-1?"1px solid var(--border)":"none", textDecoration:"none", transition:"background .1s" }}
-                onMouseEnter={(e:any)=>e.currentTarget.style.background="var(--surface-2)"}
-                onMouseLeave={(e:any)=>e.currentTarget.style.background="transparent"}
+
               >
                 <div style={{ width:6, height:6, borderRadius:3, background:PRIO[d.priority_level]??PRIO.medium, flexShrink:0 }}/>
                 <div style={{ flex:1, minWidth:0 }}>
@@ -126,8 +124,7 @@ async function Content() {
               const orgName = Array.isArray(org) ? org[0]?.name : org?.name;
               return (
                 <Link key={c.id} href={`/protected/contacts/${c.id}`} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", borderBottom: i<Math.min(relances.length,5)-1?"1px solid var(--border)":"none", textDecoration:"none", transition:"background .1s" }}
-                  onMouseEnter={(e:any)=>e.currentTarget.style.background="var(--surface-2)"}
-                  onMouseLeave={(e:any)=>e.currentTarget.style.background="transparent"}
+
                 >
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{c.first_name} {c.last_name}</div>
@@ -152,8 +149,7 @@ async function Content() {
               const overdue = t.due_date && new Date(t.due_date) < new Date();
               return (
                 <Link key={t.id} href={t.deal_id ? `/protected/dossiers/${t.deal_id}` : "#"} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", borderBottom: i<tasks.length-1?"1px solid var(--border)":"none", textDecoration:"none", transition:"background .1s" }}
-                  onMouseEnter={(e:any)=>e.currentTarget.style.background="var(--surface-2)"}
-                  onMouseLeave={(e:any)=>e.currentTarget.style.background="transparent"}
+
                 >
                   <div style={{ width:7, height:7, borderRadius:3.5, background:PRIO[t.priority_level]??PRIO.medium, flexShrink:0 }}/>
                   <div style={{ flex:1, minWidth:0 }}>
