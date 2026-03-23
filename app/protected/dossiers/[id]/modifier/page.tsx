@@ -35,6 +35,8 @@ async function Content({
       sector,
       valuation_amount,
       fundraising_amount,
+      target_amount,
+      currency,
       description,
       start_date,
       target_date
