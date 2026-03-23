@@ -1,211 +1,175 @@
-import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { ArrowRight, Sparkles, Clock, CalendarDays, Plus } from "lucide-react";
+import { Suspense } from "react";
+import { AlertTriangle, Plus } from "lucide-react";
 
-const DT: Record<string, { label:string; bg:string; tx:string; dot:string; border:string; icon:string }> = {
-  fundraising: { label:"Fundraising",  bg:"var(--fund-bg)", tx:"var(--fund-tx)", dot:"var(--fund-dot)", border:"var(--fund-mid)", icon:"📈" },
-  ma_sell:     { label:"M&A Sell",     bg:"var(--sell-bg)", tx:"var(--sell-tx)", dot:"var(--sell-dot)", border:"var(--sell-mid)", icon:"🏢" },
-  ma_buy:      { label:"M&A Buy",      bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  dot:"var(--buy-dot)",  border:"var(--buy-mid)",  icon:"🎯" },
-  cfo_advisor: { label:"CFO Advisor",  bg:"var(--cfo-bg)",  tx:"var(--cfo-tx)",  dot:"var(--cfo-dot)",  border:"var(--cfo-mid)",  icon:"💼" },
-  recruitment: { label:"Recrutement",  bg:"var(--rec-bg)",  tx:"var(--rec-tx)",  dot:"var(--rec-dot)",  border:"var(--rec-mid)",  icon:"👤" },
+const DT: Record<string,{label:string;bg:string;tx:string;border:string}> = {
+  fundraising:{label:"Fundraising",bg:"var(--fund-bg)",tx:"var(--fund-tx)",border:"var(--fund-mid)"},
+  ma_sell:    {label:"M&A Sell",   bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
+  ma_buy:     {label:"M&A Buy",    bg:"var(--buy-bg)", tx:"var(--buy-tx)", border:"var(--buy-mid)"},
+  cfo_advisor:{label:"CFO Advisor",bg:"var(--cfo-bg)", tx:"var(--cfo-tx)", border:"var(--cfo-mid)"},
+  recruitment:{label:"Recrutement",bg:"var(--rec-bg)", tx:"var(--rec-tx)", border:"var(--rec-mid)"},
 };
-const STAGE: Record<string,string> = { kickoff:"Kickoff", preparation:"Préparation", outreach:"Outreach", management_meetings:"Mgmt meetings", dd:"Due Diligence", negotiation:"Négociation", closing:"Closing", post_closing:"Post-closing", ongoing_support:"Suivi", search:"Recherche" };
-const EVT_COLOR: Record<string,{bg:string;tx:string;label:string}> = {
-  meeting:   {bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  label:"Réunion"},
-  follow_up: {bg:"var(--sell-bg)", tx:"var(--sell-tx)", label:"Relance"},
-  deadline:  {bg:"var(--rec-bg)",  tx:"var(--rec-tx)",  label:"Deadline"},
-  call:      {bg:"var(--cfo-bg)",  tx:"var(--cfo-tx)",  label:"Appel"},
-  other:     {bg:"var(--surface-3)",tx:"var(--text-3)", label:"Autre"},
+const STAGE: Record<string,string> = {
+  kickoff:"Kickoff",preparation:"Préparation",outreach:"Outreach",
+  management_meetings:"Mgmt",dd:"Due Diligence",negotiation:"Négociation",
+  closing:"Closing",post_closing:"Post-closing",ongoing_support:"Suivi",search:"Recherche",
 };
+const PRIO: Record<string,string> = {high:"var(--rec-dot)",medium:"var(--sell-dot)",low:"var(--border-2)"};
 
-function fmtDate(v:string|null){if(!v)return"—";const d=new Date(v);return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});}
-function fmtDT(v:string|null){if(!v)return"—";const d=new Date(v);return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
+function fmt(v:string|null){if(!v)return"—";return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"});}
+function daysSince(v:string){return Math.floor((Date.now()-new Date(v).getTime())/86400000);}
 
 async function Content() {
   const supabase = await createClient();
-  const today = new Date();
-  const in10 = new Date(Date.now()+10*24*60*60*1000);
+  const cutoff15 = new Date(Date.now()-15*864e5).toISOString().split("T")[0];
+  const cutoff30 = new Date(Date.now()-30*864e5).toISOString().split("T")[0];
 
-  const [{ data:deals },{ data:tasks },{ data:events },{ count:cC },{ count:cO }] = await Promise.all([
-    supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,client_organization_id").order("priority_level"),
-    supabase.from("tasks").select("id,title,priority_level,due_date,deal_id,deals(id,name)").eq("task_status","open").order("due_date",{ascending:true}).limit(8),
-    supabase.from("agenda_events").select("id,title,event_type,starts_at,meet_link,deals(name)").eq("status","open").gte("starts_at",today.toISOString()).lte("starts_at",in10.toISOString()).order("starts_at").limit(6),
-    supabase.from("contacts").select("*",{count:"exact",head:true}),
-    supabase.from("organizations").select("*",{count:"exact",head:true}),
+  const [dealsRes, tasksRes, relancesRes, kpiRes] = await Promise.all([
+    supabase.from("deals")
+      .select("id,name,deal_type,deal_status,deal_stage,priority_level,target_date,target_amount,currency")
+      .eq("deal_status","active").order("priority_level"),
+    supabase.from("tasks")
+      .select("id,title,priority_level,due_date,deal_id,deals(name)")
+      .eq("task_status","open").order("due_date",{ascending:true}).limit(6),
+    supabase.from("contacts")
+      .select("id,first_name,last_name,base_status,last_contact_date,organization_contacts(organizations(name))")
+      .not("last_contact_date","is",null)
+      .lte("last_contact_date", cutoff15)
+      .not("base_status","in","(excluded,inactive)")
+      .order("last_contact_date",{ascending:true}).limit(8),
+    Promise.all([
+      supabase.from("deals").select("*",{count:"exact",head:true}).eq("deal_status","active"),
+      supabase.from("contacts").select("*",{count:"exact",head:true}),
+      supabase.from("organizations").select("*",{count:"exact",head:true}),
+      supabase.from("tasks").select("*",{count:"exact",head:true}).eq("task_status","open"),
+    ]),
   ]);
 
-  const all = deals??[];
-  const active = all.filter(d=>d.deal_status==="active");
-  const types = ["fundraising","ma_sell","ma_buy","cfo_advisor","recruitment"];
+  const deals = dealsRes.data ?? [];
+  const tasks = tasksRes.data ?? [];
+  const relances = relancesRes.data ?? [];
+  const [cDeals, cContacts, cOrgs, cTasks] = await kpiRes;
 
-  // Stats par type
-  const typeStats = types.map(t=>({
-    t, dt:DT[t],
-    active: active.filter(d=>d.deal_type===t).length,
-    total: all.filter(d=>d.deal_type===t).length,
-  })).filter(s=>s.total>0);
+  const relancesUrgentes = relances.filter(c => c.last_contact_date && c.last_contact_date <= cutoff30);
 
   return (
-    <div style={{ padding:32, minHeight:"100vh", background:"var(--bg)" }}>
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", marginBottom:28, flexWrap:"wrap", gap:12 }}>
-        <div>
-          <div className="section-label" style={{ marginBottom:6 }}>Tableau de bord</div>
-          <h1 style={{ margin:0 }}>Bonjour 👋</h1>
-          <div style={{ fontSize:13, color:"var(--text-4)", marginTop:4 }}>{today.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
-        </div>
-        <Link href="/protected/ia" style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"10px 20px", borderRadius:11, background:"linear-gradient(135deg,var(--su-600),var(--su-500))", color:"#fff", fontWeight:700, fontSize:13, boxShadow:"0 3px 12px rgba(29,61,114,.3)" }}>
-          <Sparkles size={15}/>Assistant IA
-          <span style={{ fontSize:9, background:"rgba(255,255,255,.2)", borderRadius:4, padding:"2px 6px", fontWeight:800, letterSpacing:".04em" }}>NEW</span>
-        </Link>
-      </div>
+    <div style={{ padding:"28px 24px", maxWidth:1080, margin:"0 auto" }}>
 
-      {/* KPIs globaux */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:20 }}>
+      {/* KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
         {[
-          { label:"Actifs",    val:active.length,   bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  border:"var(--buy-mid)",  sub:"dossiers" },
-          { label:"Total",     val:all.length,      bg:"var(--surface-2)", tx:"var(--text-2)", border:"var(--border)",   sub:"dossiers" },
-          { label:"Contacts",  val:cC??0,           bg:"#FFF0FA",        tx:"#8B1E6A",        border:"#E8C0DC",         sub:"CRM" },
-          { label:"Orgas",     val:cO??0,           bg:"#FFF5E8",        tx:"#8B4A0A",        border:"#F8D09A",         sub:"CRM" },
-          { label:"Tâches",    val:(tasks??[]).length, bg:"var(--cfo-bg)", tx:"var(--cfo-tx)", border:"var(--cfo-mid)", sub:"ouvertes" },
-        ].map((k,i)=>(
-          <div key={i} style={{ background:k.bg, border:`1px solid ${k.border}`, borderRadius:14, padding:"18px 20px", boxShadow:"var(--shadow-xs)" }}>
-            <div style={{ fontSize:10, fontWeight:800, letterSpacing:".09em", textTransform:"uppercase", color:k.tx, opacity:.7, marginBottom:8 }}>{k.label}</div>
-            <div style={{ fontSize:34, fontWeight:800, color:k.tx, lineHeight:1 }}>{k.val}</div>
-            <div style={{ fontSize:11, color:k.tx, opacity:.6, marginTop:4 }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Modules par type de dossier */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:24 }}>
-        {typeStats.map(s=>(
-          <Link key={s.t} href="/protected/dossiers" className="type-card" style={{ display:"block", padding:"14px 16px", borderRadius:12, background:s.dt.bg, border:`1px solid ${s.dt.border}`, boxShadow:"var(--shadow-xs)" }}>
-            <div style={{ fontSize:18, marginBottom:6 }}>{s.dt.icon}</div>
-            <div style={{ fontSize:11.5, fontWeight:700, color:s.dt.tx, marginBottom:8 }}>{s.dt.label}</div>
-            <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
-              <span style={{ fontSize:26, fontWeight:800, color:s.dt.tx }}>{s.total}</span>
-              {s.active>0 && <span style={{ fontSize:11, color:s.dt.tx, opacity:.65 }}>{s.active} actif{s.active>1?"s":""}</span>}
+          { label:"Dossiers actifs", val:cDeals.count??0, href:"/protected/dossiers", color:"#3468B0" },
+          { label:"Organisations",   val:cOrgs.count??0,  href:"/protected/organisations", color:"#D97706" },
+          { label:"Contacts",        val:cContacts.count??0, href:"/protected/contacts", color:"#A8306A" },
+          { label:"Tâches ouvertes", val:cTasks.count??0, href:"/protected/dossiers", color: (cTasks.count??0)>0?"#DC2626":"#15A348" },
+        ].map(({ label, val, href, color }) => (
+          <Link key={label} href={href} style={{ textDecoration:"none" }}>
+            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"16px 18px", transition:"border-color .12s" }}
+              onMouseEnter={(e:any)=>e.currentTarget.style.borderColor="var(--border-2)"}
+              onMouseLeave={(e:any)=>e.currentTarget.style.borderColor="var(--border)"}
+            >
+              <div style={{ fontSize:26, fontWeight:800, color, lineHeight:1.1 }}>{val}</div>
+              <div style={{ fontSize:12.5, color:"var(--text-4)", marginTop:3 }}>{label}</div>
             </div>
           </Link>
         ))}
       </div>
 
-      {/* Grid principale */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 300px", gap:18 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
 
         {/* Dossiers actifs */}
-        <div className="card" style={{ overflow:"hidden" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderBottom:"1px solid var(--border)", background:"var(--surface-2)" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:13, fontWeight:700, color:"var(--text-1)" }}>Dossiers actifs</span>
-              <span style={{ fontSize:11, fontWeight:700, background:"var(--buy-bg)", color:"var(--buy-tx)", borderRadius:12, padding:"2px 8px" }}>{active.length}</span>
-            </div>
-            <Link href="/protected/dossiers" style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--su-500)", fontWeight:600 }}>Tous <ArrowRight size={12}/></Link>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1px solid var(--border)" }}>
+            <span style={{ fontSize:12, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:".06em" }}>Dossiers actifs</span>
+            <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--text-4)", textDecoration:"none", padding:"3px 8px", border:"1px solid var(--border)", borderRadius:6 }}>
+              <Plus size={11}/> Nouveau
+            </Link>
           </div>
-          <div>
-            {active.length===0 ? (
-              <div style={{ padding:"32px 20px", textAlign:"center", fontSize:13, color:"var(--text-5)" }}>Aucun dossier actif</div>
-            ) : active.slice(0,7).map(d=>{
-              const dt = DT[d.deal_type];
-              const pcolor = d.priority_level==="high"?"var(--rec-dot)":d.priority_level==="medium"?"var(--sell-dot)":"var(--border-2)";
-              return (
-                <Link key={d.id} href={`/protected/dossiers/${d.id}`} style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 20px", borderBottom:"1px solid var(--border)", background:"var(--surface)" }}>
-                  <div style={{ width:3, height:32, borderRadius:3, background:pcolor, flexShrink:0 }}/>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.name}</div>
-                    <div style={{ fontSize:11, color:"var(--text-4)", marginTop:1 }}>{STAGE[d.deal_stage]??d.deal_stage}</div>
-                  </div>
-                  {dt && <span className={`badge dt-${d.deal_type}`} style={{ fontSize:10 }}>{dt.icon} {dt.label}</span>}
-                  <ArrowRight size={11} color="var(--border-2)"/>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Tâches */}
-        <div className="card" style={{ overflow:"hidden" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderBottom:"1px solid var(--border)", background:"var(--surface-2)" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <Clock size={14} color="var(--text-3)"/>
-              <span style={{ fontSize:13, fontWeight:700, color:"var(--text-1)" }}>Tâches ouvertes</span>
-              <span style={{ fontSize:11, fontWeight:700, background:"var(--cfo-bg)", color:"var(--cfo-tx)", borderRadius:12, padding:"2px 8px" }}>{(tasks??[]).length}</span>
-            </div>
-            <Link href="/protected/agenda" style={{ fontSize:12, color:"var(--su-500)", fontWeight:600 }}>Agenda</Link>
-          </div>
-          <div>
-            {(tasks??[]).length===0 ? (
-              <div style={{ padding:"32px 20px", textAlign:"center", fontSize:13, color:"var(--text-5)" }}>Aucune tâche ouverte ✓</div>
-            ) : (tasks??[]).map(task=>{
-              const dl = Array.isArray(task.deals)?task.deals[0]:task.deals as any;
-              const isOv = task.due_date && new Date(task.due_date)<today;
-              const pdot = task.priority_level==="high"?"var(--rec-dot)":task.priority_level==="medium"?"var(--sell-dot)":"var(--border-2)";
-              return (
-                <div key={task.id} style={{ padding:"11px 20px", borderBottom:"1px solid var(--border)", background:isOv?"#FEF8F8":"var(--surface)" }}>
-                  <div style={{ display:"flex", gap:9 }}>
-                    <div style={{ width:6, height:6, borderRadius:"50%", background:pdot, marginTop:5, flexShrink:0 }}/>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{task.title}</div>
-                      {dl && <Link href={`/protected/dossiers/${dl.id}`} style={{ fontSize:11, color:"var(--su-500)", fontWeight:500 }}>📁 {dl.name}</Link>}
-                    </div>
-                    <div style={{ fontSize:11, fontWeight:500, color:isOv?"var(--rec-tx)":"var(--text-4)", flexShrink:0 }}>{fmtDate(task.due_date)}</div>
+          {deals.length === 0 && <div style={{ padding:"28px", textAlign:"center", fontSize:13, color:"var(--text-5)" }}>Aucun dossier actif</div>}
+          {deals.map((d, i) => {
+            const dt = DT[d.deal_type] ?? DT.fundraising;
+            return (
+              <Link key={d.id} href={`/protected/dossiers/${d.id}`} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 16px", borderBottom: i<deals.length-1?"1px solid var(--border)":"none", textDecoration:"none", transition:"background .1s" }}
+                onMouseEnter={(e:any)=>e.currentTarget.style.background="var(--surface-2)"}
+                onMouseLeave={(e:any)=>e.currentTarget.style.background="transparent"}
+              >
+                <div style={{ width:6, height:6, borderRadius:3, background:PRIO[d.priority_level]??PRIO.medium, flexShrink:0 }}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.name}</div>
+                  <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:1 }}>
+                    {STAGE[d.deal_stage]??d.deal_stage}
+                    {d.target_date ? ` · 🎯 ${fmt(d.target_date)}` : ""}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:dt.bg, color:dt.tx, border:`1px solid ${dt.border}`, flexShrink:0, fontWeight:600 }}>{dt.label}</span>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Colonne droite */}
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          {/* Actions rapides */}
-          <div className="card" style={{ padding:"16px 14px" }}>
-            <div style={{ fontSize:10, fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"var(--text-4)", marginBottom:11 }}>Actions rapides</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-              {[
-                {href:"/protected/dossiers/nouveau",      label:"Nouveau dossier",      bg:"var(--buy-bg)",  tx:"var(--buy-tx)"},
-                {href:"/protected/contacts/nouveau",      label:"Nouveau contact",      bg:"#FFF0FA",        tx:"#8B1E6A"},
-                {href:"/protected/organisations/nouveau", label:"Nouvelle organisation",bg:"#FFF5E8",        tx:"#8B4A0A"},
-                {href:"/protected/agenda/nouvelle-tache", label:"Nouvelle tâche",       bg:"var(--cfo-bg)",  tx:"var(--cfo-tx)"},
-                {href:"/protected/import",                label:"Import CSV",           bg:"var(--surface-3)",tx:"var(--text-3)"},
-              ].map(a=>(
-                <Link key={a.href} href={a.href} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 12px", borderRadius:9, background:a.bg, color:a.tx, fontSize:12.5, fontWeight:600 }}>
-                  {a.label}<ArrowRight size={12} style={{ opacity:.5 }}/>
-                </Link>
-              ))}
-            </div>
-          </div>
 
-          {/* Agenda */}
-          <div className="card" style={{ overflow:"hidden", flex:1 }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", borderBottom:"1px solid var(--border)", background:"var(--surface-2)" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                <CalendarDays size={13} color="var(--text-3)"/>
-                <span style={{ fontSize:12, fontWeight:700, color:"var(--text-1)" }}>10 prochains jours</span>
-              </div>
-              <Link href="/protected/agenda" style={{ fontSize:11, color:"var(--su-500)", fontWeight:600 }}>Tout →</Link>
+          {/* Relances urgentes */}
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:7, padding:"12px 16px", borderBottom:"1px solid var(--border)" }}>
+              {relancesUrgentes.length > 0 && <AlertTriangle size={13} color="var(--rec-tx)"/>}
+              <span style={{ fontSize:12, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:".06em" }}>
+                Relances {relancesUrgentes.length > 0 ? `(${relancesUrgentes.length} urgentes)` : ""}
+              </span>
             </div>
-            {(events??[]).length===0 ? (
-              <div style={{ padding:"24px 16px", textAlign:"center", fontSize:12, color:"var(--text-5)" }}>Aucun événement</div>
-            ) : (events??[]).map(ev=>{
-              const ec = EVT_COLOR[ev.event_type]??EVT_COLOR.other;
-              const dl = Array.isArray(ev.deals)?ev.deals[0]:ev.deals as any;
+            {relances.length === 0 && <div style={{ padding:"20px", textAlign:"center", fontSize:13, color:"var(--text-5)" }}>✅ Aucune relance due</div>}
+            {relances.slice(0,5).map((c, i) => {
+              const days = daysSince(c.last_contact_date!);
+              const org = (c.organization_contacts as any[])?.[0]?.organizations;
+              const orgName = Array.isArray(org) ? org[0]?.name : org?.name;
               return (
-                <div key={ev.id} style={{ padding:"11px 16px", borderBottom:"1px solid var(--border)" }}>
-                  <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <span style={{ fontSize:10, fontWeight:700, borderRadius:5, padding:"2px 6px", background:ec.bg, color:ec.tx }}>{ec.label}</span>
-                      <div style={{ fontSize:12, fontWeight:600, color:"var(--text-1)", marginTop:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.title}</div>
-                      {dl && <div style={{ fontSize:10.5, color:"var(--text-4)" }}>📁 {dl.name}</div>}
-                    </div>
-                    <div style={{ fontSize:10, color:"var(--text-4)", flexShrink:0, textAlign:"right", marginTop:2 }}>{fmtDT(ev.starts_at)}</div>
+                <Link key={c.id} href={`/protected/contacts/${c.id}`} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", borderBottom: i<Math.min(relances.length,5)-1?"1px solid var(--border)":"none", textDecoration:"none", transition:"background .1s" }}
+                  onMouseEnter={(e:any)=>e.currentTarget.style.background="var(--surface-2)"}
+                  onMouseLeave={(e:any)=>e.currentTarget.style.background="transparent"}
+                >
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{c.first_name} {c.last_name}</div>
+                    {orgName && <div style={{ fontSize:11.5, color:"var(--text-5)" }}>{orgName}</div>}
                   </div>
-                </div>
+                  <span style={{ fontSize:12, fontWeight:700, color: days>=30?"var(--rec-tx)":"#B45309", flexShrink:0 }}>
+                    {days}j
+                  </span>
+                </Link>
               );
             })}
           </div>
+
+          {/* Tâches à faire */}
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+            <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:12, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:".06em" }}>Tâches à faire</span>
+            </div>
+            {tasks.length === 0 && <div style={{ padding:"20px", textAlign:"center", fontSize:13, color:"var(--text-5)" }}>✅ Aucune tâche</div>}
+            {tasks.map((t, i) => {
+              const deal = Array.isArray(t.deals) ? t.deals[0] : t.deals as any;
+              const overdue = t.due_date && new Date(t.due_date) < new Date();
+              return (
+                <Link key={t.id} href={t.deal_id ? `/protected/dossiers/${t.deal_id}` : "#"} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", borderBottom: i<tasks.length-1?"1px solid var(--border)":"none", textDecoration:"none", transition:"background .1s" }}
+                  onMouseEnter={(e:any)=>e.currentTarget.style.background="var(--surface-2)"}
+                  onMouseLeave={(e:any)=>e.currentTarget.style.background="transparent"}
+                >
+                  <div style={{ width:7, height:7, borderRadius:3.5, background:PRIO[t.priority_level]??PRIO.medium, flexShrink:0 }}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.title}</div>
+                    {deal?.name && <div style={{ fontSize:11.5, color:"var(--text-5)" }}>{deal.name}</div>}
+                  </div>
+                  {t.due_date && (
+                    <span style={{ fontSize:11.5, color: overdue?"var(--rec-tx)":"var(--text-5)", fontWeight: overdue?700:400, flexShrink:0 }}>
+                      {overdue?"⚠ ":""}{fmt(t.due_date)}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
         </div>
       </div>
     </div>
@@ -214,7 +178,7 @@ async function Content() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div style={{ padding:32, background:"var(--bg)", minHeight:"100vh" }}><div className="skeleton" style={{ height:200, borderRadius:16, marginBottom:16 }}/><div className="skeleton" style={{ height:400, borderRadius:16 }}/></div>}>
+    <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
       <Content/>
     </Suspense>
   );
