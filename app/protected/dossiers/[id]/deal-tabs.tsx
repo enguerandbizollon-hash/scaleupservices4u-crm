@@ -1,284 +1,307 @@
 "use client";
+import { useState } from "react";
+import Link from "next/link";
+import { Building2, Users, FileText, CheckSquare, Activity, TrendingUp, Mail, Phone, Linkedin, ChevronRight, ExternalLink } from "lucide-react";
+import { StatusDropdown } from "../../components/status-dropdown";
 
-import { useState, useTransition } from "react";
-import { DealContacts } from "./deal-contacts";
-import { DealOrganisations } from "./deal-organisations";
-import { Users, FileText, CheckSquare, Activity, Building2, Mail, ExternalLink, Plus, Check, X, Clock } from "lucide-react";
-
-type Contact = { id: string; contactId: string; name: string; title: string; email: string | null; organisation: string; role: string; status: string; lastContact: string; nextFollowUp: string; notes: string };
-type Doc = { id: string; name: string; type: string; status: string; url: string | null; version: string; date: string; note: string };
-type Task = { id: string; title: string; status: string; priority: string; dueDate: string; dueDateRaw: string | null; description: string };
-type ActivityItem = { id: string; type: string; typeKey: string; title: string; summary: string; date: string; source: string };
-
-const contactStatusColors: Record<string, string> = {
-  to_contact: "bg-slate-100 text-slate-600", contacted: "bg-blue-100 text-blue-700",
-  to_follow_up: "bg-amber-100 text-amber-700", in_discussion: "bg-indigo-100 text-indigo-700",
-  meeting_done: "bg-violet-100 text-violet-700", strong_interest: "bg-emerald-100 text-emerald-700",
-  waiting: "bg-slate-100 text-slate-500", no_go: "bg-red-100 text-red-700",
-  partner_active: "bg-teal-100 text-teal-700",
+const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
+  active:    {bg:"var(--fund-bg)", tx:"var(--fund-tx)"},
+  priority:  {bg:"var(--rec-bg)",  tx:"var(--rec-tx)"},
+  qualified: {bg:"var(--sell-bg)", tx:"var(--sell-tx)"},
+  to_qualify:{bg:"var(--surface-3)",tx:"var(--text-4)"},
+  excluded:  {bg:"var(--rec-bg)",  tx:"var(--rec-tx)"},
+  dormant:   {bg:"var(--surface-3)",tx:"var(--text-4)"},
+  inactive:  {bg:"var(--surface-3)",tx:"var(--text-5)"},
+};
+const STATUS_LABELS: Record<string,string> = {
+  active:"Actif", priority:"Prioritaire", qualified:"Qualifié",
+  to_qualify:"À qualifier", dormant:"Dormant", inactive:"Inactif", excluded:"Exclu",
+};
+const TYPE_LABELS: Record<string,string> = {
+  investor:"Investisseur", family_office:"Family Office", corporate:"Corporate",
+  bank:"Banque", advisor:"Conseil", law_firm:"Cab. juridique", other:"Autre",
+};
+const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
+const COMM_STATUS: Record<string,{label:string,bg:string,tx:string}> = {
+  indication: {label:"Indication",  bg:"var(--surface-3)", tx:"var(--text-4)"},
+  soft:       {label:"Soft",        bg:"var(--sell-bg)",   tx:"var(--sell-tx)"},
+  hard:       {label:"Hard",        bg:"var(--fund-bg)",   tx:"var(--fund-tx)"},
+  signed:     {label:"Signé",       bg:"var(--fund-bg)",   tx:"var(--fund-tx)"},
+  transferred:{label:"Transféré",   bg:"var(--fund-bg)",   tx:"var(--fund-tx)"},
+  cancelled:  {label:"Annulé",      bg:"var(--rec-bg)",    tx:"var(--rec-tx)"},
 };
 
-const contactStatusLabels: Record<string, string> = {
-  to_contact: "À contacter", contacted: "Contacté", to_follow_up: "À relancer",
-  in_discussion: "En discussion", meeting_done: "Meeting fait", strong_interest: "Intérêt fort",
-  waiting: "En attente", no_go: "No go", partner_active: "Actif",
-};
-
-const priorityColors: Record<string, string> = {
-  high: "bg-rose-100 text-rose-700", medium: "bg-amber-100 text-amber-700", low: "bg-slate-100 text-slate-500",
-};
-
-const activityTypeColors: Record<string, string> = {
-  email_sent: "bg-sky-100 text-sky-700", email_received: "bg-blue-100 text-blue-700",
-  call: "bg-violet-100 text-violet-700", meeting: "bg-indigo-100 text-indigo-700",
-  follow_up: "bg-amber-100 text-amber-700", note: "bg-slate-100 text-slate-600",
-  document_sent: "bg-emerald-100 text-emerald-700", nda: "bg-rose-100 text-rose-700",
-  deck_sent: "bg-teal-100 text-teal-700",
-};
-
-function TaskItem({ task, dealId }: { task: Task; dealId: string }) {
-  const [status, setStatus] = useState(task.status);
-  const [isPending, startTransition] = useTransition();
-
-  const isOverdue = task.dueDateRaw && new Date(task.dueDateRaw) < new Date() && status === "open";
-
-  async function changeStatus(newStatus: string) {
-    setStatus(newStatus);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.append("id", task.id);
-      fd.append("status", newStatus);
-      fd.append("deal_id", dealId);
-      const res = await fetch("/api/update-task-status", { method: "POST", body: fd });
-    });
-  }
-
-  return (
-    <div className={`rounded-xl border p-4 transition-all ${
-      status === "done" ? "border-emerald-200 bg-emerald-50 opacity-70" :
-      status === "cancelled" ? "border-slate-200 bg-slate-50 opacity-50" :
-      isOverdue ? "border-rose-200 bg-rose-50" : "border-[#E8E0D0] bg-white"
-    }`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-medium text-sm ${status === "done" ? "line-through text-slate-400" : "text-[#0F1B2D]"}`}>
-              {task.title}
-            </span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${priorityColors[task.priority] ?? "bg-slate-100"}`}>
-              {task.priority === "high" ? "Haute" : task.priority === "medium" ? "Moyenne" : "Basse"}
-            </span>
-            {isOverdue && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">En retard</span>}
-          </div>
-          {task.description && <p className="mt-1 text-xs text-slate-400 truncate">{task.description}</p>}
-          <p className="mt-1 text-xs text-slate-400">
-            <Clock size={11} className="inline mr-1" />Échéance : {task.dueDate}
-          </p>
-        </div>
-
-        {/* Boutons statut */}
-        <div className="flex shrink-0 gap-1">
-          {status !== "done" && (
-            <button
-              onClick={() => changeStatus("done")}
-              disabled={isPending}
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
-              title="Marquer terminé"
-            >
-              <Check size={13} />
-            </button>
-          )}
-          {status === "done" && (
-            <button
-              onClick={() => changeStatus("open")}
-              disabled={isPending}
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
-              title="Réouvrir"
-            >
-              <Clock size={13} />
-            </button>
-          )}
-          {status !== "cancelled" && status !== "done" && (
-            <button
-              onClick={() => changeStatus("cancelled")}
-              disabled={isPending}
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-colors"
-              title="Annuler"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function fmtDate(d: string | null) {
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(d));
+}
+function fmtAmount(n: number, currency = "EUR") {
+  if (!n) return "—";
+  if (n >= 1_000_000) return `${(n/1_000_000).toFixed(1)}M ${currency}`;
+  if (n >= 1_000) return `${(n/1_000).toFixed(0)}k ${currency}`;
+  return `${n} ${currency}`;
+}
+function daysSince(d: string | null) {
+  if (!d) return null;
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
 }
 
-export function DealTabs({ dealId, contacts, docs, tasks, activities, description, openTasksCount, contactsCount, docsCount }: {
-  dealId: string; contacts: Contact[]; docs: Doc[]; tasks: Task[]; activities: ActivityItem[];
-  description: string; openTasksCount: number; contactsCount: number; docsCount: number;
-}) {
-  const [activeTab, setActiveTab] = useState<"organisations" | "contacts" | "docs" | "tasks" | "activities">("organisations");
+type Tab = "organisations" | "contacts" | "financier" | "taches" | "activites" | "documents";
 
-  const tabs = [
-    { id: "organisations" as const, label: "Organisations", icon: Building2, count: 0 },
-    { id: "contacts" as const, label: "Contacts", icon: Users, count: contactsCount },
-    { id: "docs" as const, label: "Documents", icon: FileText, count: docsCount },
-    { id: "tasks" as const, label: "Tâches", icon: CheckSquare, count: openTasksCount, alert: openTasksCount > 0 },
-    { id: "activities" as const, label: "Activités", icon: Activity, count: activities.length },
+export function DealTabs({ dealId, dealType, orgs, contacts, docs, tasks, activities, commitments, target, hardAmount, softAmount, currency }: {
+  dealId: string; dealType: string;
+  orgs: any[]; contacts: any[]; docs: any[]; tasks: any[]; activities: any[];
+  commitments: any[]; target: number; hardAmount: number; softAmount: number; currency: string;
+}) {
+  const [tab, setTab] = useState<Tab>("organisations");
+  const isFundraising = dealType === "fundraising";
+  const openTasks = tasks.filter(t => t.task_status === "open").length;
+  const completion = target > 0 ? Math.min(100, Math.round((hardAmount / target) * 100)) : 0;
+
+  const tabs: { id: Tab; icon: any; label: string; count?: number }[] = [
+    { id:"organisations", icon:Building2, label:"Organisations", count:orgs.length },
+    { id:"contacts",      icon:Users,     label:"Contacts",      count:contacts.length },
+    ...(isFundraising ? [{ id:"financier" as Tab, icon:TrendingUp, label:"Pipeline" }] : []),
+    { id:"taches",        icon:CheckSquare, label:"Tâches",      count:openTasks },
+    { id:"activites",     icon:Activity,  label:"Activités",     count:activities.length },
+    { id:"documents",     icon:FileText,  label:"Documents",     count:docs.length },
   ];
 
-  const openTasks = tasks.filter(t => t.status === "open");
-  const doneTasks = tasks.filter(t => t.status === "done");
-  const cancelledTasks = tasks.filter(t => t.status === "cancelled");
-
   return (
-    <div className="card" style={{ overflow:"hidden" }}>
-      {/* Tab bar */}
-      <div style={{ display:"flex", borderBottom:"1px solid var(--border)", background:"var(--surface-2)", overflowX:"auto" }}>
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex shrink-0 items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 ${activeTab === tab.id ? "border-[#0F1B2D] text-[#0F1B2D] bg-white" : "border-transparent text-slate-500 hover:text-[#0F1B2D]"}`}
-            >
-              <Icon size={15} />
-              {tab.label}
-              {tab.count > 0 && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tab.alert ? "bg-amber-500 text-white" : activeTab === tab.id ? "bg-[#0F1B2D] text-white" : "bg-slate-200 text-slate-600"}`}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+    <div>
+      {/* Onglets nav */}
+      <div style={{ display:"flex", gap:4, marginBottom:12, background:"var(--surface-2)", borderRadius:12, padding:4 }}>
+        {tabs.map(({ id, icon:Icon, label, count }) => (
+          <button key={id} onClick={() => setTab(id)} style={{
+            flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:5,
+            padding:"8px 6px", borderRadius:9, border:"none", cursor:"pointer",
+            background: tab===id ? "var(--surface)" : "transparent",
+            color: tab===id ? "var(--text-1)" : "var(--text-4)",
+            fontWeight: tab===id ? 600 : 400,
+            fontSize:12.5, fontFamily:"inherit",
+            boxShadow: tab===id ? "0 1px 3px rgba(0,0,0,.08)" : "none",
+            transition:"all .12s",
+          }}>
+            <Icon size={13}/>
+            <span>{label}</span>
+            {count !== undefined && count > 0 && (
+              <span style={{ fontSize:11, background: tab===id ? "var(--surface-3)" : "var(--surface-3)", color:"var(--text-4)", borderRadius:10, padding:"1px 6px", fontWeight:600 }}>
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      <div className="p-6">
-
-        {/* ORGANISATIONS */}
-        {activeTab === "organisations" && (
-          <DealOrganisations dealId={dealId} />
-        )}
-
-        {/* CONTACTS */}
-        {activeTab === "contacts" && (
-          <DealContacts dealId={dealId} />
-        )}
-
-        {/* DOCUMENTS */}
-        {activeTab === "docs" && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs font-semibold tracking-widest text-slate-400">DOCUMENTS</p>
-              <a href={`/protected/dossiers/${dealId}/ajouter-document`} className="flex items-center gap-1.5 rounded-xl bg-[#0F1B2D] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1B2A4A] transition-colors">
-                <Plus size={12} /> Ajouter
-              </a>
+      {/* Organisations */}
+      {tab === "organisations" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {orgs.length === 0 ? (
+            <div style={{ padding:"40px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+              Aucune organisation liée à ce dossier
             </div>
-            {docs.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">Aucun document.</p>
-            ) : (
-              <div className="space-y-2">
-                {docs.map(doc => (
-                  <div key={doc.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#E8E0D0] p-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-[#0F1B2D] text-sm truncate">{doc.name}</p>
-                      <p className="text-xs text-slate-400">{doc.date} · {doc.version}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {doc.url ? (
-                        <a href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-lg bg-[#0F1B2D] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1B2A4A] transition-colors">
-                          <ExternalLink size={11} /> Ouvrir
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">Pas de lien</span>
-                      )}
-                      <a href={`/protected/dossiers/${dealId}/modifier-document/${doc.id}`} className="text-xs text-[#6B8CAE] hover:text-[#0F1B2D]">Modifier</a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TÂCHES */}
-        {activeTab === "tasks" && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <p className="text-xs font-semibold tracking-widest text-slate-400">TÂCHES & RELANCES</p>
-                <span className="text-xs text-slate-400">{openTasks.length} à faire · {doneTasks.length} terminées</span>
-              </div>
-              <a href={`/protected/agenda/nouvelle-tache`} className="flex items-center gap-1.5 rounded-xl bg-[#0F1B2D] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1B2A4A] transition-colors">
-                <Plus size={12} /> Ajouter
-              </a>
-            </div>
-
-            {tasks.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">Aucune tâche.</p>
-            ) : (
-              <div className="space-y-4">
-                {openTasks.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-slate-400 uppercase tracking-wide">À faire</p>
-                    <div className="space-y-2">
-                      {openTasks.map(t => <TaskItem key={t.id} task={t} dealId={dealId} />)}
-                    </div>
-                  </div>
-                )}
-                {doneTasks.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-slate-400 uppercase tracking-wide">Terminées</p>
-                    <div className="space-y-2">
-                      {doneTasks.map(t => <TaskItem key={t.id} task={t} dealId={dealId} />)}
-                    </div>
-                  </div>
-                )}
-                {cancelledTasks.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-slate-400 uppercase tracking-wide">Annulées</p>
-                    <div className="space-y-2">
-                      {cancelledTasks.map(t => <TaskItem key={t.id} task={t} dealId={dealId} />)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ACTIVITÉS */}
-        {activeTab === "activities" && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs font-semibold tracking-widest text-slate-400">HISTORIQUE</p>
-            </div>
-            {activities.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">Aucune activité.</p>
-            ) : (
-              <div className="space-y-2">
-                {activities.map(a => (
-                  <div key={a.id} className="flex items-start gap-3 rounded-xl border border-[#E8E0D0] p-3">
-                    <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-semibold ${activityTypeColors[a.typeKey] ?? "bg-slate-100 text-slate-600"}`}>
-                      {a.type}
+          ) : orgs.map((o, i) => {
+            const sc = STATUS_COLORS[o.base_status] ?? STATUS_COLORS.to_qualify;
+            return (
+              <div key={o.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom: i<orgs.length-1?"1px solid var(--border)":"none" }}>
+                <div style={{ width:36, height:36, borderRadius:9, background:"var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <Building2 size={14} color="var(--text-4)"/>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:14, fontWeight:600, color:"var(--text-1)" }}>{o.name}</span>
+                    <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:sc.bg, color:sc.tx }}>
+                      {STATUS_LABELS[o.base_status] ?? o.base_status}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-[#0F1B2D] text-sm">{a.title}</span>
-                        <span className="shrink-0 text-xs text-slate-400">{a.date}</span>
-                      </div>
-                      {a.summary && <p className="mt-1 text-xs text-slate-400">{a.summary}</p>}
-                    </div>
+                    {o.investment_ticket && <span style={{ fontSize:11, color:"var(--text-4)", padding:"2px 8px", borderRadius:20, background:"var(--surface-2)", border:"1px solid var(--border)" }}>{o.investment_ticket}</span>}
                   </div>
-                ))}
+                  <div style={{ fontSize:12, color:"var(--text-5)", marginTop:2 }}>
+                    {TYPE_LABELS[o.organization_type] ?? o.organization_type}
+                    {o.location ? ` · ${o.location}` : ""}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                  <StatusDropdown id={o.id} status={o.base_status} entity="organisations" size="sm"/>
+                  <Link href={`/protected/organisations/${o.id}`}
+                    style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", color:"var(--text-4)" }}>
+                    <ChevronRight size={13}/>
+                  </Link>
+                </div>
               </div>
-            )}
+            );
+          })}
+        </div>
+      )}
+
+      {/* Contacts */}
+      {tab === "contacts" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {contacts.length === 0 ? (
+            <div style={{ padding:"40px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+              Aucun contact lié à ce dossier
+            </div>
+          ) : contacts.map((c, i) => {
+            const days = daysSince(c.last_contact_date);
+            const sc = STATUS_COLORS[c.base_status] ?? STATUS_COLORS.to_qualify;
+            return (
+              <div key={c.id} style={{
+                display:"flex", alignItems:"center", gap:14, padding:"13px 20px",
+                borderBottom: i<contacts.length-1?"1px solid var(--border)":"none",
+                background: days && days > 30 ? "rgba(220,38,38,.03)" : days && days > 15 ? "rgba(245,158,11,.03)" : "transparent",
+              }}>
+                <div style={{ width:34, height:34, borderRadius:9, background:"var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"var(--text-3)", flexShrink:0 }}>
+                  {(c.first_name?.[0]??"").toUpperCase()}{(c.last_name?.[0]??"").toUpperCase()}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{c.first_name} {c.last_name}</span>
+                    {c.title && <span style={{ fontSize:12, color:"var(--text-4)" }}>{c.title}</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:"var(--text-5)", marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {c.organisation && <span>{c.organisation}</span>}
+                    {days !== null && <span style={{ color: days>30?"var(--rec-tx)":days>15?"#B45309":"var(--text-5)", fontWeight: days>15?600:400 }}>
+                      {days>15 ? `⚠ ${days}j` : `Contact ${fmtDate(c.last_contact_date)}`}
+                    </span>}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                  <StatusDropdown id={c.id} status={c.base_status} entity="contacts" size="sm"/>
+                  {c.email && <a href={`mailto:${c.email}`} style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-4)", textDecoration:"none" }}><Mail size={12}/></a>}
+                  {c.phone && <a href={`tel:${c.phone}`} style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-4)", textDecoration:"none" }}><Phone size={12}/></a>}
+                  <Link href={`/protected/contacts/${c.id}`} style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-4)", textDecoration:"none" }}><ChevronRight size={12}/></Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pipeline financier (fundraising) */}
+      {tab === "financier" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {/* Barre progression */}
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"20px 24px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
+              <div>
+                <div style={{ fontSize:12, color:"var(--text-4)", fontWeight:600, textTransform:"uppercase", letterSpacing:".06em" }}>Objectif</div>
+                <div style={{ fontSize:22, fontWeight:800, color:"var(--text-1)" }}>{fmtAmount(target, currency)}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:12, color:"var(--text-4)", fontWeight:600, textTransform:"uppercase", letterSpacing:".06em" }}>Sécurisé (hard)</div>
+                <div style={{ fontSize:22, fontWeight:800, color:"var(--fund-tx)" }}>{fmtAmount(hardAmount, currency)}</div>
+              </div>
+            </div>
+            <div style={{ height:10, background:"var(--surface-3)", borderRadius:10, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${completion}%`, background:"var(--fund-tx)", borderRadius:10, transition:"width .3s" }}/>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:12, color:"var(--text-5)" }}>
+              <span>Soft : {fmtAmount(softAmount, currency)}</span>
+              <span style={{ fontWeight:600, color:"var(--fund-tx)" }}>{completion}%</span>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Tableau engagements */}
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+            <div style={{ padding:"12px 20px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:12, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em" }}>
+                Engagements ({commitments.length})
+              </span>
+            </div>
+            {commitments.length === 0 ? (
+              <div style={{ padding:"32px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+                Aucun engagement enregistré
+              </div>
+            ) : commitments.map((c, i) => {
+              const org = Array.isArray(c.organizations) ? c.organizations[0] : c.organizations as any;
+              const cs = COMM_STATUS[c.status] ?? COMM_STATUS.indication;
+              return (
+                <div key={c.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 20px", borderBottom: i<commitments.length-1?"1px solid var(--border)":"none" }}>
+                  <div>
+                    <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{org?.name ?? "—"}</div>
+                    <div style={{ fontSize:12, color:"var(--text-5)", marginTop:2 }}>{fmtDate(c.committed_at)}</div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:11.5, padding:"3px 10px", borderRadius:20, background:cs.bg, color:cs.tx, fontWeight:600 }}>{cs.label}</span>
+                    <span style={{ fontSize:14, fontWeight:700, color:"var(--text-1)" }}>{fmtAmount(c.amount, c.currency)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tâches */}
+      {tab === "taches" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {tasks.length === 0 ? (
+            <div style={{ padding:"40px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>Aucune tâche</div>
+          ) : tasks.map((t, i) => {
+            const overdue = t.due_date && new Date(t.due_date) < new Date() && t.task_status === "open";
+            return (
+              <div key={t.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"13px 20px", borderBottom: i<tasks.length-1?"1px solid var(--border)":"none", opacity: t.task_status==="done"?.5:1 }}>
+                <div style={{ width:8, height:8, borderRadius:4, flexShrink:0, background: t.task_status==="done"?"var(--fund-tx)": overdue?"var(--rec-tx)": t.priority_level==="high"?"var(--sell-tx)":"var(--border-2)" }}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)", textDecoration: t.task_status==="done"?"line-through":"none" }}>{t.title}</div>
+                  {t.description && <div style={{ fontSize:12, color:"var(--text-4)", marginTop:2 }}>{t.description}</div>}
+                </div>
+                <div style={{ fontSize:12, color: overdue?"var(--rec-tx)":"var(--text-5)", flexShrink:0, fontWeight: overdue?600:400 }}>
+                  {t.due_date ? fmtDate(t.due_date) : "—"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Activités */}
+      {tab === "activites" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {activities.length === 0 ? (
+            <div style={{ padding:"40px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>Aucune activité</div>
+          ) : activities.map((a, i) => {
+            const org = Array.isArray(a.organizations) ? a.organizations[0] : a.organizations as any;
+            return (
+              <div key={a.id} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"13px 20px", borderBottom: i<activities.length-1?"1px solid var(--border)":"none" }}>
+                <div style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
+                  {ACT_ICON[a.activity_type] ?? "📌"}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{a.title}</div>
+                  {a.summary && <div style={{ fontSize:12.5, color:"var(--text-4)", marginTop:2 }}>{a.summary}</div>}
+                  {org?.name && <div style={{ fontSize:12, color:"var(--text-5)", marginTop:3 }}>{org.name}</div>}
+                </div>
+                <div style={{ fontSize:12, color:"var(--text-5)", flexShrink:0 }}>{fmtDate(a.activity_date)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Documents */}
+      {tab === "documents" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {docs.length === 0 ? (
+            <div style={{ padding:"40px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>Aucun document</div>
+          ) : docs.map((d, i) => (
+            <div key={d.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 20px", borderBottom: i<docs.length-1?"1px solid var(--border)":"none" }}>
+              <div>
+                <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{d.name}</div>
+                <div style={{ fontSize:12, color:"var(--text-5)", marginTop:2 }}>{d.document_type} {d.version_label ? `· v${d.version_label}` : ""}</div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:12, color:"var(--text-5)" }}>{fmtDate(d.added_at)}</span>
+                {d.document_url && (
+                  <a href={d.document_url} target="_blank" rel="noreferrer"
+                    style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-4)", textDecoration:"none" }}>
+                    <ExternalLink size={12}/>
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -23,7 +23,7 @@ export function GlobalSearch() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen]       = useState(false);
   const ref   = useRef<HTMLDivElement>(null);
-  const timer = useRef<NodeJS.Timeout>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
 
   const search = useCallback(async (q: string) => {

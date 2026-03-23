@@ -1,0 +1,268 @@
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Globe, MapPin, Mail, Phone, Linkedin, ExternalLink, ChevronRight, Sparkles, Building2, Users, FolderOpen, Activity } from "lucide-react";
+import { StatusDropdown } from "../../components/status-dropdown";
+import { EnrichButton } from "../../components/enrich-button";
+
+const TYPE_LABELS: Record<string,string> = {
+  client:"Client", prospect_client:"Prospect", investor:"Investisseur", buyer:"Repreneur",
+  target:"Cible", law_firm:"Cab. juridique", bank:"Banque", advisor:"Conseil",
+  accounting_firm:"Cab. comptable", family_office:"Family Office",
+  corporate:"Corporate", consulting_firm:"Cab. conseil", other:"Autre",
+};
+const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
+  active:     {bg:"var(--fund-bg)",  tx:"var(--fund-tx)"},
+  priority:   {bg:"var(--rec-bg)",   tx:"var(--rec-tx)"},
+  qualified:  {bg:"var(--sell-bg)",  tx:"var(--sell-tx)"},
+  to_qualify: {bg:"var(--surface-3)",tx:"var(--text-4)"},
+  dormant:    {bg:"var(--surface-3)",tx:"var(--text-4)"},
+  inactive:   {bg:"var(--surface-3)",tx:"var(--text-5)"},
+  excluded:   {bg:"var(--rec-bg)",   tx:"var(--rec-tx)"},
+};
+const STATUS_LABELS: Record<string,string> = {
+  active:"Actif", priority:"Prioritaire", qualified:"Qualifié",
+  to_qualify:"À qualifier", dormant:"Dormant", inactive:"Inactif", excluded:"Exclu",
+};
+const DEAL_TYPE: Record<string,string> = {
+  fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy",
+  cfo_advisor:"CFO Advisor", recruitment:"Recrutement",
+};
+const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
+
+function daysSince(d: string | null) {
+  if (!d) return null;
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+}
+function fmtDate(d: string | null) {
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"short", year:"numeric" }).format(new Date(d));
+}
+
+type Tab = "contacts" | "dossiers" | "activites";
+
+export function OrgDetail({ org, contacts, deals, activities }: {
+  org: any; contacts: any[]; deals: any[]; activities: any[];
+}) {
+  const [tab, setTab] = useState<Tab>("contacts");
+  const sc = STATUS_COLORS[org.base_status] ?? STATUS_COLORS.to_qualify;
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px" }}>
+
+      {/* Breadcrumb */}
+      <Link href="/protected/organisations" style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12.5, color:"var(--text-4)", textDecoration:"none", marginBottom:20 }}>
+        <ArrowLeft size={13}/> Organisations
+      </Link>
+
+      {/* Header card */}
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:16, padding:"24px 28px", marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+          <div style={{ flex:1, minWidth:0 }}>
+            {/* Badges */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+              <span style={{ fontSize:11.5, fontWeight:600, padding:"3px 10px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-3)" }}>
+                {TYPE_LABELS[org.organization_type] ?? org.organization_type}
+              </span>
+              <span style={{ fontSize:11.5, fontWeight:600, padding:"3px 10px", borderRadius:20, background:sc.bg, color:sc.tx }}>
+                {STATUS_LABELS[org.base_status] ?? org.base_status}
+              </span>
+              {org.investment_ticket && (
+                <span style={{ fontSize:11.5, fontWeight:500, padding:"3px 10px", borderRadius:20, background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>
+                  {org.investment_ticket}
+                </span>
+              )}
+              {org.investment_stage && (
+                <span style={{ fontSize:11.5, fontWeight:500, padding:"3px 10px", borderRadius:20, background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>
+                  {org.investment_stage}
+                </span>
+              )}
+            </div>
+
+            {/* Nom */}
+            <h1 style={{ fontSize:24, fontWeight:700, color:"var(--text-1)", margin:"0 0 8px" }}>{org.name}</h1>
+
+            {/* Infos */}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 16px", fontSize:13, color:"var(--text-4)" }}>
+              {org.sector && <span>{org.sector}</span>}
+              {org.location && <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11}/>{org.location}</span>}
+              {org.website && (
+                <a href={org.website.startsWith("http") ? org.website : `https://${org.website}`} target="_blank" rel="noreferrer"
+                  style={{ display:"flex", alignItems:"center", gap:4, color:"var(--text-3)", textDecoration:"none" }}>
+                  <Globe size={11}/>{org.website.replace(/^https?:\/\//, "")}
+                </a>
+              )}
+            </div>
+
+            {org.description && (
+              <p style={{ fontSize:13, color:"var(--text-3)", margin:"10px 0 0", lineHeight:1.6 }}>{org.description}</p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end", flexShrink:0 }}>
+            <div style={{ display:"flex", gap:8 }}>
+              <StatusDropdown id={org.id} status={org.base_status} entity="organisations" size="sm"/>
+              <EnrichButton id={org.id} type="organisation" name={org.name} size="sm"/>
+            </div>
+            <Link href={`/protected/organisations/${org.id}/modifier`}
+              style={{ fontSize:12.5, color:"var(--text-4)", textDecoration:"none", padding:"5px 12px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface-2)" }}>
+              Modifier
+            </Link>
+          </div>
+        </div>
+
+        {/* Notes Pappers */}
+        {org.notes && org.notes.includes("[Pappers]") && (
+          <div style={{ marginTop:14, padding:"10px 14px", background:"var(--surface-2)", borderRadius:10, fontSize:12, color:"var(--text-4)", borderLeft:"3px solid var(--border-2)" }}>
+            <Sparkles size={11} style={{ marginRight:5, verticalAlign:"middle" }}/>{org.notes}
+          </div>
+        )}
+      </div>
+
+      {/* KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
+        {[
+          { icon:Users, label:"Contacts", val:contacts.length, tab:"contacts" as Tab },
+          { icon:FolderOpen, label:"Dossiers", val:deals.length, tab:"dossiers" as Tab },
+          { icon:Activity, label:"Activités", val:activities.length, tab:"activites" as Tab },
+        ].map(({ icon:Icon, label, val, tab:t }) => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            textAlign:"center", padding:"14px 12px",
+            background: tab===t ? "var(--surface)" : "var(--surface-2)",
+            border: tab===t ? "1.5px solid var(--border-2)" : "1px solid var(--border)",
+            borderRadius:12, cursor:"pointer", transition:"all .12s",
+          }}>
+            <Icon size={14} color="var(--text-4)" style={{ marginBottom:4 }}/>
+            <div style={{ fontSize:22, fontWeight:700, color:"var(--text-1)", lineHeight:1.2 }}>{val}</div>
+            <div style={{ fontSize:11.5, color:"var(--text-4)", marginTop:2 }}>{label}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Onglet Contacts */}
+      {tab === "contacts" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {contacts.length === 0 ? (
+            <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+              Aucun contact lié à cette organisation
+            </div>
+          ) : contacts.map((c, i) => {
+            const days = daysSince(c.last_contact_date);
+            const needsRelance = days !== null && days > 15;
+            return (
+              <div key={c.id} style={{
+                display:"flex", alignItems:"center", gap:14, padding:"14px 20px",
+                borderBottom: i < contacts.length-1 ? "1px solid var(--border)" : "none",
+                background: needsRelance ? (days > 30 ? "rgba(220,38,38,.04)" : "rgba(245,158,11,.04)") : "transparent",
+              }}>
+                {/* Avatar */}
+                <div style={{ width:36, height:36, borderRadius:10, background:"var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:13, color:"var(--text-3)", flexShrink:0 }}>
+                  {(c.first_name?.[0] ?? "").toUpperCase()}{(c.last_name?.[0] ?? "").toUpperCase()}
+                </div>
+
+                {/* Infos */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:14, fontWeight:600, color:"var(--text-1)" }}>
+                      {c.first_name} {c.last_name}
+                    </span>
+                    {c.title && <span style={{ fontSize:12, color:"var(--text-4)" }}>{c.title}</span>}
+                    {c.role_label && <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"var(--surface-2)", color:"var(--text-4)" }}>{c.role_label}</span>}
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:3, flexWrap:"wrap" }}>
+                    {c.last_contact_date && (
+                      <span style={{ fontSize:11.5, color: days! > 30 ? "var(--rec-tx)" : days! > 15 ? "#B45309" : "var(--text-5)" }}>
+                        {days! > 15 ? `⚠ ${days}j sans contact` : `Contact le ${fmtDate(c.last_contact_date)}`}
+                      </span>
+                    )}
+                    <StatusDropdown id={c.id} status={c.base_status} entity="contacts" size="sm"/>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                  {c.email && (
+                    <a href={`mailto:${c.email}`} title={c.email}
+                      style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-3)", textDecoration:"none" }}>
+                      <Mail size={13}/>
+                    </a>
+                  )}
+                  {c.phone && (
+                    <a href={`tel:${c.phone}`} title={c.phone}
+                      style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-3)", textDecoration:"none" }}>
+                      <Phone size={13}/>
+                    </a>
+                  )}
+                  {c.linkedin_url && (
+                    <a href={c.linkedin_url} target="_blank" rel="noreferrer"
+                      style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-3)", textDecoration:"none" }}>
+                      <Linkedin size={13}/>
+                    </a>
+                  )}
+                  <Link href={`/protected/contacts/${c.id}`}
+                    style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-3)", textDecoration:"none" }}>
+                    <ChevronRight size={13}/>
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Onglet Dossiers */}
+      {tab === "dossiers" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {deals.length === 0 ? (
+            <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+              Aucun dossier lié à cette organisation
+            </div>
+          ) : deals.map((d, i) => (
+            <Link key={d.id} href={`/protected/dossiers/${d.id}`} style={{
+              display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px",
+              borderBottom: i < deals.length-1 ? "1px solid var(--border)" : "none",
+              textDecoration:"none", transition:"background .1s",
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--surface-2)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+            >
+              <div>
+                <div style={{ fontSize:14, fontWeight:600, color:"var(--text-1)" }}>{d.name}</div>
+                <div style={{ fontSize:12, color:"var(--text-4)", marginTop:3 }}>
+                  {DEAL_TYPE[d.deal_type] ?? d.deal_type} · {d.deal_stage} · {d.deal_status}
+                </div>
+              </div>
+              <ChevronRight size={14} color="var(--text-5)"/>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Onglet Activités */}
+      {tab === "activites" && (
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+          {activities.length === 0 ? (
+            <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+              Aucune activité enregistrée
+            </div>
+          ) : activities.map((a, i) => (
+            <div key={a.id} style={{
+              display:"flex", alignItems:"flex-start", gap:12, padding:"14px 20px",
+              borderBottom: i < activities.length-1 ? "1px solid var(--border)" : "none",
+            }}>
+              <div style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
+                {ACT_ICON[a.activity_type] ?? "📌"}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{a.title}</div>
+                {a.summary && <div style={{ fontSize:12.5, color:"var(--text-4)", marginTop:2 }}>{a.summary}</div>}
+              </div>
+              <div style={{ fontSize:12, color:"var(--text-5)", flexShrink:0 }}>{fmtDate(a.activity_date)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
