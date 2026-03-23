@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { StatusDropdown } from "../components/status-dropdown";
+import { EnrichButton } from "../components/enrich-button";
 import { FieldDropdown } from "../components/field-dropdown";
 import { Search, Globe, Edit2, Plus, X, Loader2, CheckCircle, ExternalLink, ArrowRight } from "lucide-react";
 
