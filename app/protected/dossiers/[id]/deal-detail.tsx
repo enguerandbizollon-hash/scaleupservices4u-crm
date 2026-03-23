@@ -1,10 +1,12 @@
 "use client";
 import { useState, useCallback } from "react";
+import { EventModal } from "../../components/event-modal";
+import { LossReasonModal } from "../../components/loss-reason-modal";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
   Mail, Phone, Linkedin, Users, Building2, TrendingUp, CheckSquare,
-  Activity, FileText, ExternalLink, AlertTriangle
+  Activity, FileText, ExternalLink, AlertTriangle, CalendarDays
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 
@@ -129,6 +131,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
   // Modals
   const [modal, setModal] = useState<string|null>(null);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [showLossModal, setShowLossModal] = useState(false);
+  const [eventContext, setEventContext] = useState<{contactId?:string;contactName?:string;orgId?:string;orgName?:string}>({});
   const [editing, setEditing] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
@@ -601,6 +606,32 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             }} loading={loading}>Ajouter</BtnPrimary>
           </div>
         </Modal>
+      )}
+
+      {/* EventModal */}
+      {showEventModal && (
+        <EventModal
+          dealId={deal.id}
+          contactId={eventContext.contactId}
+          orgId={eventContext.orgId}
+          contactName={eventContext.contactName}
+          orgName={eventContext.orgName}
+          dealName={deal.name}
+          onClose={() => setShowEventModal(false)}
+        />
+      )}
+
+      {/* LossReasonModal */}
+      {showLossModal && (
+        <LossReasonModal
+          entityType="deal"
+          entityName={deal.name}
+          entityId={deal.id}
+          onClose={() => setShowLossModal(false)}
+          onConfirm={async (reason) => {
+            setShowLossModal(false);
+          }}
+        />
       )}
     </div>
   );
