@@ -1,405 +1,291 @@
 "use client";
 import { useState, useRef } from "react";
-import { Upload, Download, CheckCircle, AlertCircle, ArrowRight, Loader2, RefreshCw } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Trash2 } from "lucide-react";
 
-type Mode = "contacts" | "organisations" | "dossiers";
+type Step = "setup" | "uploading" | "done";
 
-const SECTORS = ["Généraliste","Technologie / SaaS","Intelligence Artificielle","Fintech / Insurtech","Santé / Medtech","Industrie / Manufacturing","Énergie / CleanTech","Immobilier","Distribution / Retail","Médias / Entertainment","Transport / Logistique","Agroalimentaire","Éducation / EdTech","Défense / Sécurité","Tourisme / Hospitality","Services B2B","Conseil / Advisory","Juridique","Finance / Investissement","Ressources Humaines","Luxe / Premium","Construction / BTP","Télécommunications","Agriculture / AgriTech","Chimie / Matériaux","Aérospatial","Environnement","Sport / Loisirs","Bien-être / Beauté","Cybersécurité","Autre"];
-const TICKETS = ["< 50k€","50k – 200k€","200k – 500k€","500k – 1M€","1M – 3M€","3M – 10M€","> 10M€"];
-const INV_STAGES = ["Pre-seed","Seed","Série A","Série B","Growth","PE / LBO","Restructuring"];
-const ORG_TYPES = ["investor","client","prospect_client","family_office","buyer","target","law_firm","bank","advisor","accounting_firm","corporate","consulting_firm","other"];
-const ORG_STATUSES = ["rencontre","arencontrer","contacte","arelancer","to_qualify","qualified","dormant","excluded"];
+interface FileState {
+  file: File | null;
+  rows: Record<string, string>[];
+  headers: string[];
+  error: string;
+}
 
-const COLUMNS: Record<Mode, { key: string; label: string; required?: boolean; hint?: string; type?: "select"|"date"; options?: string[] }[]> = {
-  contacts: [
-    { key:"first_name",        label:"Prénom",          required:true },
-    { key:"last_name",         label:"Nom",             required:true },
-    { key:"email",             label:"Email" },
-    { key:"phone",             label:"Téléphone" },
-    { key:"title",             label:"Fonction",        hint:"Ex: Partner, CFO" },
-    { key:"organisation_name", label:"Organisation" },
-    { key:"role_label",        label:"Rôle" },
-    { key:"sector",            label:"Secteur" },
-    { key:"country",           label:"Pays" },
-    { key:"linkedin_url",      label:"LinkedIn" },
-    { key:"base_status",       label:"Statut",          hint:"active, qualified, to_qualify, dormant, excluded" },
-    { key:"last_contact_date", label:"Date dernier contact", type:"date" as const, hint:"JJ/MM/AAAA ou AAAA-MM-JJ" },
-    { key:"notes",             label:"Notes" },
-  ],
-  organisations: [
-    { key:"name",              label:"Nom *",           required:true },
-    { key:"organization_type", label:"Type",            type:"select", options:ORG_TYPES, hint:"investor, client, family_office…" },
-    { key:"base_status",       label:"Statut",          type:"select", options:ORG_STATUSES, hint:"rencontre, contacte, arelancer…" },
-    { key:"sector",            label:"Secteur",         type:"select", options:SECTORS },
-    { key:"location",          label:"Localisation",    hint:"Ex: Paris (FR), Londres (UK)" },
-    { key:"website",           label:"Site web",        hint:"https://…" },
-    { key:"investment_ticket", label:"Ticket",          type:"select", options:TICKETS, hint:"< 50k€ … > 10M€" },
-    { key:"investment_stage",  label:"Stade",           type:"select", options:INV_STAGES, hint:"Pre-seed, Seed, Série A…" },
-    { key:"deal_name",         label:"Dossier lié",     hint:"Nom exact du dossier existant" },
-    { key:"contact_date",      label:"Date contact",    type:"date",   hint:"JJ/MM/AAAA ou AAAA-MM-JJ" },
-    { key:"description",       label:"Description" },
-    { key:"notes",             label:"Notes" },
-  ],
-  dossiers: [
-    { key:"name",              label:"Nom",             required:true },
-    { key:"deal_type",         label:"Type",            required:true, hint:"fundraising, ma_sell, ma_buy, cfo_advisor, recruitment" },
-    { key:"deal_status",       label:"Statut",          hint:"active, inactive, closed" },
-    { key:"deal_stage",        label:"Étape",           hint:"kickoff, outreach, dd, negotiation, closing…" },
-    { key:"priority_level",    label:"Priorité",        hint:"high, medium, low" },
-    { key:"sector",            label:"Secteur",         type:"select" as const, options:SECTORS },
-    { key:"location",          label:"Localisation",    hint:"Ex. Paris (FR), Lyon (FR)" },
-    { key:"description",       label:"Description" },
-  ],
-};
+interface Result {
+  deal_id: string;
+  ok_orgs: number;
+  ok_contacts: number;
+  ok_links: number;
+  errors: { type: string; idx: number; err: string }[];
+}
 
-const MODE_LABELS: Record<Mode,string> = { contacts:"Contacts", organisations:"Organisations", dossiers:"Dossiers" };
-const MODE_ICONS: Record<Mode,string> = { contacts:"👤", organisations:"🏢", dossiers:"📁" };
-const MODE_COLORS: Record<Mode,{bg:string;tx:string}> = {
-  contacts:      { bg:"#FFF0FA", tx:"#8B1E6A" },
-  organisations: { bg:"#FFF5E8", tx:"#8B4A0A" },
-  dossiers:      { bg:"var(--buy-bg)", tx:"var(--buy-tx)" },
-};
-
-// Parser CSV RFC 4180 — gère les champs entre guillemets avec virgules internes
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i+1] === '"') { current += '"'; i++; }
-      else { inQuotes = !inQuotes; }
-    } else if (ch === "," && !inQuotes) {
-      result.push(current.trim());
-      current = "";
+// Parser CSV robuste (RFC 4180)
+function parseCSV(text: string): { headers: string[]; rows: Record<string, string>[] } {
+  const lines: string[][] = [];
+  let cur = "", inQ = false, fields: string[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (inQ) {
+      if (c === '"' && n === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
     } else {
-      current += ch;
+      if (c === '"') inQ = true;
+      else if (c === ',') { fields.push(cur); cur = ""; }
+      else if (c === '\n' || (c === '\r' && n === '\n')) {
+        if (c === '\r') i++;
+        fields.push(cur); cur = "";
+        if (fields.some(f => f.trim())) lines.push(fields);
+        fields = [];
+      } else cur += c;
     }
   }
-  result.push(current.trim());
-  return result;
+  if (cur || fields.length) { fields.push(cur); if (fields.some(f => f.trim())) lines.push(fields); }
+  if (lines.length < 2) return { headers: [], rows: [] };
+  const headers = lines[0].map(h => h.trim().toLowerCase());
+  const rows = lines.slice(1).map(l => {
+    const r: Record<string, string> = {};
+    headers.forEach((h, i) => r[h] = (l[i] ?? "").trim());
+    return r;
+  }).filter(r => Object.values(r).some(v => v));
+  return { headers, rows };
 }
 
-function parseCSV(text: string): Record<string,string>[] {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g,"").trim());
-  return lines.slice(1).filter(l => l.trim()).map(line => {
-    const vals = parseCSVLine(line).map(v => v.replace(/^"|"$/g,"").trim());
-    return Object.fromEntries(headers.map((h,i) => [h, vals[i] ?? ""]));
-  });
-}
+function FileDrop({
+  label, accept, state, onLoad, onClear
+}: {
+  label: string; accept: string;
+  state: FileState;
+  onLoad: (s: FileState) => void;
+  onClear: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
 
-function autoMap(heads: string[], mode: Mode) {
-  const map: Record<string,string> = {};
-  const expected = COLUMNS[mode].map(c=>c.key);
-  const aliases: Record<string,string[]> = {
-    first_name:["prenom","prénom","firstname"],
-    last_name:["nom","lastname","surname"],
-    email:["mail","courriel"],
-    phone:["tel","telephone","mobile"],
-    title:["fonction","poste","job"],
-    organisation_name:["organisation","organization","société","company","entreprise"],
-    name:["nom","raison_sociale","company"],
-    website:["site","url","web"],
-    location:["localisation","lieu","pays","country","ville"],
-    sector:["secteur","industry"],
-    investment_ticket:["ticket","montant","size","taille"],
-    investment_stage:["stade","stage","etape","étape"],
-    deal_name:["dossier","deal","mission"],
-    contact_date:["date_contact","date_premier_contact","first_contact","date"],
-    deal_type:["type","mission_type"],
-    deal_status:["statut","status"],
-    priority_level:["priorite","priorité","priority"],
-    description:["description","desc"],
-  };
-  for (const h of heads) {
-    const low = h.toLowerCase().replace(/[^a-z0-9]/g,"_");
-    const exact = expected.find(k=>k===low||k===h);
-    if (exact && !map[exact]) { map[exact]=h; continue; }
-    for (const [k,al] of Object.entries(aliases)) {
-      if (expected.includes(k) && !map[k] && al.some(a=>low.includes(a))) { map[k]=h; break; }
+  async function handleFile(file: File) {
+    if (!file.name.endsWith(".csv")) {
+      onLoad({ file, rows: [], headers: [], error: "Fichier CSV requis" });
+      return;
     }
+    const text = await file.text();
+    const { headers, rows } = parseCSV(text);
+    if (!rows.length) {
+      onLoad({ file, rows: [], headers: [], error: "Fichier vide ou mal formaté" });
+      return;
+    }
+    onLoad({ file, rows, headers, error: "" });
   }
-  return map;
+
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-3)", marginBottom: 8, letterSpacing: ".04em", textTransform: "uppercase" }}>{label}</div>
+      {state.file ? (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", background: state.error ? "var(--rec-bg)" : "var(--fund-bg)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <FileText size={15} color={state.error ? "var(--rec-tx)" : "var(--fund-tx)"}/>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>{state.file.name}</div>
+                {state.error
+                  ? <div style={{ fontSize: 11.5, color: "var(--rec-tx)" }}>{state.error}</div>
+                  : <div style={{ fontSize: 11.5, color: "var(--fund-tx)" }}>{state.rows.length} lignes · {state.headers.length} colonnes</div>
+                }
+              </div>
+            </div>
+            <button onClick={onClear} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-4)", padding: 4 }}>
+              <Trash2 size={13}/>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={() => ref.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+          style={{
+            border: "2px dashed var(--border)", borderRadius: 12, padding: "28px 20px",
+            textAlign: "center", cursor: "pointer", transition: "border-color .15s",
+            background: "var(--surface-2)",
+          }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "var(--border-2)"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"}
+        >
+          <Upload size={20} color="var(--text-4)" style={{ marginBottom: 8 }}/>
+          <div style={{ fontSize: 13, color: "var(--text-3)" }}>Glisser-déposer ou cliquer</div>
+          <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 4 }}>Format CSV requis</div>
+          <input ref={ref} type="file" accept={accept} style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}/>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function downloadTemplate(mode: Mode) {
-  const cols = COLUMNS[mode];
-  const examples: Record<Mode,string> = {
-    contacts:"Jean,Dupont,jean@example.com,+33600000000,Partner,Sequoia Capital,Decision maker,Technologie / SaaS,France,https://linkedin.com/in/jean,",
-    organisations:`Sequoia Capital,investor,contacte,Technologie / SaaS,"Paris (FR)",https://sequoiacap.com,1M – 3M€,Série A,Redpeaks Serie A,14/01/2025,Fonds VC tech européen,`,
-    dossiers:"Redpeaks Série A,fundraising,active,outreach,high,Redpeaks,Technologie / SaaS,Levée série A",
-  };
-  const blob = new Blob([cols.map(c=>c.key).join(",")+"\n"+examples[mode]], { type:"text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  Object.assign(document.createElement("a"),{href:url,download:`template_${mode}.csv`}).click();
-  URL.revokeObjectURL(url);
-}
+const EMPTY_FILE: FileState = { file: null, rows: [], headers: [], error: "" };
 
 export default function ImportPage() {
-  const [mode, setMode] = useState<Mode>("organisations");
-  const [rows, setRows] = useState<Record<string,string>[]>([]);
-  const [heads, setHeads] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<Record<string,string>>({});
-  const [step, setStep] = useState<"upload"|"mapping"|"preview"|"done">("upload");
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [results, setResults] = useState<{ok:number;errors:string[]}>({ok:0,errors:[]});
-  const fileRef = useRef<HTMLInputElement>(null);
-  const cols = COLUMNS[mode];
-  const mc = MODE_COLORS[mode];
+  const [dealName, setDealName]   = useState("");
+  const [orgsFile, setOrgsFile]   = useState<FileState>(EMPTY_FILE);
+  const [consFile, setConsFile]   = useState<FileState>(EMPTY_FILE);
+  const [step, setStep]           = useState<Step>("setup");
+  const [result, setResult]       = useState<Result | null>(null);
+  const [err, setErr]             = useState("");
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const parsed = parseCSV(ev.target?.result as string);
-      if (!parsed.length) { alert("Fichier vide ou format incorrect."); return; }
-      const h = Object.keys(parsed[0]);
-      setHeads(h); setRows(parsed); setMapping(autoMap(h,mode)); setStep("mapping");
-    };
-    reader.readAsText(f,"UTF-8");
-  }
+  const canImport = dealName.trim() && (orgsFile.rows.length > 0 || consFile.rows.length > 0) && !orgsFile.error && !consFile.error;
 
-  function goPreview() {
-    const miss = cols.filter(c=>c.required&&!mapping[c.key]).map(c=>c.label.replace(" *",""));
-    if (miss.length) { alert(`Obligatoires manquantes : ${miss.join(", ")}`); return; }
-    setStep("preview");
-  }
-
-  async function runImport() {
-    setLoading(true); setProgress(0);
-    const mapped = rows.map(r=>Object.fromEntries(Object.entries(mapping).map(([k,fh])=>[k,r[fh]??""])));
-    let ok=0; const errs:string[]=[];
-    for (let i=0;i<mapped.length;i+=50) {
-      const batch=mapped.slice(i,i+50);
-      const res=await fetch(`/api/import/${mode}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rows:batch})});
-      const d=await res.json();
-      ok+=d.ok??0;
-      const rawErrors = d.errors??[];
-      errs.push(...rawErrors.map((e: any) => typeof e === 'string' ? e : `Ligne ${e.ligne}: ${e.erreur}`));
-      setProgress(Math.round(((i+batch.length)/mapped.length)*100));
+  async function handleImport() {
+    if (!canImport) return;
+    setStep("uploading");
+    setErr("");
+    try {
+      const res = await fetch("/api/import/deal-dataset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deal_name: dealName.trim(),
+          orgs:      orgsFile.rows,
+          contacts:  consFile.rows,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { setErr(data.error ?? "Erreur inconnue"); setStep("setup"); return; }
+      setResult(data);
+      setStep("done");
+    } catch (e: any) {
+      setErr(e.message);
+      setStep("setup");
     }
-    setResults({ok,errors:errs}); setLoading(false); setStep("done");
   }
 
   function reset() {
-    setRows([]); setHeads([]); setMapping({}); setStep("upload"); setProgress(0); setResults({ok:0,errors:[]});
-    if (fileRef.current) fileRef.current.value="";
+    setDealName(""); setOrgsFile(EMPTY_FILE); setConsFile(EMPTY_FILE);
+    setStep("setup"); setResult(null); setErr("");
   }
 
-  const STEPS = ["upload","mapping","preview","done"];
-  const STEP_LABELS = ["Fichier","Colonnes","Aperçu","Résultat"];
-
   return (
-    <div style={{ padding:32, minHeight:"100vh", background:"var(--bg)" }}>
-      <div style={{ maxWidth:920, margin:"0 auto" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>Import dossier</h1>
+        <p style={{ fontSize: 13.5, color: "var(--text-4)", margin: "6px 0 0" }}>
+          Organisations + contacts importés en une seule transaction. Tous les liens sont créés automatiquement.
+        </p>
+      </div>
 
-        {/* Header */}
-        <div style={{ marginBottom:28 }}>
-          <div className="section-label" style={{ marginBottom:6 }}>DONNÉES</div>
-          <h1 style={{ margin:0 }}>Import de données</h1>
-          <p style={{ fontSize:13, color:"var(--text-3)", marginTop:6 }}>
-            Importez vos données depuis un CSV. Pour les organisations, le lien avec les dossiers existants et les dates de contact sont gérés automatiquement.
-          </p>
-        </div>
-
-        {/* Mode tabs */}
-        <div className="card" style={{ padding:6, marginBottom:14, display:"flex", gap:4 }}>
-          {(Object.entries(MODE_LABELS) as [Mode,string][]).map(([m,l]) => (
-            <button key={m} onClick={()=>{setMode(m);reset();}}
-              style={{ flex:1, padding:"11px 16px", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600, borderRadius:9, transition:"all .12s",
-                background: mode===m ? mc.bg : "transparent",
-                color: mode===m ? mc.tx : "var(--text-4)",
-                boxShadow: mode===m ? `inset 0 0 0 1.5px ${mc.tx}30` : "none",
-              }}>
-              {MODE_ICONS[m]} {l}
-            </button>
-          ))}
-        </div>
-
-        {/* Steps */}
-        <div style={{ display:"flex", alignItems:"center", gap:0, marginBottom:20 }}>
-          {STEP_LABELS.map((l,i) => {
-            const cur=STEPS.indexOf(step); const done=i<cur; const active=i===cur;
-            return (
-              <div key={i} style={{ display:"flex", alignItems:"center", flex:1 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:11.5, fontWeight:600,
-                  color:active?mc.tx:done?"var(--fund-tx)":"var(--text-5)",
-                  padding:"6px 10px", borderRadius:7,
-                  background:active?mc.bg:done?"var(--fund-bg)":"transparent",
-                  border:`1px solid ${active?mc.tx+"30":done?"var(--fund-dot)20":"transparent"}`,
-                }}>
-                  {done?<CheckCircle size={12}/>:<span style={{ width:16,height:16,borderRadius:"50%",background:active?mc.tx:"var(--border)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:9,color:active?"#fff":"var(--text-4)",fontWeight:700 }}>{i+1}</span>}
-                  {l}
-                </div>
-                {i<3&&<div style={{ flex:1, height:1, background:"var(--border)", margin:"0 4px" }}/>}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ── STEP 1 Upload ── */}
-        {step==="upload" && (
-          <div className="card" style={{ padding:28 }}>
-            {/* Colonnes avec types */}
-            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:22, gap:16, flexWrap:"wrap" }}>
-              <div>
-                <div style={{ fontSize:13, fontWeight:700, color:"var(--text-1)", marginBottom:10 }}>Colonnes disponibles pour {MODE_LABELS[mode]}</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                  {cols.map(c=>(
-                    <span key={c.key} style={{ fontSize:11, padding:"3px 9px", borderRadius:6,
-                      background:c.required?mc.bg:"var(--surface-3)",
-                      color:c.required?mc.tx:"var(--text-4)",
-                      border:`1px solid ${c.required?mc.tx+"30":"var(--border)"}`,
-                      fontWeight:c.required?700:400,
-                    }}>
-                      {c.label}
-                      {c.type==="select" && <span style={{ fontSize:9, marginLeft:3, opacity:.6 }}>▼</span>}
-                      {c.type==="date"   && <span style={{ fontSize:9, marginLeft:3, opacity:.6 }}>📅</span>}
-                    </span>
-                  ))}
-                </div>
-                {mode==="organisations" && (
-                  <div style={{ marginTop:12, padding:"10px 12px", borderRadius:9, background:"var(--buy-bg)", border:"1px solid var(--buy-mid)" }}>
-                    <div style={{ fontSize:11.5, color:"var(--buy-tx)", fontWeight:600, marginBottom:4 }}>💡 Liaison automatique avec les dossiers</div>
-                    <div style={{ fontSize:11, color:"var(--buy-tx)", opacity:.8 }}>
-                      Si tu renseignes <strong>deal_name</strong> (nom exact du dossier) + <strong>contact_date</strong>, le CRM crée automatiquement le lien organisation → dossier et enregistre l'activité de prise de contact.
-                    </div>
-                  </div>
-                )}
-              </div>
-              <button onClick={()=>downloadTemplate(mode)} className="btn btn-secondary btn-sm">
-                <Download size={12}/> Template CSV
-              </button>
-            </div>
-
-            {/* Drop zone */}
-            <div onClick={()=>fileRef.current?.click()}
-              style={{ border:"2px dashed var(--border-2)", borderRadius:12, padding:"52px 32px", textAlign:"center", cursor:"pointer", background:"var(--surface-2)", transition:"all .12s" }}
-              onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor=mc.tx;(e.currentTarget as HTMLElement).style.background=mc.bg+"80"}}
-              onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor="var(--border-2)";(e.currentTarget as HTMLElement).style.background="var(--surface-2)"}}>
-              <Upload size={28} color={mc.tx} style={{ margin:"0 auto 14px",display:"block",opacity:.6 }}/>
-              <div style={{ fontSize:14, fontWeight:600, color:"var(--text-2)", marginBottom:4 }}>Glisser ou cliquer pour choisir un fichier CSV</div>
-              <div style={{ fontSize:12, color:"var(--text-5)" }}>Encodage UTF-8, séparateur virgule</div>
-            </div>
-            <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display:"none" }}/>
+      {step === "done" && result ? (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 28, background: "var(--surface)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <CheckCircle size={22} color="var(--fund-tx)"/>
+            <span style={{ fontSize: 17, fontWeight: 600, color: "var(--text-1)" }}>Import terminé</span>
           </div>
-        )}
-
-        {/* ── STEP 2 Mapping ── */}
-        {step==="mapping" && (
-          <div className="card" style={{ padding:28 }}>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:15, fontWeight:700, color:"var(--text-1)", marginBottom:4 }}>Correspondance des colonnes</div>
-              <p style={{ fontSize:12.5, color:"var(--text-3)" }}>{rows.length} ligne{rows.length>1?"s":""} détectée{rows.length>1?"s":""}. Vérifie le mapping auto et ajuste si besoin.</p>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:13, marginBottom:24 }}>
-              {cols.map(col=>(
-                <div key={col.key}>
-                  <label className="lbl" style={{ color:col.required&&!mapping[col.key]?"var(--rec-tx)":"var(--text-4)" }}>
-                    {col.label}
-                    {col.type==="select" && <span style={{ marginLeft:4, opacity:.5 }}>▼ liste</span>}
-                    {col.type==="date"   && <span style={{ marginLeft:4, opacity:.5 }}>📅 date</span>}
-                  </label>
-                  {col.hint && <div style={{ fontSize:10, color:"var(--text-5)", marginBottom:3 }}>{col.hint}</div>}
-                  <select className="inp" value={mapping[col.key]??""} onChange={e=>setMapping(p=>({...p,[col.key]:e.target.value}))}
-                    style={{ borderColor:col.required&&!mapping[col.key]?"var(--rec-dot)":"var(--border)" }}>
-                    <option value="">— Ignorer —</option>
-                    {heads.map(h=><option key={h} value={h}>{h}</option>)}
-                  </select>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+            {[
+              { label: "Organisations", val: result.ok_orgs, color: "#3468B0" },
+              { label: "Contacts", val: result.ok_contacts, color: "#A8306A" },
+              { label: "Liens créés", val: result.ok_links, color: "#15A348" },
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ textAlign: "center", padding: "16px 12px", background: "var(--surface-2)", borderRadius: 10 }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color }}>{val}</div>
+                <div style={{ fontSize: 12, color: "var(--text-4)", marginTop: 2 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          {result.errors.length > 0 && (
+            <div style={{ background: "var(--sell-bg)", border: "1px solid var(--sell-brd)", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sell-tx)", marginBottom: 6 }}>
+                {result.errors.length} ligne{result.errors.length > 1 ? "s" : ""} ignorée{result.errors.length > 1 ? "s" : ""}
+              </div>
+              {result.errors.slice(0, 5).map((e, i) => (
+                <div key={i} style={{ fontSize: 11.5, color: "var(--sell-tx)" }}>
+                  • [{e.type}] ligne {e.idx} : {e.err}
                 </div>
               ))}
             </div>
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
-              <button className="btn btn-secondary" onClick={reset}>Recommencer</button>
-              <button className="btn btn-primary" style={{ background:mc.tx }} onClick={goPreview}>Aperçu <ArrowRight size={13}/></button>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <a href={`/protected`} style={{
+              padding: "9px 18px", background: "var(--accent)", color: "#fff",
+              borderRadius: 9, fontSize: 13.5, fontWeight: 600, textDecoration: "none",
+            }}>Voir le dashboard</a>
+            <button onClick={reset} style={{
+              padding: "9px 18px", background: "var(--surface-2)", color: "var(--text-2)",
+              border: "1px solid var(--border)", borderRadius: 9, fontSize: 13.5, cursor: "pointer",
+            }}>Nouvel import</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 28, background: "var(--surface)" }}>
+          {/* Nom du dossier */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".04em", textTransform: "uppercase" }}>
+              Nom du dossier
+            </label>
+            <input
+              value={dealName}
+              onChange={e => setDealName(e.target.value)}
+              placeholder="ex: Redpeaks, Hello Justice Capital 1…"
+              style={{
+                display: "block", width: "100%", marginTop: 8,
+                padding: "10px 14px", border: "1px solid var(--border)",
+                borderRadius: 10, background: "var(--surface-2)",
+                color: "var(--text-1)", fontSize: 14, fontFamily: "inherit",
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 5 }}>
+              Doit correspondre exactement au nom dans les CSV (colonne deal_name).
+              Le dossier est créé automatiquement s'il n'existe pas.
             </div>
           </div>
-        )}
 
-        {/* ── STEP 3 Preview ── */}
-        {step==="preview" && (
-          <div className="card" style={{ padding:28 }}>
-            <div style={{ marginBottom:18 }}>
-              <div style={{ fontSize:15, fontWeight:700, color:"var(--text-1)", marginBottom:4 }}>{rows.length} ligne{rows.length>1?"s":""} à importer</div>
-              <p style={{ fontSize:12.5, color:"var(--text-3)" }}>Aperçu des 5 premières lignes.</p>
-            </div>
-            <div style={{ overflowX:"auto", marginBottom:24, borderRadius:10, border:"1px solid var(--border)" }}>
-              <table style={{ width:"100%", fontSize:11.5, borderCollapse:"collapse" }}>
-                <thead>
-                  <tr style={{ background:"var(--surface-2)" }}>
-                    {cols.filter(c=>mapping[c.key]).map(c=>(
-                      <th key={c.key} style={{ padding:"9px 12px", textAlign:"left", color:"var(--text-4)", fontWeight:700, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap", fontSize:10.5, letterSpacing:".04em", textTransform:"uppercase" }}>{c.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0,5).map((row,i)=>(
-                    <tr key={i} style={{ borderBottom:"1px solid var(--border)", background:i%2===0?"var(--surface)":"var(--surface-2)" }}>
-                      {cols.filter(c=>mapping[c.key]).map(c=>(
-                        <td key={c.key} style={{ padding:"9px 12px", color:"var(--text-2)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {row[mapping[c.key]]||<span style={{ color:"var(--text-5)", fontStyle:"italic" }}>vide</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {loading ? (
-              <div>
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                  <Loader2 size={15} className="animate-spin" style={{ color:mc.tx }}/>
-                  <span style={{ fontSize:13, color:"var(--text-2)", fontWeight:500 }}>Import en cours… {progress}%</span>
-                </div>
-                <div style={{ height:5, borderRadius:10, background:"var(--border)" }}>
-                  <div style={{ height:"100%", borderRadius:10, background:mc.tx, width:`${progress}%`, transition:"width .3s ease" }}/>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
-                <button className="btn btn-secondary" onClick={()=>setStep("mapping")}>← Modifier</button>
-                <button className="btn btn-primary" style={{ background:mc.tx }} onClick={runImport}>Importer {rows.length} ligne{rows.length>1?"s":""}</button>
-              </div>
-            )}
+          {/* Upload fichiers */}
+          <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
+            <FileDrop
+              label="Organisations (optionnel)"
+              accept=".csv"
+              state={orgsFile}
+              onLoad={setOrgsFile}
+              onClear={() => setOrgsFile(EMPTY_FILE)}
+            />
+            <FileDrop
+              label="Contacts (optionnel)"
+              accept=".csv"
+              state={consFile}
+              onLoad={setConsFile}
+              onClear={() => setConsFile(EMPTY_FILE)}
+            />
           </div>
-        )}
 
-        {/* ── STEP 4 Done ── */}
-        {step==="done" && (
-          <div className="card" style={{ padding:32 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:20 }}>
-              <div style={{ width:48, height:48, borderRadius:14, background:"var(--fund-bg)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <CheckCircle size={24} color="var(--fund-tx)"/>
-              </div>
-              <div>
-                <div style={{ fontSize:16, fontWeight:700, color:"var(--text-1)" }}>Import terminé</div>
-                <div style={{ fontSize:13, color:"var(--fund-tx)", fontWeight:600, marginTop:2 }}>
-                  {results.ok} ligne{results.ok>1?"s":""} importée{results.ok>1?"s":""} avec succès
-                  {mode==="organisations" && mapping["deal_name"] && <span style={{ marginLeft:6, opacity:.7 }}>· liens dossiers créés automatiquement</span>}
-                </div>
-              </div>
-            </div>
-            {results.errors.length > 0 && (
-              <div style={{ marginBottom:20, padding:"14px 16px", borderRadius:10, background:"var(--rec-bg)", border:"1px solid var(--rec-dot)20" }}>
-                <div style={{ fontSize:12, fontWeight:700, color:"var(--rec-tx)", marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
-                  <AlertCircle size={13}/> {results.errors.length} erreur{results.errors.length>1?"s":""}
-                </div>
-                <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:3 }}>
-                  {results.errors.map((e,i)=><div key={i} style={{ fontSize:11.5, color:"var(--rec-tx)" }}>• {typeof e === "string" ? e : JSON.stringify(e)}</div>)}
-                </div>
-              </div>
-            )}
-            <div style={{ display:"flex", gap:8 }}>
-              <button className="btn btn-secondary" onClick={reset}><RefreshCw size={13}/>Nouvel import</button>
-              <a href={`/protected/${mode}`} className="btn btn-primary" style={{ background:mc.tx }}>Voir les {MODE_LABELS[mode].toLowerCase()} <ArrowRight size={13}/></a>
-            </div>
+          {/* Colonnes attendues */}
+          <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "12px 14px", marginBottom: 20, fontSize: 11.5, color: "var(--text-4)" }}>
+            <div style={{ marginBottom: 4, fontWeight: 600, color: "var(--text-3)" }}>Colonnes attendues</div>
+            <div><strong>Organisations :</strong> name · organization_type · base_status · sector · location · website · investment_ticket · investment_stage · deal_name · contact_date · description</div>
+            <div style={{ marginTop: 4 }}><strong>Contacts :</strong> first_name · last_name · email · phone · title · organisation_name · role_label · sector · country · linkedin_url · base_status · last_contact_date</div>
           </div>
-        )}
-      </div>
+
+          {err && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--rec-bg)", borderRadius: 9, marginBottom: 16, fontSize: 13, color: "var(--rec-tx)" }}>
+              <AlertCircle size={14}/> {err}
+            </div>
+          )}
+
+          <button
+            onClick={handleImport}
+            disabled={!canImport || step === "uploading"}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "11px 24px", borderRadius: 10, border: "none",
+              background: canImport ? "var(--accent)" : "var(--surface-3)",
+              color: canImport ? "#fff" : "var(--text-5)",
+              fontSize: 14, fontWeight: 600, cursor: canImport ? "pointer" : "default",
+              fontFamily: "inherit",
+            }}
+          >
+            {step === "uploading"
+              ? <><Loader2 size={14} className="animate-spin"/> Import en cours…</>
+              : <><Upload size={14}/> Lancer l'import</>
+            }
+          </button>
+        </div>
+      )}
     </div>
   );
 }
