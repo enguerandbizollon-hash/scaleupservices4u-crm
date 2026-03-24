@@ -15,12 +15,13 @@ interface DashboardClientProps {
   tasks: { id:string; title:string; priority:string; dueDate:string|null; dealId:string|null; dealName?:string; overdue:boolean; prioColor:string }[];
   activities: { id:string; title:string; type:string; date:string; dealId:string|null; dealName?:string }[];
   calendarItems: { id:string; title:string; date:string; type:string; dealName?:string|null; contactName?:string|null }[];
+  allContacts?: ContactOption[];
 }
 
 function fmt(v:string|null){ if(!v)return"—"; return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}); }
 function fmtFull(v:string){ return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}); }
 
-export function DashboardClient({ kpis, deals, relances, tasks, activities, calendarItems }: DashboardClientProps) {
+export function DashboardClient({ kpis, deals, relances, tasks, activities, calendarItems, allContacts }: DashboardClientProps) {
   const [showEventModal, setShowEventModal] = useState(false);
   const [openTask, setOpenTask] = useState<TaskItem|null>(null);
   const [calMonth, setCalMonth] = useState(() => { const d=new Date(); return { year:d.getFullYear(), month:d.getMonth() }; });
@@ -239,6 +240,7 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
       {openTask && (
         <TaskModal
           item={openTask}
+          contacts={allContacts ?? []}
           dealId={openTask.deal_id}
           onClose={() => setOpenTask(null)}
         />

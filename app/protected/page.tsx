@@ -24,7 +24,7 @@ async function Content() {
   const today    = new Date().toISOString().split("T")[0];
   const in30     = new Date(Date.now()+30*864e5).toISOString().split("T")[0];
 
-  const [dealsRes, tasksRes, relancesRes, activitiesRes, eventsRes, kpiRes] = await Promise.all([
+  const [dealsRes, tasksRes, relancesRes, activitiesRes, eventsRes, kpiRes, allContactsRes] = await Promise.all([
     supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,target_date").eq("deal_status","active").order("priority_level"),
     supabase.from("tasks").select("id,title,priority_level,due_date,deal_id,deals(name)").eq("task_status","open").order("due_date",{ascending:true}).limit(6),
     supabase.from("contacts").select("id,first_name,last_name,last_contact_date,organization_contacts(organizations(name))").not("last_contact_date","is",null).lte("last_contact_date",cutoff15).not("base_status","in","(excluded,inactive)").order("last_contact_date",{ascending:true}).limit(8),
@@ -36,6 +36,10 @@ async function Content() {
       supabase.from("organizations").select("*",{count:"exact",head:true}),
       supabase.from("tasks").select("*",{count:"exact",head:true}).eq("task_status","open"),
     ]),
+    supabase.from("contacts")
+      .select("id,first_name,last_name,email,organization_contacts(organizations(name))")
+      .not("base_status","in","(excluded,inactive)")
+      .order("last_name").limit(200),
   ]);
 
   const deals     = dealsRes.data ?? [];
@@ -79,6 +83,11 @@ async function Content() {
       tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority_level, dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority_level]??PRIO.medium }; })}
       activities={activities.map(a => { const deal=Array.isArray(a.deals)?a.deals[0]:a.deals as any; return { id:a.id, title:a.title, type:a.activity_type, date:a.activity_date, dealId:a.deal_id, dealName:deal?.name }; })}
       calendarItems={[...calendarEvents, ...calendarTasks]}
+      allContacts={(allContactsRes.data ?? []).map((c:any) => {
+        const org = (c.organization_contacts as any[])?.[0]?.organizations;
+        const orgName = Array.isArray(org) ? org[0]?.name : org?.name;
+        return { id:c.id, first_name:c.first_name, last_name:c.last_name, email:c.email, org_name:orgName };
+      })}
     />
   );
 }
