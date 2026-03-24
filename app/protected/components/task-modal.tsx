@@ -58,7 +58,7 @@ interface TaskModalProps {
 
 
 // ── Composant de sélection de contacts par organisation ──────────────
-function ContactPicker({ contacts, selected, onToggle }: {
+export function ContactPicker({ contacts, selected, onToggle }: {
   contacts: ContactOption[];
   selected: string[];
   onToggle: (id: string) => void;
@@ -166,7 +166,11 @@ export function TaskModal({ item, contacts = [], dealId, onClose, onSave, onDele
     if (!form.title.trim()) return;
     setLoading(true);
     try {
-      if (!effectiveDealId) throw new Error("Dossier non identifié");
+      if (!effectiveDealId) {
+        alert("Pour créer une tâche depuis le dashboard, ouvre d'abord un dossier et crée la tâche depuis la fiche dossier.");
+        setLoading(false);
+        return;
+      }
       const method = item?.id ? "PATCH" : "POST";
       const body   = item?.id
         ? { task_id: item.id, ...form }

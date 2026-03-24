@@ -236,7 +236,7 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
         </div>
       </div>
 
-      {showEventModal && <EventModal onClose={() => setShowEventModal(false)}/>}
+      {showEventModal && <EventModal contacts={allContacts ?? []} onClose={() => setShowEventModal(false)}/>}
       {openTask && (
         <TaskModal
           item={openTask}

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { TimeSelect } from "./time-select";
+import { ContactPicker, type ContactOption } from "./task-modal";
 import { X, CalendarDays, Bell } from "lucide-react";
 
 const EVENT_TYPES = [
@@ -32,11 +33,12 @@ interface EventModalProps {
   contactName?: string;
   orgName?:   string;
   dealName?:  string;
+  contacts?:  ContactOption[];
   onClose:    () => void;
   onCreated?: (event: any) => void;
 }
 
-export function EventModal({ dealId, contactId, orgId, contactName, orgName, dealName, onClose, onCreated }: EventModalProps) {
+export function EventModal({ dealId, contactId, orgId, contactName, orgName, dealName, contacts = [], onClose, onCreated }: EventModalProps) {
   const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({
     title:         contactName ? `Relancer ${contactName}` : orgName ? `Relancer ${orgName}` : "",
@@ -46,6 +48,7 @@ export function EventModal({ dealId, contactId, orgId, contactName, orgName, dea
     reminder_date: "",
     notes:         "",
   });
+  const [contactIds, setContactIds] = useState<string[]>(contactId ? [contactId] : []);
   const [loading, setLoading] = useState(false);
 
   const setF = (k: string) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) =>
@@ -62,7 +65,8 @@ export function EventModal({ dealId, contactId, orgId, contactName, orgName, dea
           ...form,
           deal_id:         dealId || null,
           organization_id: orgId  || null,
-          contact_id:      contactId || null,
+          contact_id:      contactIds[0] || contactId || null,
+          contact_ids:     contactIds,
           reminder_date:   form.reminder_date || null,
         }),
       });
@@ -134,6 +138,15 @@ export function EventModal({ dealId, contactId, orgId, contactName, orgName, dea
           </label>
           <input style={inp} type="date" value={form.reminder_date} onChange={setF("reminder_date")} max={form.due_date}/>
         </div>
+
+        {/* Contacts */}
+        {contacts.length > 0 && (
+          <ContactPicker
+            contacts={contacts}
+            selected={contactIds}
+            onToggle={id => setContactIds(p => p.includes(id) ? p.filter(x=>x!==id) : [...p,id])}
+          />
+        )}
 
         {/* Notes */}
         <div style={{ marginBottom:18 }}>
