@@ -1,12 +1,14 @@
 "use client";
 import { useState, useCallback } from "react";
+import { TimeSelect } from "../../components/time-select";
 import { EventModal } from "../../components/event-modal";
 import { LossReasonModal } from "../../components/loss-reason-modal";
+import { MailTaskModal } from "../../components/mail-task-modal";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
   Mail, Phone, Linkedin, Users, Building2, TrendingUp, CheckSquare,
-  Activity, FileText, ExternalLink, AlertTriangle, CalendarDays
+  Activity, FileText, ExternalLink, AlertTriangle, CalendarDays, Send
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 
@@ -133,6 +135,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [modal, setModal] = useState<string|null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showLossModal, setShowLossModal] = useState(false);
+  const [mailTask, setMailTask] = useState<Task|null>(null);
   const [eventContext, setEventContext] = useState<{contactId?:string;contactName?:string;orgId?:string;orgName?:string}>({});
   const [editing, setEditing] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -430,6 +433,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       )}
                     </div>
                     <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                      {(contacts.length > 0) && (
+                        <button onClick={()=>setMailTask(t)} title="Envoyer un email aux contacts liés" style={{...actionBtn, color:"#1a56db"}}><Send size={11}/></button>
+                      )}
                       <button onClick={()=>openModal("task",t)} style={{...actionBtn}}><Pencil size={11}/></button>
                       <button onClick={()=>deleteTask(t.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                     </div>
@@ -539,7 +545,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             </select>
           </Field>
           <Field label="Date limite">
-            <input style={inp} type="date" value={form.due_date||""} onChange={setF("due_date")}/>
+            <div style={{ display:"flex", gap:8 }}>
+              <input style={{...inp, flex:2}} type="date" value={form.due_date||""} onChange={setF("due_date")}/>
+              <TimeSelect value={form.due_time||""} onChange={v=>setForm(p=>({...p,due_time:v}))} style={{ flex:1 }}/>
+            </div>
           </Field>
           <Field label="Contact associé">
             <select style={sel} value={form.contact_name||""} onChange={setF("contact_name")}>
@@ -577,8 +586,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               <option value="other">📌 Autre</option>
             </select>
           </Field>
-          <Field label="Date">
-            <input style={inp} type="date" value={form.activity_date||new Date().toISOString().split("T")[0]} onChange={setF("activity_date")}/>
+          <Field label="Date et heure">
+            <div style={{ display:"flex", gap:8 }}>
+              <input style={{...inp, flex:2}} type="date" value={form.activity_date||new Date().toISOString().split("T")[0]} onChange={setF("activity_date")}/>
+              <TimeSelect value={form.activity_time||""} onChange={v=>setForm(p=>({...p,activity_time:v}))} style={{ flex:1 }}/>
+            </div>
           </Field>
           <Field label="Contacts associés">
             <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:160, overflowY:"auto", padding:"4px 0" }}>
@@ -677,6 +689,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             <BtnPrimary onClick={saveDocument} loading={loading}>Ajouter</BtnPrimary>
           </div>
         </Modal>
+      )}
+
+      {/* Modale email tâche */}
+      {mailTask && (
+        <MailTaskModal
+          task={mailTask}
+          contacts={contacts}
+          onClose={() => setMailTask(null)}
+        />
       )}
 
       {/* EventModal */}

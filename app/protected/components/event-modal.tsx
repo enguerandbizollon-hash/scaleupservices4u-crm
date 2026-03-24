@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { TimeSelect } from "./time-select";
 import { X, CalendarDays, Bell } from "lucide-react";
 
 const EVENT_TYPES = [
@@ -41,6 +42,7 @@ export function EventModal({ dealId, contactId, orgId, contactName, orgName, dea
     title:         contactName ? `Relancer ${contactName}` : orgName ? `Relancer ${orgName}` : "",
     event_type:    "follow_up",
     due_date:      addDays(7),
+    due_time:      "",
     reminder_date: "",
     notes:         "",
   });
@@ -119,7 +121,10 @@ export function EventModal({ dealId, contactId, orgId, contactName, orgName, dea
               </button>
             ))}
           </div>
-          <input style={inp} type="date" value={form.due_date} onChange={setF("due_date")} min={today}/>
+          <div style={{ display:"flex", gap:8, marginTop:6 }}>
+            <input style={{...inp, flex:2}} type="date" value={form.due_date} onChange={setF("due_date")} min={today}/>
+            <TimeSelect value={form.due_time} onChange={v=>setForm(p=>({...p,due_time:v}))} style={{ flex:1 }}/>
+          </div>
         </div>
 
         {/* Rappel */}
