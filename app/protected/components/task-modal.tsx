@@ -56,6 +56,80 @@ interface TaskModalProps {
   onToggle?: (id: string, done: boolean) => void;
 }
 
+
+// ── Composant de sélection de contacts par organisation ──────────────
+function ContactPicker({ contacts, selected, onToggle }: {
+  contacts: ContactOption[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  const [orgFilter, setOrgFilter] = useState("all");
+  const [search, setSearch]       = useState("");
+
+  // Extraire les orgs uniques
+  const orgs = Array.from(new Set(contacts.map(c => c.org_name).filter(Boolean))) as string[];
+
+  const filtered = contacts.filter(c => {
+    const matchOrg = orgFilter === "all" || c.org_name === orgFilter;
+    const matchSearch = !search ||
+      `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
+      (c.email ?? "").toLowerCase().includes(search.toLowerCase());
+    return matchOrg && matchSearch;
+  });
+
+  const inp2: React.CSSProperties = { width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:7, background:"var(--surface-2)", color:"var(--text-1)", fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box" };
+
+  return (
+    <div style={{ marginBottom:12 }}>
+      <label style={{ display:"block", fontSize:11.5, fontWeight:600, color:"var(--text-4)", marginBottom:5, textTransform:"uppercase", letterSpacing:".05em" }}>
+        Contacts associés
+        {selected.length > 0 && <span style={{ marginLeft:6, fontWeight:700, color:"#1a56db" }}>{selected.length} sélectionné{selected.length>1?"s":""}</span>}
+      </label>
+
+      {contacts.length === 0 ? (
+        <div style={{ fontSize:12.5, color:"var(--text-5)", padding:"8px 12px", background:"var(--surface-2)", borderRadius:8, border:"1px solid var(--border)" }}>
+          Aucun contact disponible pour ce dossier.
+        </div>
+      ) : (
+        <>
+          {/* Filtres rapides */}
+          <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap" }}>
+            {orgs.length > 1 && (
+              <select value={orgFilter} onChange={e => setOrgFilter(e.target.value)}
+                style={{ ...inp2, flex:"none", width:"auto", fontSize:12 }}>
+                <option value="all">Toutes les orgs</option>
+                {orgs.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            )}
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher un contact…"
+              style={{ ...inp2, flex:1, minWidth:140 }}/>
+          </div>
+
+          {/* Liste */}
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:180, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8, padding:"6px 8px" }}>
+            {filtered.length === 0 ? (
+              <div style={{ fontSize:12.5, color:"var(--text-5)", padding:"6px 4px" }}>Aucun résultat</div>
+            ) : filtered.map(c => {
+              const sel = selected.includes(c.id);
+              return (
+                <label key={c.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 8px", borderRadius:7, border:`1px solid ${sel?"#1a56db":"transparent"}`, background:sel?"rgba(26,86,219,.06)":"transparent", cursor:"pointer" }}>
+                  <input type="checkbox" checked={sel} onChange={() => onToggle(c.id)} style={{ accentColor:"#1a56db", flexShrink:0 }}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <span style={{ fontSize:13, color:"var(--text-1)", fontWeight:600 }}>{c.first_name} {c.last_name}</span>
+                    {c.org_name && <span style={{ fontSize:11.5, color:"var(--text-5)", marginLeft:6 }}>— {c.org_name}</span>}
+                  </div>
+                  {c.email && <span style={{ fontSize:11, color:"var(--text-5)", flexShrink:0 }}>✉️</span>}
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function TaskModal({ item, contacts = [], dealId, onClose, onSave, onDelete, onToggle }: TaskModalProps) {
   const isNew = !item?.id;
   const [form, setForm] = useState({
@@ -253,33 +327,8 @@ export function TaskModal({ item, contacts = [], dealId, onClose, onSave, onDele
           </div>
         </div>
 
-        {/* ── Contacts ── */}
-        <div style={{ marginBottom:12 }}>
-          <label style={{ display:"block", fontSize:11.5, fontWeight:600, color:"var(--text-4)", marginBottom:5, textTransform:"uppercase", letterSpacing:".05em" }}>
-            Contacts associés {contacts.length === 0 && <span style={{ fontWeight:400, textTransform:"none", fontSize:11 }}>(aucun disponible)</span>}
-          </label>
-          {contacts.length > 0 ? (
-            <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:160, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8, padding:"6px 8px" }}>
-              {contacts.map(c => {
-                const sel = form.contact_ids.includes(c.id);
-                return (
-                  <label key={c.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 8px", borderRadius:7, border:`1px solid ${sel?"#1a56db":"transparent"}`, background:sel?"rgba(26,86,219,.06)":"transparent", cursor:"pointer" }}>
-                    <input type="checkbox" checked={sel} onChange={() => toggleContact(c.id)} style={{ accentColor:"#1a56db", flexShrink:0 }}/>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <span style={{ fontSize:13, color:"var(--text-1)", fontWeight:600 }}>{c.first_name} {c.last_name}</span>
-                      {c.org_name && <span style={{ fontSize:11.5, color:"var(--text-5)", marginLeft:6 }}>— {c.org_name}</span>}
-                    </div>
-                    {c.email && <span style={{ fontSize:11, color:"var(--text-5)", flexShrink:0 }}>✉️</span>}
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ fontSize:12.5, color:"var(--text-5)", padding:"8px 12px", background:"var(--surface-2)", borderRadius:8, border:"1px solid var(--border)" }}>
-              Les contacts apparaissent ici quand la tâche est liée à un dossier.
-            </div>
-          )}
-        </div>
+        {/* ── Contacts avec recherche par org ── */}
+        <ContactPicker contacts={contacts} selected={form.contact_ids} onToggle={toggleContact}/>
 
         {/* ── Notes ── */}
         <div style={{ marginBottom:16 }}>

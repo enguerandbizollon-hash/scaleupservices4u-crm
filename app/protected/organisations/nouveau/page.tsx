@@ -6,6 +6,7 @@ import { Building2, ArrowLeft } from "lucide-react";
 
 const TYPES = [
   { value:"investor",        label:"Investisseur",       desc:"VC, PE, Growth" },
+  { value:"business_angel",   label:"Business Angel",     desc:"Investisseur individuel" },
   { value:"family_office",   label:"Family Office",      desc:"SFO, MFO, GFI" },
   { value:"corporate",       label:"Corporate / CVC",    desc:"Investisseur corporate" },
   { value:"bank",            label:"Banque",             desc:"Banque privée, commerciale" },
@@ -36,7 +37,7 @@ const SECTORS = ["Technologie / SaaS","Fintech / Insurtech","Santé / MedTech","
 
 // Champs dynamiques selon le type
 function extraFields(type: string) {
-  const isInvestor = ["investor","family_office","corporate","bank"].includes(type);
+  const isInvestor = ["investor","business_angel","family_office","corporate","bank"].includes(type);
   const isTarget   = ["target","client","prospect_client"].includes(type);
   const isBuyer    = type === "buyer";
 

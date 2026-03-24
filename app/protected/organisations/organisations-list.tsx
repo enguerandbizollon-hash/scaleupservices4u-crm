@@ -1,205 +1,261 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
+import { Plus, Search, Mail, Phone, Globe, AlertTriangle, CheckSquare, Activity, ChevronRight } from "lucide-react";
 import { StatusDropdown } from "../components/status-dropdown";
-import { EnrichButton } from "../components/enrich-button";
-import { FieldDropdown } from "../components/field-dropdown";
-import { Search, Globe, Edit2, Plus, X, Loader2, CheckCircle, ExternalLink, ArrowRight } from "lucide-react";
 
-type Org = { id:string; name:string; typeKey:string; typeLabel:string; status:string; sector:string; location:string; website:string|null; notes:string; dealsCount:number; investmentTicket:string; investmentStage:string; description:string; };
-
-const STATUS: Record<string,{label:string;bg:string;tx:string}> = {
-  rencontre:   {label:"Rencontré",   bg:"var(--os-rencontre-bg)",   tx:"var(--os-rencontre-tx)"},
-  arencontrer: {label:"À rencontrer",bg:"var(--os-arencontrer-bg)", tx:"var(--os-arencontrer-tx)"},
-  contacte:    {label:"Contacté",    bg:"var(--os-contacte-bg)",    tx:"var(--os-contacte-tx)"},
-  arelancer:   {label:"À relancer",  bg:"var(--os-arelancer-bg)",   tx:"var(--os-arelancer-tx)"},
-  to_qualify:  {label:"À qualifier", bg:"var(--os-qualify-bg)",     tx:"var(--os-qualify-tx)"},
-  qualified:   {label:"Qualifié",    bg:"var(--os-rencontre-bg)",   tx:"var(--os-rencontre-tx)"},
-  active:      {label:"Actif",       bg:"var(--os-rencontre-bg)",   tx:"var(--os-rencontre-tx)"},
-  dormant:     {label:"Dormant",     bg:"var(--os-arencontrer-bg)", tx:"var(--os-arencontrer-tx)"},
-  excluded:    {label:"Exclu",       bg:"var(--os-excluded-bg)",    tx:"var(--os-excluded-tx)"},
+type Contact = { id:string; first_name:string; last_name:string; title?:string; email?:string; phone?:string; base_status?:string; last_contact_date?:string; role_label?:string; is_primary?:boolean };
+type Org = {
+  id:string; name:string; typeKey:string; typeLabel:string; status:string;
+  sector:string; location:string; website:string|null; notes:string;
+  investmentTicket:string; investmentStage:string; description:string;
+  contacts: Contact[]; openTasks:number; lastActivity:string|null;
 };
 
-const ORG_TYPES=[["client","Client"],["prospect_client","Prospect client"],["investor","Investisseur"],["buyer","Repreneur"],["target","Cible"],["law_firm","Cabinet juridique"],["bank","Banque"],["advisor","Conseil"],["accounting_firm","Cabinet comptable"],["family_office","Family office"],["corporate","Corporate"],["consulting_firm","Cabinet de conseil"],["other","Autre"]];
-const ORG_STATUSES=[["rencontre","Rencontré"],["arencontrer","À rencontrer"],["contacte","Contacté"],["arelancer","À relancer"],["to_qualify","À qualifier"],["qualified","Qualifié"],["dormant","Dormant"],["excluded","Exclu"]];
-const SECTORS=["Généraliste","Technologie / SaaS","Intelligence Artificielle","Fintech / Insurtech","Santé / Medtech","Industrie / Manufacturing","Énergie / CleanTech","Immobilier","Distribution / Retail","Médias / Entertainment","Transport / Logistique","Agroalimentaire","Éducation / EdTech","Défense / Sécurité","Tourisme / Hospitality","Services B2B","Conseil / Advisory","Juridique","Finance / Investissement","Ressources Humaines","Luxe / Premium","Construction / BTP","Télécommunications","Agriculture / AgriTech","Chimie / Matériaux","Aérospatial","Environnement","Sport / Loisirs","Bien-être / Beauté","Cybersécurité","Autre"];
-const TICKETS=["< 50k€","50k – 200k€","200k – 500k€","500k – 1M€","1M – 3M€","3M – 10M€","> 10M€"];
-const STAGES=["Pre-seed","Seed","Série A","Série B","Growth","PE / LBO","Restructuring"];
-
-const TYPE_ACCENT: Record<string,{dot:string;bg:string}> = {
-  investor:       {dot:"#2355B0",bg:"#E8F0FC"},
-  family_office:  {dot:"#0D5C2A",bg:"#E8F8ED"},
-  client:         {dot:"#193A82",bg:"#EAF0FC"},
-  prospect_client:{dot:"#245090",bg:"#E8EFFA"},
-  buyer:          {dot:"#864E00",bg:"#FFF7E6"},
-  target:         {dot:"#921A1A",bg:"#FEF0F0"},
-  law_firm:       {dot:"#4E1A9E",bg:"#F2EDFC"},
-  bank:           {dot:"#42607E",bg:"#EDF2F7"},
-  corporate:      {dot:"#42607E",bg:"#EDF2F7"},
+const TYPE_COLORS: Record<string, { bg:string; tx:string; border:string }> = {
+  investor:       { bg:"var(--fund-bg)", tx:"var(--fund-tx)", border:"var(--fund-mid)" },
+  business_angel: { bg:"var(--fund-bg)", tx:"var(--fund-tx)", border:"var(--fund-mid)" },
+  family_office:  { bg:"var(--fund-bg)", tx:"var(--fund-tx)", border:"var(--fund-mid)" },
+  client:         { bg:"var(--sell-bg)", tx:"var(--sell-tx)", border:"var(--sell-mid)" },
+  prospect_client:{ bg:"var(--sell-bg)", tx:"var(--sell-tx)", border:"var(--sell-mid)" },
+  target:         { bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  border:"var(--buy-mid)"  },
+  buyer:          { bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  border:"var(--buy-mid)"  },
+  default:        { bg:"var(--surface-3)", tx:"var(--text-4)", border:"var(--border)" },
 };
 
-function OrgCard({org,onEdit}:{org:Org;onEdit:()=>void}) {
-  const st=STATUS[org.status]??STATUS.to_qualify;
-  const acc=TYPE_ACCENT[org.typeKey]??{dot:"#6F90A8",bg:"#EDF2F7"};
-  const isInvestor=["investor","family_office"].includes(org.typeKey);
-  return (
-    <a href={`/protected/organisations/${org.id}`} style={{display:"block",textDecoration:"none"}}>
-      <div className="card" style={{overflow:"hidden",display:"flex",flexDirection:"column",transition:"transform .14s,box-shadow .14s",cursor:"pointer"}}
-        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-2px)";el.style.boxShadow="var(--shadow-md)"}}
-        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";el.style.boxShadow="var(--shadow-sm)"}}>
-        <div style={{height:3,background:acc.dot}}/>
-        <div style={{padding:"15px 16px",flex:1}}>
-          {/* Header */}
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10,gap:6}}>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{fontSize:13.5,fontWeight:700,color:"var(--text-1)",marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{org.name}</div>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                <span style={{fontSize:10.5,fontWeight:700,color:acc.dot,background:acc.bg,borderRadius:5,padding:"2px 7px"}}>{org.typeLabel}</span>
-                <span style={{fontSize:10.5,fontWeight:600,borderRadius:5,padding:"2px 7px",background:st.bg,color:st.tx}}>{st.label}</span>
-              </div>
-            </div>
-            <button className="btn-icon" style={{width:26,height:26,flexShrink:0}} onClick={e=>{e.preventDefault();e.stopPropagation();onEdit()}}><Edit2 size={11}/></button>
-          </div>
-          <div className="divider" style={{marginBottom:10}}/>
-          {/* Infos — dropdowns inline */}
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <FieldDropdown id={org.id} value={org.sector} field="sector"/>
-            {isInvestor&&<>
-              <FieldDropdown id={org.id} value={org.investmentTicket} field="investment_ticket"/>
-              <FieldDropdown id={org.id} value={org.investmentStage}  field="investment_stage"/>
-            </>}
-            {org.location&&<Row icon="📍" v={org.location}/>}
-            {org.dealsCount>0&&<Row icon="📁" v={`${org.dealsCount} dossier${org.dealsCount>1?"s":""}`} tx="var(--su-500)"/>}
-            {org.description&&<div style={{fontSize:11,color:"var(--text-4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" as any}}>{org.description}</div>}
-          </div>
-        </div>
-        {org.website&&(
-          <div style={{padding:"8px 16px",borderTop:"1px solid var(--border)",background:"var(--surface-2)"}}>
-            <span style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--su-500)",fontWeight:500}}>
-              <Globe size={10}/>
-              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{org.website.replace(/^https?:\/\/(www\.)?/,"")}</span>
-              <ExternalLink size={9} style={{flexShrink:0}}/>
-            </span>
-          </div>
-        )}
-      </div>
-    </a>
-  );
+const STATUS_LABELS: Record<string,{label:string;color:string}> = {
+  to_qualify: { label:"À qualifier", color:"#6B7280" },
+  qualified:  { label:"Qualifié",    color:"#1a56db" },
+  priority:   { label:"Prioritaire", color:"#7C3AED" },
+  active:     { label:"Actif",       color:"#16a34a" },
+  dormant:    { label:"Dormant",     color:"#B45309" },
+  inactive:   { label:"Inactif",     color:"#9CA3AF" },
+  excluded:   { label:"Exclu",       color:"#DC2626" },
+};
+
+function fmtDate(v:string|null) {
+  if (!v) return null;
+  const days = Math.floor((Date.now()-new Date(v).getTime())/86400000);
+  if (days === 0) return "aujourd'hui";
+  if (days === 1) return "hier";
+  if (days < 30) return `il y a ${days}j`;
+  return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
 }
 
-function Row({icon,v,tx}:{icon:string;v:string;tx?:string}) {
-  return <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11.5}}><span>{icon}</span><span style={{color:tx??"var(--text-2)",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span></div>;
-}
+export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total: number } }) {
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
 
-function EditOrgModal({org,onClose,onSaved}:{org:Org;onClose:()=>void;onSaved:(u:Partial<Org>)=>void}) {
-  const [f,setF]=useState({name:org.name,organization_type:org.typeKey,base_status:org.status,sector:org.sector,location:org.location,website:org.website??"",investment_ticket:org.investmentTicket,investment_stage:org.investmentStage,description:org.description,notes:org.notes});
-  const [loading,setLoading]=useState(false); const [done,setDone]=useState(false); const [err,setErr]=useState("");
-  const set=(k:string)=>(e:React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>)=>setF(p=>({...p,[k]:e.target.value}));
-  async function save(){
-    setLoading(true);setErr("");
-    const r=await fetch(`/api/organisations/${org.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(f)});
-    if(!r.ok){setErr((await r.json()).error??"Erreur");setLoading(false);return;}
-    setDone(true);
-    onSaved({name:f.name,sector:f.sector,location:f.location,website:f.website||null,investmentTicket:f.investment_ticket,investmentStage:f.investment_stage,description:f.description,notes:f.notes,status:f.base_status});
-    setTimeout(onClose,900);
-  }
-  const isInvestor=["investor","family_office"].includes(f.organization_type);
+  const types = ["all", ...Array.from(new Set(orgs.map(o => o.typeKey)))];
+
+  const filtered = orgs.filter(o => {
+    const matchSearch = !search ||
+      o.name.toLowerCase().includes(search.toLowerCase()) ||
+      o.sector.toLowerCase().includes(search.toLowerCase()) ||
+      o.location.toLowerCase().includes(search.toLowerCase()) ||
+      o.contacts.some(c => `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()));
+    const matchType   = filterType === "all" || o.typeKey === filterType;
+    const matchStatus = filterStatus === "all" || o.status === filterStatus;
+    return matchSearch && matchType && matchStatus;
+  });
+
+  const TYPE_LABELS: Record<string,string> = {
+    all:"Tous", client:"Client", prospect_client:"Prospect", investor:"Investisseur",
+    business_angel:"Business Angel", buyer:"Repreneur", target:"Cible",
+    law_firm:"Cabinet juridique", bank:"Banque", advisor:"Conseil",
+    accounting_firm:"Cabinet comptable", family_office:"Family office",
+    corporate:"Corporate", consulting_firm:"Conseil strat.", other:"Autre"
+  };
+
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(9,22,40,.6)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(3px)"}} onClick={onClose}>
-      <div className="animate-scalein card" style={{width:"100%",maxWidth:560,maxHeight:"92vh",overflowY:"auto",padding:28,boxShadow:"var(--shadow-xl)"}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:22}}>
-          <div><div className="section-label" style={{marginBottom:4}}>Modifier organisation</div><h2 style={{fontSize:17,fontWeight:700}}>{org.name}</h2></div>
-          <button className="btn-icon" onClick={onClose}><X size={15}/></button>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:13}}>
-          <div style={{gridColumn:"1/-1"}}><label className="lbl">NOM *</label><input className="inp" value={f.name} onChange={set("name")}/></div>
-          <div><label className="lbl">TYPE</label>
-            <select className="inp" value={f.organization_type} onChange={set("organization_type")}>
-              {ORG_TYPES.map(([k,v])=><option key={k} value={k}>{v}</option>)}
-            </select>
+    <div style={{ padding:"28px 24px", minHeight:"100vh", background:"var(--bg)" }}>
+
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div>
+          <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>Organisations</h1>
+          <div style={{ fontSize:13, color:"var(--text-5)", marginTop:4 }}>
+            {filtered.length} / {stats.total} organisation{stats.total > 1 ? "s" : ""}
+            {filtered.some(o=>o.contacts.length>0) && ` · ${filtered.reduce((s,o)=>s+o.contacts.length,0)} contacts`}
           </div>
-          <div><label className="lbl">STATUT</label>
-            <select className="inp" value={f.base_status} onChange={set("base_status")}>
-              {ORG_STATUSES.map(([k,v])=><option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div><label className="lbl">SECTEUR</label>
-            <select className="inp" value={f.sector} onChange={set("sector")}>
-              <option value="">— Choisir —</option>
-              {SECTORS.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div><label className="lbl">LOCALISATION</label><input className="inp" value={f.location} onChange={set("location")} placeholder="Paris (FR), Londres (UK)…"/></div>
-          {isInvestor&&<>
-            <div><label className="lbl">TICKET D'INVESTISSEMENT</label>
-              <select className="inp" value={f.investment_ticket} onChange={set("investment_ticket")}>
-                <option value="">— Choisir —</option>
-                {TICKETS.map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div><label className="lbl">STADE D'INVESTISSEMENT</label>
-              <select className="inp" value={f.investment_stage} onChange={set("investment_stage")}>
-                <option value="">— Choisir —</option>
-                {STAGES.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          </>}
-          <div style={{gridColumn:"1/-1"}}><label className="lbl">SITE WEB</label><input className="inp" value={f.website} onChange={set("website")} placeholder="https://…"/></div>
-          <div style={{gridColumn:"1/-1"}}><label className="lbl">DESCRIPTION</label><textarea className="inp" value={f.description} onChange={set("description")} rows={2}/></div>
-          <div style={{gridColumn:"1/-1"}}><label className="lbl">NOTES</label><textarea className="inp" value={f.notes} onChange={set("notes")} rows={3}/></div>
         </div>
-        {err&&<p style={{fontSize:12,color:"var(--rec-tx)",marginTop:10}}>{err}</p>}
-        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:20}}>
-          <button className="btn btn-secondary" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" onClick={save} disabled={loading||done} style={{minWidth:128,justifyContent:"center"}}>
-            {loading&&<Loader2 size={14} className="animate-spin"/>}{done&&<CheckCircle size={14}/>}
-            {loading?"Enregistrement…":done?"Enregistré !":"Enregistrer"}
-          </button>
-        </div>
+        <Link href="/protected/organisations/nouveau"
+          style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+          <Plus size={14}/> Nouvelle
+        </Link>
       </div>
+
+      {/* Filtres */}
+      <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap" }}>
+        {/* Recherche */}
+        <div style={{ position:"relative", flex:1, minWidth:220 }}>
+          <Search size={13} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--text-5)" }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Rechercher org, contact, secteur…"
+            style={{ width:"100%", paddingLeft:30, paddingRight:12, paddingTop:8, paddingBottom:8, border:"1px solid var(--border)", borderRadius:8, background:"var(--surface)", color:"var(--text-1)", fontSize:13.5, fontFamily:"inherit", outline:"none", boxSizing:"border-box" as const }}/>
+        </div>
+        {/* Filtre type */}
+        <select value={filterType} onChange={e=>setFilterType(e.target.value)}
+          style={{ padding:"8px 12px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface)", color:"var(--text-2)", fontSize:13, fontFamily:"inherit", outline:"none" }}>
+          {types.map(t => <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>)}
+        </select>
+        {/* Filtre statut */}
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+          style={{ padding:"8px 12px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface)", color:"var(--text-2)", fontSize:13, fontFamily:"inherit", outline:"none" }}>
+          <option value="all">Tous statuts</option>
+          {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+      </div>
+
+      {/* Grille */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"60px 24px", color:"var(--text-5)", fontSize:14 }}>
+          Aucune organisation trouvée
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))", gap:12 }}>
+          {filtered.map(o => <OrgCard key={o.id} org={o}/>)}
+        </div>
+      )}
     </div>
   );
 }
 
-export function OrganisationsList({orgs:init,stats}:{orgs:Org[];stats:{total:number}}) {
-  const [orgs,setOrgs]=useState(init);
-  const [search,setSearch]=useState(""); const [typeF,setTypeF]=useState("all"); const [statusF,setStatusF]=useState("all"); const [editing,setEditing]=useState<Org|null>(null);
-  const types=[...new Set(orgs.map(o=>o.typeLabel))].sort();
-  const filtered=orgs.filter(o=>{
-    const q=search.toLowerCase();
-    return(!q||[o.name,o.sector,o.location,o.notes,o.description].some(v=>(v||"").toLowerCase().includes(q)))&&(typeF==="all"||o.typeLabel===typeF)&&(statusF==="all"||o.status===statusF);
-  });
+function OrgCard({ org }: { org: Org }) {
+  const tc = TYPE_COLORS[org.typeKey] ?? TYPE_COLORS.default;
+  const st = STATUS_LABELS[org.status] ?? { label: org.status, color:"#6B7280" };
+  const primaryContact = org.contacts.find(c => c.is_primary) ?? org.contacts[0];
+  const otherContacts  = org.contacts.filter(c => c.id !== primaryContact?.id).slice(0, 3);
+  const lastAct        = fmtDate(org.lastActivity);
+  const isInvestor     = ["investor","business_angel","family_office","corporate","bank"].includes(org.typeKey);
+
   return (
-    <div style={{padding:32,minHeight:"100vh",background:"var(--bg)"}}>
-      {editing&&<EditOrgModal org={editing} onClose={()=>setEditing(null)} onSaved={u=>{setOrgs(p=>p.map(o=>o.id===editing.id?{...o,...u}:o));}}/>}
-      <div className="page-header">
-        <div>
-          <div className="section-label" style={{marginBottom:6}}>CRM</div>
-          <h1 style={{margin:0}}>Organisations</h1>
-          <div style={{fontSize:13,color:"var(--text-4)",marginTop:4}}>{stats.total} organisations · {filtered.length} affichées</div>
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+
+      {/* Barre type */}
+      <div style={{ height:3, background:tc.tx }}/>
+
+      {/* En-tête */}
+      <div style={{ padding:"14px 16px 10px", borderBottom:"1px solid var(--border)" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:6 }}>
+          <Link href={`/protected/organisations/${org.id}`}
+            style={{ fontSize:14.5, fontWeight:700, color:"var(--text-1)", textDecoration:"none", flex:1, lineHeight:1.3 }}>
+            {org.name}
+          </Link>
+          <div style={{ display:"flex", gap:6, flexShrink:0, alignItems:"center" }}>
+            <span style={{ fontSize:10.5, fontWeight:700, padding:"2px 8px", borderRadius:20, background:tc.bg, color:tc.tx, border:`1px solid ${tc.border}` }}>
+              {org.typeLabel}
+            </span>
+            <span style={{ fontSize:11, fontWeight:600, color:st.color }}>● {st.label}</span>
+          </div>
         </div>
-        <a href="/protected/organisations/nouveau" className="btn btn-primary"><Plus size={14}/>Nouvelle organisation</a>
+
+        {/* Secteur + localisation */}
+        {(org.sector || org.location) && (
+          <div style={{ fontSize:12, color:"var(--text-4)", marginBottom:6 }}>
+            {org.sector}{org.sector && org.location ? " · " : ""}{org.location}
+          </div>
+        )}
+
+        {/* Infos investisseur */}
+        {isInvestor && (org.investmentTicket || org.investmentStage) && (
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {org.investmentTicket && (
+              <span style={{ fontSize:11.5, padding:"2px 8px", borderRadius:6, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>
+                🎯 {org.investmentTicket}
+              </span>
+            )}
+            {org.investmentStage && (
+              <span style={{ fontSize:11.5, padding:"2px 8px", borderRadius:6, background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>
+                {org.investmentStage}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-        <div style={{position:"relative",flex:1,minWidth:240}}>
-          <Search size={13} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--text-4)",pointerEvents:"none"}}/>
-          <input className="inp" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nom, secteur, localisation…" style={{paddingLeft:36}}/>
-        </div>
-        <select className="inp" value={typeF} onChange={e=>setTypeF(e.target.value)} style={{width:"auto",minWidth:160}}>
-          <option value="all">Tous les types</option>
-          {types.map(t=><option key={t} value={t}>{t}</option>)}
-        </select>
-        <select className="inp" value={statusF} onChange={e=>setStatusF(e.target.value)} style={{width:"auto",minWidth:150}}>
-          <option value="all">Tous les statuts</option>
-          {ORG_STATUSES.map(([k,v])=><option key={k} value={k}>{v}</option>)}
-        </select>
-      </div>
-      {filtered.length===0 ? (
-        <div className="empty-state"><div style={{fontWeight:600,color:"var(--text-3)"}}>Aucune organisation trouvée</div></div>
-      ) : (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:12}}>
-          {filtered.map(org=><OrgCard key={org.id} org={org} onEdit={()=>setEditing(org)}/>)}
+
+      {/* Contacts */}
+      {org.contacts.length > 0 && (
+        <div style={{ padding:"10px 16px", borderBottom:"1px solid var(--border)" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>
+            {org.contacts.length} contact{org.contacts.length > 1 ? "s" : ""}
+          </div>
+
+          {/* Contact principal */}
+          {primaryContact && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: otherContacts.length > 0 ? 8 : 0 }}>
+              <div style={{ width:28, height:28, borderRadius:8, background:"var(--surface-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"var(--text-3)", flexShrink:0 }}>
+                {primaryContact.first_name?.[0]}{primaryContact.last_name?.[0]}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>
+                  {primaryContact.first_name} {primaryContact.last_name}
+                  {primaryContact.is_primary && <span style={{ fontSize:10, marginLeft:5, color:"var(--fund-tx)", fontWeight:700 }}>★ Principal</span>}
+                </div>
+                {primaryContact.title && <div style={{ fontSize:11.5, color:"var(--text-5)" }}>{primaryContact.title}</div>}
+              </div>
+              <div style={{ display:"flex", gap:4 }}>
+                {primaryContact.email && (
+                  <a href={`mailto:${primaryContact.email}`} style={{ width:24, height:24, borderRadius:6, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", color:"var(--text-4)" }}>
+                    <Mail size={11}/>
+                  </a>
+                )}
+                {primaryContact.phone && (
+                  <a href={`tel:${primaryContact.phone}`} style={{ width:24, height:24, borderRadius:6, background:"var(--surface-2)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", color:"var(--text-4)" }}>
+                    <Phone size={11}/>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Autres contacts */}
+          {otherContacts.length > 0 && (
+            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+              {otherContacts.map(c => (
+                <span key={c.id} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:6, background:"var(--surface-2)", border:"1px solid var(--border)", color:"var(--text-3)" }}>
+                  {c.first_name} {c.last_name}
+                </span>
+              ))}
+              {org.contacts.length > 4 && (
+                <span style={{ fontSize:11.5, padding:"2px 8px", borderRadius:6, background:"var(--surface-2)", color:"var(--text-5)" }}>
+                  +{org.contacts.length - 4}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Stats rapides */}
+      <div style={{ padding:"10px 16px", display:"flex", gap:14, flexWrap:"wrap", flex:1 }}>
+        {org.openTasks > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--text-4)" }}>
+            <CheckSquare size={11}/>
+            <span>{org.openTasks} tâche{org.openTasks > 1 ? "s" : ""}</span>
+          </div>
+        )}
+        {lastAct && (
+          <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--text-4)" }}>
+            <Activity size={11}/>
+            <span>{lastAct}</span>
+          </div>
+        )}
+        {org.website && (
+          <a href={org.website} target="_blank" rel="noreferrer"
+            style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--text-4)", textDecoration:"none", marginLeft:"auto" }}>
+            <Globe size={11}/> Site
+          </a>
+        )}
+      </div>
+
+      {/* Footer lien fiche */}
+      <Link href={`/protected/organisations/${org.id}`}
+        style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 16px", borderTop:"1px solid var(--border)", textDecoration:"none", color:"var(--text-4)", fontSize:12.5, fontWeight:600 }}>
+        <span>Voir la fiche</span>
+        <ChevronRight size={13}/>
+      </Link>
     </div>
   );
 }
