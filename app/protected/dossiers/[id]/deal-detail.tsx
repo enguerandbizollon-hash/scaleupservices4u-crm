@@ -2,6 +2,7 @@
 import { useState, useCallback } from "react";
 import { TimeSelect } from "../../components/time-select";
 import { EventModal } from "../../components/event-modal";
+import { TaskModal } from "../../components/task-modal";
 import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
 import Link from "next/link";
@@ -16,7 +17,7 @@ import { StatusDropdown } from "../../components/status-dropdown";
 type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; contacts: Contact[] };
 type Contact = { id:string; first_name:string; last_name:string; email?:string; phone?:string; title?:string; linkedin_url?:string; base_status:string; last_contact_date?:string; role_label?:string; org_id?:string; org_name?:string };
 type Commitment = { id:string; amount?:number; currency:string; status:string; committed_at?:string; notes?:string; organization_id?:string; org_name?:string };
-type Task = { id:string; title:string; task_status:string; priority_level:string; due_date?:string; description?:string; contact_id?:string; contact_name?:string };
+type Task = { id:string; title:string; task_type?:string; task_status:string; priority_level:string; due_date?:string; due_time?:string; description?:string; summary?:string; contact_id?:string; contact_name?:string; contact_ids?:string[] };
 type Act = { id:string; title:string; activity_type:string; activity_date:string; summary?:string; contact_ids?:string[]; contact_names?:string[] };
 type Doc = { id:string; name:string; document_type:string; document_status:string; document_url?:string; version_label?:string; added_at:string };
 
@@ -136,6 +137,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [showEventModal, setShowEventModal] = useState(false);
   const [showLossModal, setShowLossModal] = useState(false);
   const [mailTask, setMailTask] = useState<Task|null>(null);
+  const [taskModal, setTaskModal] = useState<Task|Act|null|"new">(null);
   const [eventContext, setEventContext] = useState<{contactId?:string;contactName?:string;orgId?:string;orgName?:string}>({});
   const [editing, setEditing] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -414,7 +416,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* TÂCHES */}
             <div style={cardStyle}>
-              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>openModal("task")} addLabel="Tâche"/>
+              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>setTaskModal("new")} addLabel="Tâche"/>
               {expTasks && tasks.slice(0,8).map((t,i) => {
                 const overdue = t.due_date && new Date(t.due_date) < new Date() && t.task_status==="open";
                 return (
@@ -436,7 +438,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       {(contacts.length > 0) && (
                         <button onClick={()=>setMailTask(t)} title="Envoyer un email aux contacts liés" style={{...actionBtn, color:"#1a56db"}}><Send size={11}/></button>
                       )}
-                      <button onClick={()=>openModal("task",t)} style={{...actionBtn}}><Pencil size={11}/></button>
+                      <button onClick={()=>setTaskModal(t)} style={{...actionBtn}}><Pencil size={11}/></button>
                       <button onClick={()=>deleteTask(t.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                     </div>
                   </div>
@@ -448,7 +450,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* ACTIVITÉS */}
             <div style={cardStyle}>
-              <SectionHeader icon={Activity} title="Activités" count={activities.length} expanded={expActs} onToggle={()=>setExpActs(p=>!p)} onAdd={()=>openModal("activity")} addLabel="Activité"/>
+              <SectionHeader icon={Activity} title="Tâches & Actions" count={activities.length + tasks.length} expanded={expActs} onToggle={()=>setExpActs(p=>!p)} onAdd={()=>setTaskModal("new")} addLabel="Ajouter"/>
               {expActs && activities.slice(0,6).map((a,i) => (
                 <div key={a.id} style={{ ...rowStyle, borderBottom: i<Math.min(activities.length,6)-1?"1px solid var(--border)":"none" }}>
                   <div style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
@@ -464,7 +466,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                   </div>
                   <span style={{ fontSize:11.5, color:"var(--text-5)", flexShrink:0 }}>{fmt(a.activity_date)}</span>
                   <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                    <button onClick={()=>openModal("activity",{...a,contact_ids_arr:a.contact_ids||[]})} style={{...actionBtn}}><Pencil size={11}/></button>
+                    <button onClick={()=>setTaskModal({id:a.id, title:a.title, task_type:a.activity_type, task_status:"done", priority_level:"medium", due_date:a.activity_date, contact_ids:a.contact_ids||[], summary:a.summary})} style={{...actionBtn}}><Pencil size={11}/></button>
                     <button onClick={()=>deleteActivity(a.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                   </div>
                 </div>
@@ -689,6 +691,31 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             <BtnPrimary onClick={saveDocument} loading={loading}>Ajouter</BtnPrimary>
           </div>
         </Modal>
+      )}
+
+      {/* TaskModal unifié */}
+      {taskModal !== null && (
+        <TaskModal
+          item={taskModal === "new" ? null : taskModal as any}
+          contacts={contacts.map(c => ({ id:c.id, first_name:c.first_name, last_name:c.last_name, email:c.email, org_name:c.org_name }))}
+          dealId={deal.id}
+          onClose={() => setTaskModal(null)}
+          onSave={(t) => {
+            if (taskModal === "new") {
+              setTasks(p => [...p, {...t, task_status:"open"} as any]);
+            } else {
+              setTasks(p => p.map(x => x.id === t.id ? {...x,...t} as any : x));
+              setActivities(p => p.map(x => x.id === t.id ? {...x,...t} as any : x));
+            }
+          }}
+          onDelete={(id) => {
+            setTasks(p => p.filter(x => x.id !== id));
+            setActivities(p => p.filter(x => x.id !== id));
+          }}
+          onToggle={(id, done) => {
+            setTasks(p => p.map(x => x.id === id ? {...x, task_status:done?"done":"open"} as any : x));
+          }}
+        />
       )}
 
       {/* Modale email tâche */}
