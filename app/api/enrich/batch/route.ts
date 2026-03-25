@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error("[Pappers batch enrichment error]", msg);
       }
+    }
   }
 
   if (type === "contacts" && hunterKey) {

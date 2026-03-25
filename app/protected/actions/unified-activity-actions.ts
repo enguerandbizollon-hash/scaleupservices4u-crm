@@ -299,7 +299,7 @@ export async function setContactPrimaryOrganizationAction(
     }
 
     // S'assurer que le contact est dans organization_contacts
-    await supabase.from("organization_contacts").insert(
+    await supabase.from("organization_contacts").upsert(
       [
         {
           organization_id: organizationId,

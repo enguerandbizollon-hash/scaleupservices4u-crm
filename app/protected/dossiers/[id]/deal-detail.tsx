@@ -450,7 +450,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* ACTIVITÉS */}
             <div style={cardStyle}>
-              <SectionHeader icon={Activity} title="Tâches & Actions" count={activities.length + tasks.length} expanded={expActs} onToggle={()=>setExpActs(p=>!p)} onAdd={()=>setTaskModal("new")} addLabel="Ajouter"/>
+              <SectionHeader icon={Activity} title="Tâches & Actions" count={activities.length + tasks.length} expanded={expActs} onToggle={()=>setExpActs(p=>!p)} onAdd={()=>setModal("task")} addLabel="Ajouter"/>
               {expActs && activities.slice(0,6).map((a,i) => (
                 <div key={a.id} style={{ ...rowStyle, borderBottom: i<Math.min(activities.length,6)-1?"1px solid var(--border)":"none" }}>
                   <div style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
