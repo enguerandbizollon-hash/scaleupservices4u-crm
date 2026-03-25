@@ -1,9 +1,10 @@
 "use client";
 import { useState, useCallback } from "react";
 import { TimeSelect } from "../../components/time-select";
-import { UnifiedActivityModal } from "../../components/unified-activity-modal";
+import { UnifiedActivityModal, type UnifiedActivityFormData } from "../../components/unified-activity-modal";
 import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
+import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
@@ -133,12 +134,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
   // Modals
   const [modal, setModal] = useState<string|null>(null);
-  const [showEventModal, setShowEventModal] = useState(false);
   const [showLossModal, setShowLossModal] = useState(false);
   const [mailTask, setMailTask] = useState<Task|null>(null);
   const [unifiedActivityModalOpen, setUnifiedActivityModalOpen] = useState(false);
-  const [unifiedActivityContext, setUnifiedActivityContext] = useState<any>(null);
-  const [eventContext, setEventContext] = useState<{contactId?:string;contactName?:string;orgId?:string;orgName?:string}>({});
+  const [activityContextType, setActivityContextType] = useState<"task" | "activity" | null>(null);
+  const [editingActivity, setEditingActivity] = useState<any>(null);
   const [editing, setEditing] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
@@ -185,61 +185,76 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     setCommitments(p=>p.filter(c=>c.id!==id));
   }
 
-  // ── TASKS CRUD ────────────────────────────────────────────
-  async function saveTask() {
+  // ── UNIFIED ACTIVITIES CRUD (Server Actions) ──────────────
+  async function handleSaveUnifiedActivity(formData: UnifiedActivityFormData, isNew: boolean, oldActivityId?: string) {
     setLoading(true);
     try {
-      const contactId = contacts.find(c=>`${c.first_name} ${c.last_name}`===form.contact_name)?.id || form.contact_id || null;
-      const payload = {...form, contact_id:contactId};
-      if (editing) {
-        const d = await api("tasks","PATCH",{task_id:editing.id,...payload});
-        const cn = contacts.find(c=>c.id===d.contact_id);
-        setTasks(p=>p.map(t=>t.id===editing.id?{...d,contact_name:cn?`${cn.first_name} ${cn.last_name}`:undefined}:t));
-      } else {
-        const d = await api("tasks","POST",payload);
-        const cn = contacts.find(c=>c.id===d.contact_id);
-        setTasks(p=>[...p,{...d,contact_name:cn?`${cn.first_name} ${cn.last_name}`:undefined}]);
+      if (isNew) {
+        // Create new activity
+        const result = await createUnifiedActivityAction({
+          ...formData,
+          dealId: deal.id,
+        });
+        if (!result.success) {
+          alert(result.error || "Erreur lors de la création");
+          return false;
+        }
+        // Refresh: pour l'instant on recharge les tâches/activités en mémoire
+        // (Dans un cas réel, il faudrait refetcher les données côté serveur)
+        return true;
+      } else if (oldActivityId) {
+        // Update existing activity
+        const result = await updateUnifiedActivityAction(oldActivityId, formData);
+        if (!result.success) {
+          alert(result.error || "Erreur lors de la modification");
+          return false;
+        }
+        return true;
       }
-      closeModal();
-    } catch(e:any){ alert(e.message); } finally { setLoading(false); }
-  }
-  async function toggleTask(t:Task) {
-    const newStatus = t.task_status==="open"?"done":"open";
-    const d = await api("tasks","PATCH",{task_id:t.id,task_status:newStatus});
-    setTasks(p=>p.map(x=>x.id===t.id?{...x,task_status:d.task_status}:x));
-  }
-  async function deleteTask(id:string) {
-    if(!confirm("Supprimer cette tâche ?")) return;
-    await api("tasks","DELETE",{task_id:id});
-    setTasks(p=>p.filter(t=>t.id!==id));
+      return false;
+    } catch(e:any) {
+      console.error("Error in handleSaveUnifiedActivity:", e);
+      alert(e.message || "Erreur serveur");
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // ── ACTIVITIES CRUD ───────────────────────────────────────
-  async function saveActivity() {
-    setLoading(true);
+  async function toggleTask(t: Task) {
     try {
-      const contactIds: string[] = Array.isArray(form.contact_ids_arr) ? form.contact_ids_arr as unknown as string[] : [];
-      const payload = {
-        title: form.title,
-        activity_type: form.activity_type || "email_sent",
-        activity_date: form.activity_date || new Date().toISOString().split("T")[0],
-        summary: form.summary || null,
-        contact_ids: contactIds,
-      };
-      if (editing) {
-        const d = await api("activities-crud","PATCH",{activity_id:editing.id,...payload});
-        setActivities(p=>p.map(a=>a.id===editing.id?{...d}:a));
-      } else {
-        const d = await api("activities-crud","POST",payload);
-        setActivities(p=>[{...d},...p]);
+      const newStatus = t.task_status === "open" ? "done" : "open";
+      const result = await updateUnifiedActivityAction(t.id, {
+        status: newStatus as "open" | "done" | "cancelled",
+        title: t.title,
+        activityType: t.task_type || "todo",
+      });
+      if (result.success) {
+        setTasks(p => p.map(x => x.id === t.id ? {...x, task_status: newStatus} : x));
       }
-      closeModal();
-    } catch(e:any){ alert(e.message); } finally { setLoading(false); }
+    } catch(e:any) {
+      console.error("Error toggling task:", e);
+    }
   }
-  async function deleteActivity(id:string) {
+
+  async function deleteTask(id: string) {
+    if(!confirm("Supprimer cette tâche ?")) return;
+    try {
+      await deleteUnifiedActivityAction(id);
+      setTasks(p => p.filter(t => t.id !== id));
+    } catch(e:any) {
+      alert(e.message || "Erreur lors de la suppression");
+    }
+  }
+
+  async function deleteActivity(id: string) {
     if(!confirm("Supprimer cette activité ?")) return;
-    await api("activities-crud","DELETE",{activity_id:id});
-    setActivities(p=>p.filter(a=>a.id!==id));
+    try {
+      await deleteUnifiedActivityAction(id);
+      setActivities(p => p.filter(a => a.id !== id));
+    } catch(e:any) {
+      alert(e.message || "Erreur lors de la suppression");
+    }
   }
 
   async function saveDocument() {
@@ -416,7 +431,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* TÂCHES */}
             <div style={cardStyle}>
-              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>{setUnifiedActivityContext({isNew:true, type:"task"}); setUnifiedActivityModalOpen(true);}} addLabel="Tâche"/>
+              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>{setActivityContextType("task"); setEditingActivity(null); setUnifiedActivityModalOpen(true);}} addLabel="Tâche"/>
               {expTasks && tasks.slice(0,8).map((t,i) => {
                 const overdue = t.due_date && new Date(t.due_date) < new Date() && t.task_status==="open";
                 return (
@@ -438,7 +453,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       {(contacts.length > 0) && (
                         <button onClick={()=>setMailTask(t)} title="Envoyer un email aux contacts liés" style={{...actionBtn, color:"#1a56db"}}><Send size={11}/></button>
                       )}
-                      <button onClick={()=>{setUnifiedActivityContext({isNew:false, type:"task", task:t}); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
+                      <button onClick={()=>{setActivityContextType("task"); setEditingActivity(t); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
                       <button onClick={()=>deleteTask(t.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                     </div>
                   </div>
@@ -466,7 +481,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                   </div>
                   <span style={{ fontSize:11.5, color:"var(--text-5)", flexShrink:0 }}>{fmt(a.activity_date)}</span>
                   <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                    <button onClick={()=>{setUnifiedActivityContext({isNew:false, type:"activity", activity:a}); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
+                    <button onClick={()=>{setActivityContextType("activity"); setEditingActivity(a); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
                     <button onClick={()=>deleteActivity(a.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                   </div>
                 </div>
@@ -535,94 +550,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         </Modal>
       )}
 
-      {/* Tâche */}
-      {modal==="task" && (
-        <Modal title={editing?"Modifier la tâche":"Nouvelle tâche"} onClose={closeModal}>
-          <Field label="Titre *">
-            <input style={inp} placeholder="Titre de la tâche…" value={form.title||""} onChange={setF("title")}/>
-          </Field>
-          <Field label="Priorité">
-            <select style={sel} value={form.priority_level||"medium"} onChange={setF("priority_level")}>
-              <option value="high">Haute</option><option value="medium">Moyenne</option><option value="low">Basse</option>
-            </select>
-          </Field>
-          <Field label="Date limite">
-            <div style={{ display:"flex", gap:8 }}>
-              <input style={{...inp, flex:2}} type="date" value={form.due_date||""} onChange={setF("due_date")}/>
-              <TimeSelect value={form.due_time||""} onChange={v=>setForm(p=>({...p,due_time:v}))} style={{ flex:1 }}/>
-            </div>
-          </Field>
-          <Field label="Contact associé">
-            <select style={sel} value={form.contact_name||""} onChange={setF("contact_name")}>
-              <option value="">— Aucun —</option>
-              {contacts.map(c=><option key={c.id} value={`${c.first_name} ${c.last_name}`}>{c.first_name} {c.last_name} {c.org_name?`(${c.org_name})`:""}</option>)}
-            </select>
-          </Field>
-          <Field label="Description">
-            <textarea style={{...inp, height:70, resize:"vertical"}} placeholder="Description…" value={form.description||""} onChange={setF("description")}/>
-          </Field>
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
-            <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
-            <BtnPrimary onClick={saveTask} loading={loading}>{editing?"Enregistrer":"Ajouter"}</BtnPrimary>
-          </div>
-        </Modal>
-      )}
 
-      {/* Activité */}
-      {modal==="activity" && (
-        <Modal title={editing?"Modifier l'activité":"Nouvelle activité"} onClose={closeModal}>
-          <Field label="Titre *">
-            <input style={inp} placeholder="ex: Email de présentation, Call de suivi…" value={form.title||""} onChange={setF("title")}/>
-          </Field>
-          <Field label="Type">
-            <select style={sel} value={form.activity_type||"email_sent"} onChange={setF("activity_type")}>
-              <option value="email_sent">✉️ Email envoyé</option>
-              <option value="email_received">📩 Email reçu</option>
-              <option value="call">📞 Appel</option>
-              <option value="meeting">🤝 Réunion</option>
-              <option value="follow_up">🔔 Relance</option>
-              <option value="intro">👋 Introduction</option>
-              <option value="deck_sent">📊 Deck envoyé</option>
-              <option value="nda">📋 NDA</option>
-              <option value="note">📝 Note</option>
-              <option value="other">📌 Autre</option>
-            </select>
-          </Field>
-          <Field label="Date et heure">
-            <div style={{ display:"flex", gap:8 }}>
-              <input style={{...inp, flex:2}} type="date" value={form.activity_date||new Date().toISOString().split("T")[0]} onChange={setF("activity_date")}/>
-              <TimeSelect value={form.activity_time||""} onChange={v=>setForm(p=>({...p,activity_time:v}))} style={{ flex:1 }}/>
-            </div>
-          </Field>
-          <Field label="Contacts associés">
-            <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:160, overflowY:"auto", padding:"4px 0" }}>
-              {contacts.map(c => {
-                const cid = c.id;
-                const selected = (Array.isArray(form.contact_ids_arr) ? form.contact_ids_arr as unknown as string[] : []).includes(cid);
-                return (
-                  <label key={cid} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", borderRadius:7, border:`1px solid ${selected?"var(--accent,#1a56db)":"var(--border)"}`, background:selected?"rgba(26,86,219,.06)":"var(--surface-2)", cursor:"pointer" }}>
-                    <input type="checkbox" checked={selected} onChange={() => {
-                      const cur: string[] = Array.isArray(form.contact_ids_arr) ? form.contact_ids_arr as unknown as string[] : [];
-                      const next = selected ? cur.filter(x=>x!==cid) : [...cur, cid];
-                      setForm((p: Record<string,string>) => ({...p, contact_ids_arr: next as unknown as string}));
-                    }} style={{ accentColor:"var(--accent,#1a56db)" }}/>
-                    <span style={{ fontSize:13, color:"var(--text-2)" }}>{c.first_name} {c.last_name}</span>
-                    {c.org_name && <span style={{ fontSize:11.5, color:"var(--text-5)" }}>— {c.org_name}</span>}
-                  </label>
-                );
-              })}
-              {contacts.length === 0 && <span style={{ fontSize:13, color:"var(--text-5)" }}>Aucun contact dans ce dossier</span>}
-            </div>
-          </Field>
-          <Field label="Résumé">
-            <textarea style={{...inp, height:70, resize:"vertical"}} placeholder="Résumé, notes…" value={form.summary||""} onChange={setF("summary")}/>
-          </Field>
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
-            <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
-            <BtnPrimary onClick={saveActivity} loading={loading}>{editing?"Enregistrer":"Ajouter"}</BtnPrimary>
-          </div>
-        </Modal>
-      )}
 
       {/* Ajouter contact */}
       {modal==="add_contact" && (
@@ -695,38 +623,54 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
       {/* TaskModal unifié */}
       <UnifiedActivityModal
-        isOpen={unifiedActivityModalOpen && unifiedActivityContext?.type === "task"}
+        isOpen={unifiedActivityModalOpen && activityContextType === "task"}
         onClose={() => {
           setUnifiedActivityModalOpen(false);
-          setUnifiedActivityContext(null);
+          setActivityContextType(null);
+          setEditingActivity(null);
         }}
         onSave={async (formData) => {
-          try {
-            if (unifiedActivityContext?.isNew) {
-              // Create new activity
-              const newActivity = {
-                id: Math.random().toString(36),
-                title: formData.title,
-                task_type: formData.activityType,
-                task_status: formData.status,
-                priority_level: "medium",
-                due_date: formData.dueDate,
-                due_time: formData.dueTime,
-                summary: formData.summary,
-              };
-              setTasks(p => [...p, newActivity as any]);
-            } else if (unifiedActivityContext?.task) {
-              // Update existing task
-              setTasks(p => p.map(x => x.id === unifiedActivityContext.task.id ? {...x, title: formData.title, task_status: formData.status, due_date: formData.dueDate, due_time: formData.dueTime, summary: formData.summary} as any : x));
-            }
-            return true;
-          } catch (err) {
-            console.error(err);
-            return false;
+          const isNew = !editingActivity?.id;
+          const success = await handleSaveUnifiedActivity(
+            formData,
+            isNew,
+            editingActivity?.id
+          );
+          if (success) {
+            setUnifiedActivityModalOpen(false);
+            setActivityContextType(null);
+            setEditingActivity(null);
           }
+          return success;
         }}
         dealId={deal.id}
         defaultType="todo"
+      />
+
+      {/* Activity Modal */}
+      <UnifiedActivityModal
+        isOpen={unifiedActivityModalOpen && activityContextType === "activity"}
+        onClose={() => {
+          setUnifiedActivityModalOpen(false);
+          setActivityContextType(null);
+          setEditingActivity(null);
+        }}
+        onSave={async (formData) => {
+          const isNew = !editingActivity?.id;
+          const success = await handleSaveUnifiedActivity(
+            formData,
+            isNew,
+            editingActivity?.id
+          );
+          if (success) {
+            setUnifiedActivityModalOpen(false);
+            setActivityContextType(null);
+            setEditingActivity(null);
+          }
+          return success;
+        }}
+        dealId={deal.id}
+        defaultType="meeting"
       />
 
       {/* Modale email tâche */}
@@ -737,33 +681,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           onClose={() => setMailTask(null)}
         />
       )}
-
-      {/* EventModal - replaced with unified */}
-      <UnifiedActivityModal
-        isOpen={showEventModal}
-        onClose={() => setShowEventModal(false)}
-        onSave={async (formData) => {
-          try {
-            const newActivity = {
-              id: Math.random().toString(36),
-              title: formData.title,
-              activity_type: formData.activityType,
-              activity_date: formData.dueDate,
-              summary: formData.summary,
-              contact_ids: formData.participantContactIds,
-            };
-            setActivities(p => [{...newActivity} as any, ...p]);
-            return true;
-          } catch (err) {
-            console.error(err);
-            return false;
-          }
-        }}
-        dealId={deal.id}
-        contactId={eventContext.contactId}
-        organizationId={eventContext.orgId}
-        defaultType="meeting"
-      />
 
       {/* LossReasonModal */}
       {showLossModal && (

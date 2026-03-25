@@ -121,10 +121,15 @@ export async function updateUnifiedActivityAction(
     if (updates.activityType !== undefined)
       updateData.activity_type = updates.activityType;
     if (updates.status !== undefined) updateData.task_status = updates.status;
-    if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
+    if (updates.dueDate !== undefined) {
+      updateData.due_date = updates.dueDate;
+      updateData.activity_date = updates.dueDate ? new Date(updates.dueDate).toISOString() : null;
+    }
     if (updates.dueTime !== undefined) updateData.due_time = updates.dueTime;
     if (updates.location !== undefined) updateData.location = updates.location;
     if (updates.isAllDay !== undefined) updateData.is_all_day = updates.isAllDay;
+    if (updates.dealId !== undefined) updateData.deal_id = updates.dealId || null;
+    if (updates.contactId !== undefined) updateData.contact_id = updates.contactId || null;
     // Support multi-org : utiliser le premier de organizationIds si fourni
     if (updates.organizationIds !== undefined) {
       updateData.organization_id = updates.organizationIds?.[0] || null;

@@ -9,7 +9,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id,first_name,last_name,email,phone,title,sector,country,linkedin_url,base_status,last_contact_date,notes")
+    .select("id,first_name,last_name,email,phone,title,sector,country,linkedin_url,base_status,last_contact_date,notes,primary_organization_id")
     .eq("id", id).maybeSingle();
 
   if (!contact) notFound();

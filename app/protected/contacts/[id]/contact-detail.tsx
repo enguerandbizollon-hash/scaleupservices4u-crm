@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Linkedin, MapPin, ChevronRight, Building2 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
+import { ContactOrgAssignmentWarning } from "../../components/contact-org-assignment-warning";
 
 const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
   active:     {bg:"var(--fund-bg)", tx:"var(--fund-tx)"},
@@ -36,6 +37,7 @@ export function ContactDetail({ contact, orgs, activities }: { contact: any; org
   const sc = STATUS_COLORS[contact.base_status] ?? STATUS_COLORS.to_qualify;
   const days = daysSince(contact.last_contact_date);
   const initials = `${contact.first_name?.[0] ?? ""}${contact.last_name?.[0] ?? ""}`.toUpperCase();
+  const needsOrgAssignment = !contact.primary_organization_id;
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "28px 24px" }}>
@@ -109,6 +111,14 @@ export function ContactDetail({ contact, orgs, activities }: { contact: any; org
           </div>
         </div>
       </div>
+
+      {/* Alerte assignation organisation primaire */}
+      {needsOrgAssignment && (
+        <ContactOrgAssignmentWarning
+          showAlert={needsOrgAssignment}
+          contactName={`${contact.first_name} ${contact.last_name}`}
+        />
+      )}
 
       {/* Organisations liées */}
       {orgs.length > 0 && (
