@@ -185,7 +185,10 @@ export function TaskModal({ item, contacts = [], dealId, onClose, onSave, onDele
       if (!res.ok) throw new Error(data.error || "Erreur");
       onSave?.({ ...data, contact_ids: form.contact_ids });
       onClose();
-    } catch(e: any) { alert(e.message); }
+    } catch(e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      alert(errorMessage);
+    }
     finally { setLoading(false); }
   }
 
@@ -247,7 +250,10 @@ export function TaskModal({ item, contacts = [], dealId, onClose, onSave, onDele
         throw new Error(data.error || "Erreur Google Calendar");
       }
       setGcalLink(data.html_link);
-    } catch(e: any) { setGcalError(e.message); }
+    } catch(e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setGcalError(errorMessage);
+    }
     finally { setGcalLoading(false); }
   }
 

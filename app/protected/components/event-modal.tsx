@@ -74,7 +74,10 @@ export function EventModal({ dealId, contactId, orgId, contactName, orgName, dea
       if (!res.ok) throw new Error(data.error);
       onCreated?.(data);
       onClose();
-    } catch(e: any) { alert(e.message); }
+    } catch(e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      alert(errorMessage);
+    }
     finally { setLoading(false); }
   }
 

@@ -49,8 +49,9 @@ export default function IAPage() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setMessages(p => [...p, { role: "assistant", text: data.text }]);
-    } catch(e: any) {
-      setMessages(p => [...p, { role: "assistant", text: `❌ Erreur : ${e.message}` }]);
+    } catch(e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setMessages(p => [...p, { role: "assistant", text: `❌ Erreur : ${errorMessage}` }]);
     } finally {
       setLoading(false);
     }

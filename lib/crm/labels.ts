@@ -143,3 +143,65 @@ export const agendaTypeLabels: Record<string, string> = {
   closing: "Closing",
   other: "Autre",
 };
+
+// ────────────────────────────────────────────────────────────────
+// NOUVEAUX LABELS V14 : UNIFIED ACTIVITIES & RECRUITMENT
+// ────────────────────────────────────────────────────────────────
+
+export const unifiedActivityTypeLabels: Record<string, string> = {
+  // Originaux
+  email_received: "Email reçu",
+  email_sent: "Email envoyé",
+  call: "Call",
+  meeting: "Réunion",
+  follow_up: "Relance",
+  intro: "Intro",
+  note: "Note",
+  document_sent: "Document envoyé",
+  document_received: "Document reçu",
+  nda: "NDA",
+  deck_sent: "Deck envoyé",
+  todo: "Tâche",
+  deadline: "Deadline",
+  delivery: "Rendu",
+  closing: "Closing",
+  // Nouveaux : recrutement
+  recruitment_interview: "Entretien recrutement",
+  recruitment_feedback: "Feedback recrutement",
+  recruitment_task: "Tâche recrutement",
+  // Nouveaux : services
+  cfo_advisory: "Advisory CFO",
+  investor_meeting: "Réunion investisseur",
+  due_diligence: "Due diligence",
+  other: "Autre",
+};
+
+export const activityStatusLabels: Record<string, string> = {
+  open: "Ouverte",
+  done: "Terminée",
+  cancelled: "Annulée",
+};
+
+export const recruitmentStageLabels: Record<string, string> = {
+  job_definition: "Définition du poste",
+  sourcing: "Sourcing",
+  screening: "Screening",
+  phone_interview: "Entretien téléphonique",
+  first_interview: "Premier entretien",
+  second_interview: "Deuxième entretien",
+  final_interview: "Entretien final",
+  offer: "Offre",
+  negotiation: "Négociation",
+  hired: "Embauché",
+  rejected: "Rejeté",
+};
+
+export const cfoAdvisoryTypeLabels: Record<string, string> = {
+  financial_planning: "Planification financière",
+  investor_relations: "Relations investisseurs",
+  m_and_a_support: "Support M&A",
+  capital_raising: "Levée de fonds",
+  operational_optimization: "Optimisation opérationnelle",
+  tax_strategy: "Stratégie fiscale",
+  other: "Autre",
+};

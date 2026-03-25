@@ -13,8 +13,9 @@ export function DocumentFormClient({ dealId, action }: { dealId: string; action:
     try {
       await action(fd);
       router.push(`/protected/dossiers/${dealId}`);
-    } catch(err: any) {
-      alert(err.message);
+    } catch(err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      alert(errorMessage);
       setLoading(false);
     }
   }

@@ -150,8 +150,9 @@ export default function ImportPage() {
       if (!res.ok || data.error) { setErr(data.error ?? "Erreur inconnue"); setStep("setup"); return; }
       setResult(data);
       setStep("done");
-    } catch (e: any) {
-      setErr(e.message);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setErr(errorMessage);
       setStep("setup");
     }
   }

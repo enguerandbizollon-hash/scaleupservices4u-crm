@@ -33,8 +33,13 @@ export function GlobalSearch() {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setResults(data);
-    } catch {}
-    setLoading(false);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[Global search error]", msg);
+      setResults(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

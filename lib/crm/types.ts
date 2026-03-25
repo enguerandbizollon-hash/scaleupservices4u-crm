@@ -12,6 +12,11 @@ export type DealView = {
   startDate: string;
   targetDate: string;
   description: string;
+  // Nouveaux : support multi-service
+  dealTypes?: string[]; // e.g., ['fundraising', 'cfo_advisory', 'recruitment']
+  recruitmentStage?: string;
+  recruitmentTargetPositions?: string[];
+  cfoAdvisoryScope?: string;
 };
 
 export type OrganizationView = {
@@ -50,8 +55,60 @@ export type ContactView = {
   status: string;
   notes: string;
   linkedDeals: ContactLinkedDealView[];
+  // Nouveaux : org primary et alerte
+  primaryOrganizationId?: string | null;
+  primaryOrganizationName?: string | null;
+  needsOrgAssignment?: boolean; // true si primaryOrganizationId IS NULL
 };
 
+// ────────────────────────────────────────────────────────────────
+// UNIFIED ACTIVITY TYPE (fusion tasks, activities, agenda)
+// ────────────────────────────────────────────────────────────────
+export type UnifiedActivityType =
+  // Originaux activities
+  | 'email_sent' | 'email_received' | 'call' | 'meeting' | 'intro' | 'note'
+  // Originaux tasks
+  | 'todo' | 'follow_up' | 'deck_sent' | 'nda' | 'document_sent'
+  // Originaux agenda/events
+  | 'deadline' | 'delivery' | 'closing'
+  // Nouveaux : recrutement
+  | 'recruitment_interview' | 'recruitment_feedback' | 'recruitment_task'
+  // Nouveaux : services
+  | 'cfo_advisory' | 'investor_meeting' | 'due_diligence'
+  | 'other';
+
+export type ActivityStatus = 'open' | 'done' | 'cancelled';
+
+export type UnifiedActivityView = {
+  id: string;
+  title: string;
+  summary?: string;
+  activityType: UnifiedActivityType;
+  status: ActivityStatus;
+  // Dates
+  eventDate?: string; // activity_date ou due_date (pour agenda/deadline)
+  dueDate?: string;
+  reminderDate?: string;
+  dueTime?: string;
+  completedAt?: string;
+  // Contexte
+  dealName?: string;
+  contactName?: string;
+  contactId?: string;
+  organizationName?: string;
+  organizationId?: string;
+  // Pour meetings/calls
+  location?: string;
+  isAllDay?: boolean;
+  // Participants (activity_contacts)
+  participants?: string[]; // noms des contacts
+  participantIds?: string[];
+  // Création
+  createdAt: string;
+  updatedAt?: string;
+};
+
+// Ancien ActivityView (backward compat)
 export type ActivityView = {
   id: string;
   typeLabel: string;
@@ -64,6 +121,7 @@ export type ActivityView = {
   activityDate: string;
 };
 
+// Ancien TaskView (backward compat, utiliser UnifiedActivityView pour nouveau code)
 export type TaskView = {
   id: string;
   title: string;
@@ -83,6 +141,29 @@ export type AgendaEventView = {
   location: string;
   description: string;
   attendees: string[];
+};
+
+// NOUVEAUX TYPES POUR FORMS & PICKERS
+export type ContactWithOrganization = {
+  contactId: string;
+  contactName: string;
+  organizationId?: string;
+  organizationName?: string;
+  role?: string;
+  isPrimary?: boolean;
+};
+
+export type OrganizationWithContacts = {
+  organizationId: string;
+  organizationName: string;
+  organizationType: string;
+  contactCount: number;
+  contacts: Array<{
+    contactId: string;
+    contactName: string;
+    role: string;
+    isPrimary: boolean;
+  }>;
 };
 
 export type DocumentView = {

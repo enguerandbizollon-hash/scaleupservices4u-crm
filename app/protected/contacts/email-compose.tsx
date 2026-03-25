@@ -22,7 +22,11 @@ export function EmailCompose({ to, name, onClose }: { to: string; name: string; 
       if (data.error) { setError(data.error); setStatus("error"); return; }
       setStatus("sent");
       setTimeout(onClose, 2000);
-    } catch (e: any) { setError(e.message); setStatus("error"); }
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setError(errorMessage);
+      setStatus("error");
+    }
   }
 
   return (

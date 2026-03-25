@@ -41,8 +41,10 @@ export async function POST(req: NextRequest) {
         if (noteParts.length) updates.notes = org.notes ? `${org.notes}\n[Pappers] ${noteParts.join(" | ")}` : `[Pappers] ${noteParts.join(" | ")}`;
         if (Object.keys(updates).length) { await supabase.from("organizations").update(updates).eq("id",org.id); enriched++; }
         await new Promise(r=>setTimeout(r,600));
-      } catch {}
-    }
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error("[Pappers batch enrichment error]", msg);
+      }
   }
 
   if (type === "contacts" && hunterKey) {

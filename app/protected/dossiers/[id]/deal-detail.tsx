@@ -1,8 +1,7 @@
 "use client";
 import { useState, useCallback } from "react";
 import { TimeSelect } from "../../components/time-select";
-import { EventModal } from "../../components/event-modal";
-import { TaskModal } from "../../components/task-modal";
+import { UnifiedActivityModal } from "../../components/unified-activity-modal";
 import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
 import Link from "next/link";
@@ -137,7 +136,8 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [showEventModal, setShowEventModal] = useState(false);
   const [showLossModal, setShowLossModal] = useState(false);
   const [mailTask, setMailTask] = useState<Task|null>(null);
-  const [taskModal, setTaskModal] = useState<Task|Act|null|"new">(null);
+  const [unifiedActivityModalOpen, setUnifiedActivityModalOpen] = useState(false);
+  const [unifiedActivityContext, setUnifiedActivityContext] = useState<any>(null);
   const [eventContext, setEventContext] = useState<{contactId?:string;contactName?:string;orgId?:string;orgName?:string}>({});
   const [editing, setEditing] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -416,7 +416,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
             {/* TÂCHES */}
             <div style={cardStyle}>
-              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>setTaskModal("new")} addLabel="Tâche"/>
+              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>{setUnifiedActivityContext({isNew:true, type:"task"}); setUnifiedActivityModalOpen(true);}} addLabel="Tâche"/>
               {expTasks && tasks.slice(0,8).map((t,i) => {
                 const overdue = t.due_date && new Date(t.due_date) < new Date() && t.task_status==="open";
                 return (
@@ -438,7 +438,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       {(contacts.length > 0) && (
                         <button onClick={()=>setMailTask(t)} title="Envoyer un email aux contacts liés" style={{...actionBtn, color:"#1a56db"}}><Send size={11}/></button>
                       )}
-                      <button onClick={()=>setTaskModal(t)} style={{...actionBtn}}><Pencil size={11}/></button>
+                      <button onClick={()=>{setUnifiedActivityContext({isNew:false, type:"task", task:t}); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
                       <button onClick={()=>deleteTask(t.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                     </div>
                   </div>
@@ -466,7 +466,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                   </div>
                   <span style={{ fontSize:11.5, color:"var(--text-5)", flexShrink:0 }}>{fmt(a.activity_date)}</span>
                   <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                    <button onClick={()=>setTaskModal({id:a.id, title:a.title, task_type:a.activity_type, task_status:"done", priority_level:"medium", due_date:a.activity_date, contact_ids:a.contact_ids||[], summary:a.summary})} style={{...actionBtn}}><Pencil size={11}/></button>
+                    <button onClick={()=>{setUnifiedActivityContext({isNew:false, type:"activity", activity:a}); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
                     <button onClick={()=>deleteActivity(a.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                   </div>
                 </div>
@@ -694,29 +694,40 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
       )}
 
       {/* TaskModal unifié */}
-      {taskModal !== null && (
-        <TaskModal
-          item={taskModal === "new" ? null : taskModal as any}
-          contacts={contacts.map(c => ({ id:c.id, first_name:c.first_name, last_name:c.last_name, email:c.email, org_name:c.org_name }))}
-          dealId={deal.id}
-          onClose={() => setTaskModal(null)}
-          onSave={(t) => {
-            if (taskModal === "new") {
-              setTasks(p => [...p, {...t, task_status:"open"} as any]);
-            } else {
-              setTasks(p => p.map(x => x.id === t.id ? {...x,...t} as any : x));
-              setActivities(p => p.map(x => x.id === t.id ? {...x,...t} as any : x));
+      <UnifiedActivityModal
+        isOpen={unifiedActivityModalOpen && unifiedActivityContext?.type === "task"}
+        onClose={() => {
+          setUnifiedActivityModalOpen(false);
+          setUnifiedActivityContext(null);
+        }}
+        onSave={async (formData) => {
+          try {
+            if (unifiedActivityContext?.isNew) {
+              // Create new activity
+              const newActivity = {
+                id: Math.random().toString(36),
+                title: formData.title,
+                task_type: formData.activityType,
+                task_status: formData.status,
+                priority_level: "medium",
+                due_date: formData.dueDate,
+                due_time: formData.dueTime,
+                summary: formData.summary,
+              };
+              setTasks(p => [...p, newActivity as any]);
+            } else if (unifiedActivityContext?.task) {
+              // Update existing task
+              setTasks(p => p.map(x => x.id === unifiedActivityContext.task.id ? {...x, title: formData.title, task_status: formData.status, due_date: formData.dueDate, due_time: formData.dueTime, summary: formData.summary} as any : x));
             }
-          }}
-          onDelete={(id) => {
-            setTasks(p => p.filter(x => x.id !== id));
-            setActivities(p => p.filter(x => x.id !== id));
-          }}
-          onToggle={(id, done) => {
-            setTasks(p => p.map(x => x.id === id ? {...x, task_status:done?"done":"open"} as any : x));
-          }}
-        />
-      )}
+            return true;
+          } catch (err) {
+            console.error(err);
+            return false;
+          }
+        }}
+        dealId={deal.id}
+        defaultType="todo"
+      />
 
       {/* Modale email tâche */}
       {mailTask && (
@@ -727,18 +738,32 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         />
       )}
 
-      {/* EventModal */}
-      {showEventModal && (
-        <EventModal
-          dealId={deal.id}
-          contactId={eventContext.contactId}
-          orgId={eventContext.orgId}
-          contactName={eventContext.contactName}
-          orgName={eventContext.orgName}
-          dealName={deal.name}
-          onClose={() => setShowEventModal(false)}
-        />
-      )}
+      {/* EventModal - replaced with unified */}
+      <UnifiedActivityModal
+        isOpen={showEventModal}
+        onClose={() => setShowEventModal(false)}
+        onSave={async (formData) => {
+          try {
+            const newActivity = {
+              id: Math.random().toString(36),
+              title: formData.title,
+              activity_type: formData.activityType,
+              activity_date: formData.dueDate,
+              summary: formData.summary,
+              contact_ids: formData.participantContactIds,
+            };
+            setActivities(p => [{...newActivity} as any, ...p]);
+            return true;
+          } catch (err) {
+            console.error(err);
+            return false;
+          }
+        }}
+        dealId={deal.id}
+        contactId={eventContext.contactId}
+        organizationId={eventContext.orgId}
+        defaultType="meeting"
+      />
 
       {/* LossReasonModal */}
       {showLossModal && (

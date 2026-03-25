@@ -70,8 +70,9 @@ export default function NouvelleOrganisationPage() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Erreur");
       router.push("/protected/organisations");
-    } catch(err: any) {
-      setError(err.message);
+    } catch(err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
       setLoading(false);
     }
   }
