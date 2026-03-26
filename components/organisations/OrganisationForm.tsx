@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Building2, ArrowLeft } from "lucide-react";
 import { OrganisationTypeGrid, INVESTOR_TYPES } from "./OrganisationTypeGrid";
 import { InvestorProfileFields, TICKET_OPTIONS, ticketKeyFromMinMax, type InvestorProfileData } from "./InvestorProfileFields";
+import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -100,46 +101,32 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     setLoading(true);
     setError("");
 
-    // Resolve ticket min/max from key
     const ticketOpt = TICKET_OPTIONS.find(t => t.key === investorData.ticketKey);
 
-    const body: Record<string, unknown> = {
-      name: name.trim(),
+    const data = {
+      name:         name.trim(),
       organization_type: orgType,
-      base_status: status,
-      location: location.trim() || null,
-      website: website.trim() || null,
+      base_status:  status,
+      location:     location.trim() || null,
+      website:      website.trim() || null,
       linkedin_url: linkedin.trim() || null,
-      description: description.trim() || null,
-      notes: notes.trim() || null,
+      description:  description.trim() || null,
+      notes:        notes.trim() || null,
+      investor_ticket_min:  isInvestorType ? (ticketOpt?.min ?? null) : null,
+      investor_ticket_max:  isInvestorType ? (ticketOpt?.max ?? null) : null,
+      investor_stages:      isInvestorType && investorData.stage ? [investorData.stage] : [],
+      investor_sectors:     isInvestorType ? investorData.sectors : [],
+      investor_geographies: isInvestorType ? investorData.geographies : [],
+      investor_thesis:      isInvestorType ? (investorData.thesis.trim() || null) : null,
     };
 
-    if (isInvestorType) {
-      body.investor_ticket_min   = ticketOpt?.min ?? null;
-      body.investor_ticket_max   = ticketOpt?.max ?? null;
-      body.investor_stages       = investorData.stage ? [investorData.stage] : [];
-      body.investor_sectors      = investorData.sectors;
-      body.investor_geographies  = investorData.geographies;
-      body.investor_thesis       = investorData.thesis.trim() || null;
-    }
-
     try {
-      let res: Response;
-      if (mode === "create") {
-        res = await fetch("/api/organisations/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      } else {
-        res = await fetch(`/api/organisations/${initialData.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      }
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Erreur serveur");
+      const result = mode === "create"
+        ? await createOrganisationAction(data)
+        : await updateOrganisationAction(initialData.id!, data);
+
+      if (!result.success) throw new Error(result.error);
+
       router.push(mode === "create" ? "/protected/organisations" : `/protected/organisations/${initialData.id}`);
       router.refresh();
     } catch (err: unknown) {
