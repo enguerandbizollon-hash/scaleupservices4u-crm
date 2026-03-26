@@ -197,6 +197,31 @@ export const recruitmentStageLabels: Record<string, string> = {
   rejected: "Rejeté",
 };
 
+export const candidateStatusLabels: Record<string, string> = {
+  searching:   "En recherche active",
+  in_process:  "En process",
+  placed:      "Placé",
+  employed:    "En poste",
+  inactive:    "Inactif",
+  blacklisted: "Blacklisté",
+};
+
+export const seniorityLabels: Record<string, string> = {
+  junior:   "Junior",
+  mid:      "Confirmé",
+  senior:   "Senior",
+  lead:     "Lead",
+  director: "Directeur",
+  "c-level": "C-Level",
+};
+
+export const remoteLabels: Record<string, string> = {
+  onsite:   "Présentiel",
+  hybrid:   "Hybride",
+  remote:   "Full remote",
+  flexible: "Flexible",
+};
+
 export const cfoAdvisoryTypeLabels: Record<string, string> = {
   financial_planning: "Planification financière",
   investor_relations: "Relations investisseurs",
