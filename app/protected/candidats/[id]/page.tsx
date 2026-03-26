@@ -12,6 +12,8 @@ import {
   addInterviewAction,
 } from "@/actions/candidates";
 import { dealTypeLabels, dealStatusLabels } from "@/lib/crm/labels";
+import { getMatchingDeals } from "@/actions/recruitment-matching";
+import { scoreColor } from "@/lib/crm/recruitment-scoring";
 
 const GEO_LABELS = Object.fromEntries(RH_GEOGRAPHIES.map(g => [g.value, g.label]));
 const SEN_LABELS = Object.fromEntries(SENIORITY_OPTIONS.map(s => [s.value, s.label]));
@@ -51,6 +53,7 @@ async function Content({ id }: { id: string }) {
   const candidate = await getCandidateDetail(id);
   if (!candidate) notFound();
 
+  const matchingDeals = await getMatchingDeals(id);
   const st = CANDIDATE_STATUSES.find(s => s.value === candidate.candidate_status);
 
   const inp = "width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);box-sizing:border-box";
@@ -420,6 +423,40 @@ async function Content({ id }: { id: string }) {
                 <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{candidate.notes_shareable}</div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── DOSSIERS COMPATIBLES (matching M4) ─────────────────────── */}
+        {matchingDeals.results.length > 0 && (
+          <div style={{ cssText: section } as React.CSSProperties}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", marginBottom: 14 }}>
+              Dossiers compatibles ({matchingDeals.results.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {matchingDeals.results.slice(0, 10).map(r => {
+                const sc = scoreColor(r.score);
+                return (
+                  <Link key={r.deal_id} href={`/protected/dossiers/${r.deal_id}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--bg)", borderRadius: 9, border: "1px solid var(--border)", textDecoration: "none" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)" }}>{r.deal_name}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-5)", marginTop: 1 }}>
+                        {r.job_title ? `${r.job_title} · ` : ""}{dealTypeLabels[r.deal_type] ?? r.deal_type} · {dealStatusLabels[r.deal_status] ?? r.deal_status}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                      {r.in_deal && (
+                        <span style={{ fontSize: 10.5, padding: "1px 7px", borderRadius: 20, background: "#DBEAFE", color: "#1D4ED8", fontWeight: 600 }}>
+                          {r.dc_stage ?? "En process"}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 13, fontWeight: 800, padding: "3px 10px", borderRadius: 20, background: sc.bg, color: sc.tx }}>
+                        {r.score}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
 

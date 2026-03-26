@@ -65,6 +65,13 @@ export async function updateDealAction(formData: FormData) {
     currency:          ns(formData.get("currency")) ?? "EUR",
     company_stage:     ns(formData.get("company_stage")),
     company_geography: ns(formData.get("company_geography")),
+    // Recrutement
+    job_title:          ns(formData.get("job_title")),
+    required_seniority: ns(formData.get("required_seniority")),
+    required_location:  ns(formData.get("required_location")),
+    required_remote:    ns(formData.get("required_remote")),
+    salary_min: formData.get("salary_min") ? Number(formData.get("salary_min")) : null,
+    salary_max: formData.get("salary_max") ? Number(formData.get("salary_max")) : null,
   }).eq("id", dealId);
 
   if (error) throw new Error(error.message);

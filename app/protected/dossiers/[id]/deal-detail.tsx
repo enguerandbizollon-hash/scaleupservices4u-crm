@@ -7,6 +7,7 @@ import { MailTaskModal } from "../../components/mail-task-modal";
 import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
 import { MatchingTab } from "./matching-tab";
 import { RecruitmentKanban } from "./recruitment-kanban";
+import { RecruitmentMatching } from "./recruitment-matching";
 import { updateDealMatchingProfile } from "@/actions/matching";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
@@ -163,7 +164,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "matching" | "pipeline">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "matching" | "pipeline" | "matching_rh">("dossier");
 
   // Matching profile inline edit
   const [matchingEditOpen, setMatchingEditOpen] = useState(false);
@@ -348,9 +349,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
             {(isFundraising
               ? (["dossier","matching"] as const)
-              : (["dossier","pipeline"] as const)
+              : (["dossier","pipeline","matching_rh"] as const)
             ).map(tab => {
-              const labels: Record<string, string> = { dossier:"Dossier", matching:"Matching investisseurs", pipeline:"Pipeline candidats" };
+              const labels: Record<string, string> = { dossier:"Dossier", matching:"Matching investisseurs", pipeline:"Pipeline", matching_rh:"Matching vivier" };
               const accentColor = isFundraising ? "var(--fund-tx)" : "var(--rec-tx)";
               const isActive = activeTab === tab;
               return (
@@ -383,6 +384,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         {/* Onglet Pipeline (recruitment) */}
         {isRecruitment && activeTab === "pipeline" && (
           <RecruitmentKanban dealId={deal.id} />
+        )}
+
+        {/* Onglet Matching vivier (recruitment) */}
+        {isRecruitment && activeTab === "matching_rh" && (
+          <RecruitmentMatching dealId={deal.id} />
         )}
 
         {/* Layout 2 colonnes */}

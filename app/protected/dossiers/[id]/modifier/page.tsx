@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
+import { SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES } from "@/lib/crm/matching-maps";
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,7 +11,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,job_title,required_seniority,required_location,required_remote,salary_min,salary_max")
     .eq("id", id)
     .maybeSingle();
 
@@ -135,6 +136,61 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
             </div>
           </div>
+
+          {/* Profil de poste — recrutement uniquement */}
+          {deal.deal_type === "recruitment" && (
+            <div style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:14, padding:24, marginBottom:16 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#111", marginBottom:18 }}>Profil de poste</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+
+                <div style={{ gridColumn:"1 / -1" }}>
+                  <label style={{ cssText: lbl } as any}>Intitulé exact du poste</label>
+                  <input name="job_title" defaultValue={(deal as any).job_title ?? ""} style={{ cssText: inp } as any} placeholder="ex: Directeur Financier" />
+                </div>
+
+                <div>
+                  <label style={{ cssText: lbl } as any}>Séniorité requise</label>
+                  <select name="required_seniority" defaultValue={(deal as any).required_seniority ?? ""} style={{ cssText: sel } as any}>
+                    <option value="">— Non renseignée —</option>
+                    {SENIORITY_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ cssText: lbl } as any}>Remote</label>
+                  <select name="required_remote" defaultValue={(deal as any).required_remote ?? ""} style={{ cssText: sel } as any}>
+                    <option value="">— Non renseigné —</option>
+                    {REMOTE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ gridColumn:"1 / -1" }}>
+                  <label style={{ cssText: lbl } as any}>Localisation du poste</label>
+                  <select name="required_location" defaultValue={(deal as any).required_location ?? ""} style={{ cssText: sel } as any}>
+                    <option value="">— Non renseignée —</option>
+                    {Object.entries(
+                      RH_GEOGRAPHIES.reduce((acc, g) => ({ ...acc, [g.group]: [...(acc[g.group as keyof typeof acc] ?? []), g] }), {} as Record<string, typeof RH_GEOGRAPHIES[number][]>)
+                    ).map(([group, geos]) => (
+                      <optgroup key={group} label={group}>
+                        {geos.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ cssText: lbl } as any}>Salaire min (€/an)</label>
+                  <input name="salary_min" type="number" defaultValue={(deal as any).salary_min ?? ""} style={{ cssText: inp } as any} placeholder="ex: 70000" />
+                </div>
+
+                <div>
+                  <label style={{ cssText: lbl } as any}>Salaire max (€/an)</label>
+                  <input name="salary_max" type="number" defaultValue={(deal as any).salary_max ?? ""} style={{ cssText: inp } as any} placeholder="ex: 95000" />
+                </div>
+
+              </div>
+            </div>
+          )}
 
           <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
             <Link href={`/protected/dossiers/${id}`} style={{ fontSize:13.5, padding:"9px 18px", borderRadius:9, border:"1px solid #d1d5db", background:"#fff", color:"#374151", textDecoration:"none" }}>
