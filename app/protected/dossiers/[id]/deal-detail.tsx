@@ -6,6 +6,7 @@ import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
 import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
 import { MatchingTab } from "./matching-tab";
+import { RecruitmentKanban } from "./recruitment-kanban";
 import { updateDealMatchingProfile } from "@/actions/matching";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
@@ -162,7 +163,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "matching">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "matching" | "pipeline">("dossier");
 
   // Matching profile inline edit
   const [matchingEditOpen, setMatchingEditOpen] = useState(false);
@@ -171,7 +172,8 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [matchingSaving, setMatchingSaving] = useState(false);
 
   const dt = DT[deal.deal_type] ?? DT.fundraising;
-  const isFundraising = deal.deal_type === "fundraising";
+  const isFundraising  = deal.deal_type === "fundraising";
+  const isRecruitment  = deal.deal_type === "recruitment";
   const target = deal.target_amount ?? 0;
   const hard = commitments.filter(c=>["hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
   const soft = commitments.filter(c=>["soft","hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
@@ -341,18 +343,22 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           </div>
         </div>
 
-        {/* Tabs (fundraising uniquement) */}
-        {isFundraising && (
+        {/* Tabs */}
+        {(isFundraising || isRecruitment) && (
           <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
-            {(["dossier","matching"] as const).map(tab => {
-              const labels = { dossier:"Dossier", matching:"Matching investisseurs" };
+            {(isFundraising
+              ? (["dossier","matching"] as const)
+              : (["dossier","pipeline"] as const)
+            ).map(tab => {
+              const labels: Record<string, string> = { dossier:"Dossier", matching:"Matching investisseurs", pipeline:"Pipeline candidats" };
+              const accentColor = isFundraising ? "var(--fund-tx)" : "var(--rec-tx)";
               const isActive = activeTab === tab;
               return (
-                <button key={tab} onClick={()=>setActiveTab(tab)} style={{
+                <button key={tab} onClick={()=>setActiveTab(tab as typeof activeTab)} style={{
                   padding:"8px 16px", border:"none", background:"none", cursor:"pointer",
                   fontSize:13, fontWeight: isActive ? 700 : 500,
                   color: isActive ? "var(--text-1)" : "var(--text-4)",
-                  borderBottom: isActive ? "2px solid var(--fund-tx)" : "2px solid transparent",
+                  borderBottom: isActive ? `2px solid ${accentColor}` : "2px solid transparent",
                   marginBottom:-1, fontFamily:"inherit",
                 }}>
                   {labels[tab]}
@@ -362,23 +368,25 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           </div>
         )}
 
-        {/* Onglet Matching */}
+        {/* Onglet Matching (fundraising) */}
         {isFundraising && activeTab === "matching" && (
           <MatchingTab
             dealId={deal.id}
-            onCreateActivity={(orgId, orgName) => {
+            onCreateActivity={() => {
               setActivityContextType("activity");
               setEditingActivity(null);
               setUnifiedActivityModalOpen(true);
-              // Pré-sélection org dans le modal via form — le UnifiedActivityModal accepte organizationId en prop
-              // On ouvre simplement le modal ; l'utilisateur choisira l'org dans la modale
-              // (amélioration future : passer orgId en defaultOrganizationId)
             }}
           />
         )}
 
+        {/* Onglet Pipeline (recruitment) */}
+        {isRecruitment && activeTab === "pipeline" && (
+          <RecruitmentKanban dealId={deal.id} />
+        )}
+
         {/* Layout 2 colonnes */}
-        {(!isFundraising || activeTab === "dossier") && (
+        {((!isFundraising && !isRecruitment) || activeTab === "dossier") && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
 
           {/* ── Colonne gauche ── */}
