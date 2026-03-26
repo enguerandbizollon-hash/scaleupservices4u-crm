@@ -47,6 +47,17 @@ export interface CandidateInterview {
   created_at: string;
 }
 
+export interface CandidateDocument {
+  id: string;
+  file_name: string;
+  file_url: string;
+  drive_file_id: string;
+  mime_type: string | null;
+  document_type: string;
+  source: string;
+  created_at: string;
+}
+
 export interface LinkedDeal {
   id: string;
   stage: string;
@@ -82,6 +93,7 @@ export interface CandidateDetail extends CandidateRow {
   skills: CandidateSkill[];
   interviews: CandidateInterview[];
   linked_deals: LinkedDeal[];
+  documents: CandidateDocument[];
 }
 
 export async function getCandidatesView(filters?: {
@@ -120,7 +132,7 @@ export async function getCandidateDetail(id: string): Promise<CandidateDetail | 
   if (error) throw new Error(error.message);
   if (!candidate) return null;
 
-  const [logResult, jobsResult, skillsResult, interviewsResult, linkedDealsResult] = await Promise.all([
+  const [logResult, jobsResult, skillsResult, interviewsResult, linkedDealsResult, docsResult] = await Promise.all([
     supabase
       .from("candidate_status_log")
       .select("id,old_status,new_status,note,created_at")
@@ -146,6 +158,11 @@ export async function getCandidateDetail(id: string): Promise<CandidateDetail | 
       .select("id,stage,combined_score,notes,added_at,deals(id,name,deal_type,deal_status)")
       .eq("candidate_id", id)
       .order("added_at", { ascending: false }),
+    supabase
+      .from("candidate_documents")
+      .select("id,file_name,file_url,drive_file_id,mime_type,document_type,source,created_at")
+      .eq("candidate_id", id)
+      .order("created_at", { ascending: false }),
   ]);
 
   return {
@@ -154,6 +171,7 @@ export async function getCandidateDetail(id: string): Promise<CandidateDetail | 
     jobs:         (jobsResult.data  ?? []) as CandidateJob[],
     skills:       (skillsResult.data ?? []) as CandidateSkill[],
     interviews:   (interviewsResult.data ?? []) as CandidateInterview[],
+    documents:    (docsResult.data ?? []) as CandidateDocument[],
     linked_deals: ((linkedDealsResult.data ?? []) as unknown[]).map((row: unknown) => {
       const r = row as { id: string; stage: string; combined_score: number | null; notes: string | null; added_at: string; deals: unknown };
       return {

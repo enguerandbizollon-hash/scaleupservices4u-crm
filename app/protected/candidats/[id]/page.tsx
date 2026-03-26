@@ -10,7 +10,9 @@ import {
   addSkillAction,
   deleteSkillAction,
   addInterviewAction,
+  deleteCandidateDocumentAction,
 } from "@/actions/candidates";
+import { DriveDocumentPicker } from "@/components/candidates/DriveDocumentPicker";
 import { dealTypeLabels, dealStatusLabels } from "@/lib/crm/labels";
 import { getMatchingDeals } from "@/actions/recruitment-matching";
 import { scoreColor } from "@/lib/crm/recruitment-scoring";
@@ -460,6 +462,50 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </div>
         )}
+
+        {/* ── DOCUMENTS ───────────────────────────────────────────────── */}
+        <div style={{ cssText: section } as React.CSSProperties}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Documents</div>
+            <DriveDocumentPicker candidateId={id} />
+          </div>
+
+          {candidate.documents.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: "var(--text-5)", fontStyle: "italic" }}>Aucun document lié.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {candidate.documents.map(doc => {
+                const docTypeLabels: Record<string, string> = {
+                  cv: "CV", cover_letter: "Lettre de motivation", portfolio: "Portfolio",
+                  reference: "Référence", other: "Autre",
+                };
+                const isImage = doc.mime_type?.startsWith("image/");
+                const isPdf   = doc.mime_type === "application/pdf";
+                const icon    = isPdf ? "📄" : isImage ? "🖼️" : "📎";
+                return (
+                  <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "var(--surface-2)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <span style={{ fontSize: 16 }}>{icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", textDecoration: "none" }}>
+                        {doc.file_name}
+                      </a>
+                      <div style={{ fontSize: 11, color: "var(--text-5)", marginTop: 1 }}>
+                        {docTypeLabels[doc.document_type] ?? doc.document_type} · {fmtShort(doc.created_at)}
+                      </div>
+                    </div>
+                    <form action={deleteCandidateDocumentAction}>
+                      <input type="hidden" name="doc_id" value={doc.id} />
+                      <input type="hidden" name="candidate_id" value={id} />
+                      <button type="submit" style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-4)", cursor: "pointer", fontFamily: "inherit" }}>
+                        Supprimer
+                      </button>
+                    </form>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* ── STATUT ──────────────────────────────────────────────────── */}
         <div style={{ cssText: section } as React.CSSProperties}>

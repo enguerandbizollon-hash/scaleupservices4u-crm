@@ -294,3 +294,60 @@ export async function addInterviewAction(formData: FormData) {
   revalidatePath(`/protected/candidats/${candidate_id}`);
   redirect(`/protected/candidats/${candidate_id}`);
 }
+
+// ── addCandidateDocumentAction ───────────────────────────────────────
+// Appelée depuis DriveDocumentPicker (client) après sélection Drive
+
+export async function addCandidateDocumentAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const candidate_id  = ns(formData.get("candidate_id"));
+  const drive_file_id = ns(formData.get("drive_file_id"));
+  const file_name     = ns(formData.get("file_name"));
+  const file_url      = ns(formData.get("file_url"));
+
+  if (!candidate_id)  throw new Error("ID candidat manquant");
+  if (!drive_file_id) throw new Error("ID fichier Drive manquant");
+  if (!file_name)     throw new Error("Nom de fichier manquant");
+  if (!file_url)      throw new Error("URL fichier manquante");
+
+  const { error } = await supabase.from("candidate_documents").insert({
+    candidate_id,
+    user_id:       user.id,
+    drive_file_id,
+    file_name,
+    file_url,
+    mime_type:     ns(formData.get("mime_type")),
+    document_type: ns(formData.get("document_type")) ?? "other",
+    source:        "google_drive",
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+}
+
+// ── deleteCandidateDocumentAction ────────────────────────────────────
+
+export async function deleteCandidateDocumentAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const doc_id       = ns(formData.get("doc_id"));
+  const candidate_id = ns(formData.get("candidate_id"));
+  if (!doc_id || !candidate_id) throw new Error("IDs manquants");
+
+  const { error } = await supabase
+    .from("candidate_documents")
+    .delete()
+    .eq("id", doc_id)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
+}
