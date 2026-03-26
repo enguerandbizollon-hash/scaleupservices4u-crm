@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(git --version)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(npx next:*)",
+      "Bash(find c:devscaleupservices4u-crm/lib -maxdepth 3 -type f -name *.ts)"
     ]
   }
 }

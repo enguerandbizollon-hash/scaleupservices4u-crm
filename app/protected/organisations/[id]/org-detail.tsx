@@ -12,17 +12,24 @@ const TYPE_LABELS: Record<string,string> = {
   corporate:"Corporate", consulting_firm:"Cab. conseil", other:"Autre",
 };
 const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
-  active:     {bg:"var(--fund-bg)",  tx:"var(--fund-tx)"},
-  priority:   {bg:"var(--rec-bg)",   tx:"var(--rec-tx)"},
-  qualified:  {bg:"var(--sell-bg)",  tx:"var(--sell-tx)"},
-  to_qualify: {bg:"var(--surface-3)",tx:"var(--text-4)"},
-  dormant:    {bg:"var(--surface-3)",tx:"var(--text-4)"},
-  inactive:   {bg:"var(--surface-3)",tx:"var(--text-5)"},
-  excluded:   {bg:"var(--rec-bg)",   tx:"var(--rec-tx)"},
+  active:     {bg:"#D1FAE5",          tx:"#065F46"},
+  to_qualify: {bg:"var(--surface-3)", tx:"var(--text-4)"},
+  inactive:   {bg:"#FEE2E2",          tx:"#991B1B"},
+  // Backward compat
+  priority:   {bg:"#D1FAE5",          tx:"#065F46"},
+  qualified:  {bg:"#D1FAE5",          tx:"#065F46"},
+  dormant:    {bg:"var(--surface-3)", tx:"var(--text-4)"},
+  excluded:   {bg:"#FEE2E2",          tx:"#991B1B"},
 };
 const STATUS_LABELS: Record<string,string> = {
-  active:"Actif", priority:"Prioritaire", qualified:"Qualifié",
-  to_qualify:"À qualifier", dormant:"Dormant", inactive:"Inactif", excluded:"Exclu",
+  active:     "Actif",
+  to_qualify: "Non qualifié",
+  inactive:   "Inactif",
+  // Backward compat
+  priority:   "Actif",
+  qualified:  "Actif",
+  dormant:    "Non qualifié",
+  excluded:   "Inactif",
 };
 const DEAL_TYPE: Record<string,string> = {
   fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy",

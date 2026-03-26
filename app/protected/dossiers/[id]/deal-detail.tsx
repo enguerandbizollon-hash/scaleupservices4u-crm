@@ -1,10 +1,11 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { TimeSelect } from "../../components/time-select";
 import { UnifiedActivityModal, type UnifiedActivityFormData } from "../../components/unified-activity-modal";
 import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
 import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
+import { MatchingTab } from "./matching-tab";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
@@ -32,12 +33,19 @@ const DT: Record<string,{bg:string;tx:string;border:string}> = {
 const TYPE_LABELS: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor", recruitment:"Recrutement" };
 const STAGE_LABELS: Record<string,string> = { kickoff:"Kickoff", preparation:"Préparation", outreach:"Prospection", management_meetings:"Meetings mgt", dd:"Due diligence", negotiation:"Négociation", closing:"Closing", post_closing:"Post-closing", ongoing_support:"Suivi", search:"Recherche" };
 const STATUS_SC: Record<string,{bg:string,tx:string}> = {
-  active:{bg:"var(--fund-bg)",tx:"var(--fund-tx)"}, priority:{bg:"var(--rec-bg)",tx:"var(--rec-tx)"},
-  qualified:{bg:"var(--sell-bg)",tx:"var(--sell-tx)"}, to_qualify:{bg:"var(--surface-3)",tx:"var(--text-4)"},
-  dormant:{bg:"var(--surface-3)",tx:"var(--text-4)"}, inactive:{bg:"var(--surface-3)",tx:"var(--text-5)"},
-  excluded:{bg:"var(--rec-bg)",tx:"var(--rec-tx)"},
+  active:     {bg:"#D1FAE5",          tx:"#065F46"},
+  to_qualify: {bg:"var(--surface-3)", tx:"var(--text-4)"},
+  inactive:   {bg:"#FEE2E2",          tx:"#991B1B"},
+  // Backward compat
+  priority:   {bg:"#D1FAE5",          tx:"#065F46"},
+  qualified:  {bg:"#D1FAE5",          tx:"#065F46"},
+  dormant:    {bg:"var(--surface-3)", tx:"var(--text-4)"},
+  excluded:   {bg:"#FEE2E2",          tx:"#991B1B"},
 };
-const STATUS_L: Record<string,string> = { active:"Actif", priority:"Prioritaire", qualified:"Qualifié", to_qualify:"À qualifier", dormant:"Dormant", inactive:"Inactif", excluded:"Exclu" };
+const STATUS_L: Record<string,string> = {
+  active:"Actif", to_qualify:"Non qualifié", inactive:"Inactif",
+  priority:"Actif", qualified:"Actif", dormant:"Non qualifié", excluded:"Inactif",
+};
 const COMM_S: Record<string,{label:string,bg:string,tx:string}> = {
   indication:{label:"Indication",bg:"var(--surface-3)",tx:"var(--text-4)"},
   soft:{label:"Soft",bg:"#FEF3C7",tx:"#92400E"},
@@ -118,6 +126,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 }) {
   // State sections
   const [orgs] = useState<Org[]>(initialOrgs);
+  const [allOrgs, setAllOrgs] = useState<{id:string;name:string}[]>([]);
+
+  // Charger toutes les orgs CRM (pour le sélecteur dans Engagement)
+  useEffect(() => {
+    fetch("/api/organisations")
+      .then(r => r.json())
+      .then(d => setAllOrgs(d.organisations ?? []))
+      .catch(() => {});
+  }, []);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -143,6 +160,8 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
+  const [activeTab, setActiveTab] = useState<"dossier" | "matching">("dossier");
+
   const dt = DT[deal.deal_type] ?? DT.fundraising;
   const isFundraising = deal.deal_type === "fundraising";
   const target = deal.target_amount ?? 0;
@@ -152,7 +171,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const openTasks = tasks.filter(t=>t.task_status==="open").length;
 
   const setF = (k:string) => (e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => setForm(p=>({...p,[k]:e.target.value}));
-  const openModal = (name:string, data?:any) => { setModal(name); setEditing(data??null); setForm(data ? {...data, amount:data.amount??"", committed_at:toDateStr(data.committed_at), due_date:toDateStr(data.due_date), activity_date:toDateStr(data.activity_date) } : {}); };
+  const openModal = (name:string, data?:any) => { setModal(name); setEditing(data??null); setForm(data ? {...data, amount:data.amount??"", committed_at:toDateStr(data.committed_at), due_date:toDateStr(data.due_date), activity_date:toDateStr(data.activity_date), organization_id:data.organization_id??""} : {}); };
   const closeModal = () => { setModal(null); setEditing(null); setForm({}); };
 
   async function api(path:string, method:string, body:any) {
@@ -166,7 +185,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   async function saveCommitment() {
     setLoading(true);
     try {
-      const payload = { ...form, organization_id: orgs.find(o=>o.name===form.org_name)?.id || form.organization_id };
+      const payload = { ...form };
       if (editing) {
         const d = await api("pipeline","PATCH",{commitment_id:editing.id,...payload});
         const orgName = Array.isArray(d.organizations)?d.organizations[0]?.name:d.organizations?.name;
@@ -314,7 +333,44 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           </div>
         </div>
 
+        {/* Tabs (fundraising uniquement) */}
+        {isFundraising && (
+          <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
+            {(["dossier","matching"] as const).map(tab => {
+              const labels = { dossier:"Dossier", matching:"Matching investisseurs" };
+              const isActive = activeTab === tab;
+              return (
+                <button key={tab} onClick={()=>setActiveTab(tab)} style={{
+                  padding:"8px 16px", border:"none", background:"none", cursor:"pointer",
+                  fontSize:13, fontWeight: isActive ? 700 : 500,
+                  color: isActive ? "var(--text-1)" : "var(--text-4)",
+                  borderBottom: isActive ? "2px solid var(--fund-tx)" : "2px solid transparent",
+                  marginBottom:-1, fontFamily:"inherit",
+                }}>
+                  {labels[tab]}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Onglet Matching */}
+        {isFundraising && activeTab === "matching" && (
+          <MatchingTab
+            dealId={deal.id}
+            onCreateActivity={(orgId, orgName) => {
+              setActivityContextType("activity");
+              setEditingActivity(null);
+              setUnifiedActivityModalOpen(true);
+              // Pré-sélection org dans le modal via form — le UnifiedActivityModal accepte organizationId en prop
+              // On ouvre simplement le modal ; l'utilisateur choisira l'org dans la modale
+              // (amélioration future : passer orgId en defaultOrganizationId)
+            }}
+          />
+        )}
+
         {/* Layout 2 colonnes */}
+        {(!isFundraising || activeTab === "dossier") && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
 
           {/* ── Colonne gauche ── */}
@@ -511,6 +567,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
           </div>
         </div>
+        )}
       </div>
 
       {/* ═══ MODALES ═══════════════════════════════════════════ */}
@@ -519,9 +576,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
       {modal==="commitment" && (
         <Modal title={editing?"Modifier l'engagement":"Nouvel engagement"} onClose={closeModal}>
           <Field label="Organisation">
-            <select style={sel} value={form.org_name||""} onChange={setF("org_name")}>
+            <select style={sel} value={form.organization_id||""} onChange={setF("organization_id")}>
               <option value="">— Choisir —</option>
-              {orgs.map(o=><option key={o.id} value={o.name}>{o.name}</option>)}
+              {allOrgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </Field>
           <Field label="Statut">

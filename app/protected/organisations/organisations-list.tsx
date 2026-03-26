@@ -24,13 +24,14 @@ const TYPE_COLORS: Record<string, { bg:string; tx:string; border:string }> = {
 };
 
 const STATUS_LABELS: Record<string,{label:string;color:string}> = {
-  to_qualify: { label:"À qualifier", color:"#6B7280" },
-  qualified:  { label:"Qualifié",    color:"#1a56db" },
-  priority:   { label:"Prioritaire", color:"#7C3AED" },
-  active:     { label:"Actif",       color:"#16a34a" },
-  dormant:    { label:"Dormant",     color:"#B45309" },
-  inactive:   { label:"Inactif",     color:"#9CA3AF" },
-  excluded:   { label:"Exclu",       color:"#DC2626" },
+  active:     { label:"Actif",        color:"#16a34a" },
+  to_qualify: { label:"Non qualifié", color:"#6B7280" },
+  inactive:   { label:"Inactif",      color:"#9CA3AF" },
+  // Backward compat (valeurs migrées en BDD)
+  qualified:  { label:"Actif",        color:"#16a34a" },
+  priority:   { label:"Actif",        color:"#16a34a" },
+  dormant:    { label:"Non qualifié", color:"#6B7280" },
+  excluded:   { label:"Inactif",      color:"#9CA3AF" },
 };
 
 function fmtDate(v:string|null) {
@@ -104,7 +105,9 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
         <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
           style={{ padding:"8px 12px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface)", color:"var(--text-2)", fontSize:13, fontFamily:"inherit", outline:"none" }}>
           <option value="all">Tous statuts</option>
-          {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+          <option value="active">Actif</option>
+          <option value="to_qualify">Non qualifié</option>
+          <option value="inactive">Inactif</option>
         </select>
       </div>
 

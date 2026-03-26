@@ -15,13 +15,9 @@ const CONTACT_STATUSES = [
 ];
 
 const ORG_STATUSES = [
-  { value:"active",     label:"Actif",       bg:"var(--cs-active-bg)",    tx:"var(--cs-active-tx)" },
-  { value:"priority",   label:"Prioritaire", bg:"var(--cs-priority-bg)",  tx:"var(--cs-priority-tx)" },
-  { value:"qualified",  label:"Qualifié",    bg:"var(--cs-qualified-bg)", tx:"var(--cs-qualified-tx)" },
-  { value:"to_qualify", label:"À qualifier", bg:"var(--cs-qualify-bg)",   tx:"var(--cs-qualify-tx)" },
-  { value:"dormant",    label:"Dormant",     bg:"var(--cs-dormant-bg)",   tx:"var(--cs-dormant-tx)" },
-  { value:"inactive",   label:"Inactif",     bg:"var(--cs-inactive-bg)",  tx:"var(--cs-inactive-tx)" },
-  { value:"excluded",   label:"Exclu",       bg:"var(--cs-excluded-bg)",  tx:"var(--cs-excluded-tx)" },
+  { value:"active",     label:"Actif",        bg:"var(--cs-active-bg)",   tx:"var(--cs-active-tx)" },
+  { value:"to_qualify", label:"Non qualifié", bg:"var(--cs-qualify-bg)",  tx:"var(--cs-qualify-tx)" },
+  { value:"inactive",   label:"Inactif",      bg:"var(--cs-inactive-bg)", tx:"var(--cs-inactive-tx)" },
 ];
 
 export function StatusDropdown({ id, status, entity, size = "sm" }: {
