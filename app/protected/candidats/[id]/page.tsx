@@ -49,7 +49,8 @@ const fmtDateRange = (start: string | null, end: string | null, isCurrent: boole
   return null;
 };
 
-async function Content({ id }: { id: string }) {
+async function Content({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const candidate = await getCandidateDetail(id);
   if (!candidate) notFound();
 
@@ -532,10 +533,10 @@ async function Content({ id }: { id: string }) {
   );
 }
 
-export default function CandidatDetailPage({ params }: { params: { id: string } }) {
+export default function CandidatDetailPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={<div style={{ padding: 32 }}><div style={{ height: 600, borderRadius: 14, background: "var(--surface-2)" }} /></div>}>
-      <Content id={params.id} />
+      <Content params={params} />
     </Suspense>
   );
 }

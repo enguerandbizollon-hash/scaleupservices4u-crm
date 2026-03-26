@@ -5,7 +5,8 @@ import { getCandidateDetail } from "@/lib/crm/get-candidates";
 import { CANDIDATE_STATUSES, SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import { updateCandidateAction } from "@/actions/candidates";
 
-async function Content({ id }: { id: string }) {
+async function Content({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const candidate = await getCandidateDetail(id);
   if (!candidate) notFound();
 
@@ -155,10 +156,10 @@ async function Content({ id }: { id: string }) {
   );
 }
 
-export default function ModifierCandidatPage({ params }: { params: { id: string } }) {
+export default function ModifierCandidatPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={<div style={{ padding: 32 }}><div style={{ height: 600, borderRadius: 14, background: "var(--surface-2)" }} /></div>}>
-      <Content id={params.id} />
+      <Content params={params} />
     </Suspense>
   );
 }
