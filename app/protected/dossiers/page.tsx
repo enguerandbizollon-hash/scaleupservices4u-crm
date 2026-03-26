@@ -97,16 +97,19 @@ async function Content() {
     orgCountByDeal[o.deal_id] = (orgCountByDeal[o.deal_id] ?? 0) + 1;
   }
 
-  const active  = deals.filter(d => d.deal_status === "active");
-  const inactive = deals.filter(d => d.deal_status === "inactive");
-  const closed  = deals.filter(d => d.deal_status === "closed");
+  const open    = deals.filter(d => d.deal_status === "open");
+  const paused  = deals.filter(d => d.deal_status === "paused");
+  const won     = deals.filter(d => d.deal_status === "won");
+  const lost    = deals.filter(d => d.deal_status === "lost");
+  const closed  = [...won, ...lost]; // affichés ensemble en grisé
   const types   = ["fundraising","ma_sell","ma_buy","cfo_advisor","recruitment"];
   const groups  = types.map(t => ({
     t, dt: DT[t],
-    active:  active.filter(d => d.deal_type === t),
-    inactive: inactive.filter(d => d.deal_type === t),
-    closed:  closed.filter(d => d.deal_type === t),
-  })).filter(g => g.active.length + g.inactive.length + g.closed.length > 0);
+    open:   open.filter(d => d.deal_type === t),
+    paused: paused.filter(d => d.deal_type === t),
+    won:    won.filter(d => d.deal_type === t),
+    lost:   lost.filter(d => d.deal_type === t),
+  })).filter(g => g.open.length + g.paused.length + g.won.length + g.lost.length > 0);
 
   return (
     <div style={{ padding:"28px 24px", minHeight:"100vh", background:"var(--bg)" }}>
@@ -116,8 +119,10 @@ async function Content() {
           <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>Dossiers</h1>
           <div style={{ display:"flex", gap:8, marginTop:6 }}>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{deals.length} total</span>
-            <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>{active.length} actif{active.length !== 1 ? "s" : ""}</span>
-            {closed.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-5)", fontWeight:600 }}>{closed.length} clôturé{closed.length !== 1 ? "s" : ""}</span>}
+            <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>{open.length} en cours</span>
+            {paused.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{paused.length} en pause</span>}
+            {won.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#D1FAE5", color:"#065F46", fontWeight:600 }}>{won.length} gagné{won.length !== 1 ? "s" : ""}</span>}
+            {lost.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-5)", fontWeight:600 }}>{lost.length} perdu{lost.length !== 1 ? "s" : ""}</span>}
           </div>
         </div>
         <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
@@ -131,14 +136,15 @@ async function Content() {
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, paddingBottom:10, borderBottom:`2px solid ${g.dt.border}` }}>
               <span style={{ fontSize:16 }}>{g.dt.icon}</span>
               <h2 style={{ margin:0, fontSize:15, fontWeight:700, color:g.dt.tx }}>{g.dt.label}</h2>
-              {g.active.length > 0 && <span style={{ fontSize:11, fontWeight:700, background:g.dt.bg, color:g.dt.tx, border:`1px solid ${g.dt.border}`, borderRadius:20, padding:"2px 9px" }}>{g.active.length} actif{g.active.length > 1 ? "s" : ""}</span>}
-              {g.inactive.length > 0 && <span style={{ fontSize:11, background:"var(--surface-3)", color:"var(--text-4)", borderRadius:20, padding:"2px 9px" }}>{g.inactive.length} inactif{g.inactive.length > 1 ? "s" : ""}</span>}
-              {g.closed.length > 0 && <span style={{ fontSize:11, background:"var(--surface-3)", color:"var(--text-5)", borderRadius:20, padding:"2px 9px" }}>{g.closed.length} clôturé{g.closed.length > 1 ? "s" : ""}</span>}
+              {g.open.length > 0 && <span style={{ fontSize:11, fontWeight:700, background:g.dt.bg, color:g.dt.tx, border:`1px solid ${g.dt.border}`, borderRadius:20, padding:"2px 9px" }}>{g.open.length} en cours</span>}
+              {g.paused.length > 0 && <span style={{ fontSize:11, background:"var(--surface-3)", color:"var(--text-4)", borderRadius:20, padding:"2px 9px" }}>{g.paused.length} en pause</span>}
+              {g.won.length > 0 && <span style={{ fontSize:11, background:"#D1FAE5", color:"#065F46", borderRadius:20, padding:"2px 9px" }}>{g.won.length} gagné{g.won.length > 1 ? "s" : ""}</span>}
+              {g.lost.length > 0 && <span style={{ fontSize:11, background:"var(--surface-3)", color:"var(--text-5)", borderRadius:20, padding:"2px 9px" }}>{g.lost.length} perdu{g.lost.length > 1 ? "s" : ""}</span>}
             </div>
 
-            {g.active.length > 0 && (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10, marginBottom: g.inactive.length + g.closed.length > 0 ? 10 : 0 }}>
-                {g.active.map(d => (
+            {g.open.length > 0 && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10, marginBottom: g.paused.length + g.won.length + g.lost.length > 0 ? 10 : 0 }}>
+                {g.open.map(d => (
                   <DealCard key={d.id} deal={d} dt={g.dt}
                     tasks={tasksByDeal[d.id] ?? []}
                     lastActivity={(actsByDeal[d.id] ?? [])[0]?.activity_date ?? null}
@@ -148,9 +154,9 @@ async function Content() {
                 ))}
               </div>
             )}
-            {(g.inactive.length + g.closed.length) > 0 && (
+            {(g.paused.length + g.won.length + g.lost.length) > 0 && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10, opacity:.5 }}>
-                {[...g.inactive, ...g.closed].map(d => (
+                {[...g.paused, ...g.won, ...g.lost].map(d => (
                   <DealCard key={d.id} deal={d} dt={g.dt}
                     tasks={[]} lastActivity={null} nextEvent={null} orgCount={0}
                   />
@@ -175,7 +181,7 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount }: {
   const pcolor = PRIO[deal.priority_level] ?? "var(--border-2)";
   const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date());
   const daysSinceActivity = lastActivity ? daysSince(lastActivity) : null;
-  const inactive = deal.deal_status !== "active";
+  const inactive = deal.deal_status !== "open";
   const fmtAmount = (n: number|null, c: string|null) => {
     if (!n) return null;
     return n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c??"€"}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c??"€"}` : `${n} ${c??"€"}`;

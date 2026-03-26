@@ -20,7 +20,7 @@ export async function createDealAction(formData: FormData) {
   const { data: deal, error } = await supabase.from("deals").insert({
     name,
     deal_type:   ns(formData.get("deal_type"))   ?? "fundraising",
-    deal_status: ns(formData.get("deal_status"))  ?? "active",
+    deal_status: ns(formData.get("deal_status"))  ?? "open",
     deal_stage:  ns(formData.get("deal_stage"))   ?? "kickoff",
     priority_level: ns(formData.get("priority_level")) ?? "medium",
     sector:            ns(formData.get("sector")),

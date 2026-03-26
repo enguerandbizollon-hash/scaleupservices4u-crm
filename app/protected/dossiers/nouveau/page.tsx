@@ -39,9 +39,8 @@ export default function NouveauDossierPage() {
               <div>
                 <label className="lbl">STATUT</label>
                 <select name="deal_status" className="inp">
-                  <option value="active">Actif</option>
-                  <option value="inactive">Inactif</option>
-                  <option value="closed">Clôturé</option>
+                  <option value="open">En cours</option>
+                  <option value="paused">En pause</option>
                 </select>
               </div>
             </div>

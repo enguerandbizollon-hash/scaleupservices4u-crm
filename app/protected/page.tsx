@@ -25,13 +25,13 @@ async function Content() {
   const in30     = new Date(Date.now()+30*864e5).toISOString().split("T")[0];
 
   const [dealsRes, tasksRes, relancesRes, activitiesRes, eventsRes, kpiRes, allContactsRes] = await Promise.all([
-    supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,target_date").eq("deal_status","active").order("priority_level"),
+    supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,target_date").eq("deal_status","open").order("priority_level"),
     supabase.from("tasks").select("id,title,priority_level,due_date,deal_id,deals(name)").eq("task_status","open").order("due_date",{ascending:true}).limit(6),
     supabase.from("contacts").select("id,first_name,last_name,last_contact_date,organization_contacts(organizations(name))").not("last_contact_date","is",null).lte("last_contact_date",cutoff15).not("base_status","in","(excluded,inactive)").order("last_contact_date",{ascending:true}).limit(8),
     supabase.from("activities").select("id,title,activity_type,activity_date,deal_id,deals(name)").order("activity_date",{ascending:false}).limit(8),
     supabase.from("events").select("id,title,event_type,due_date,deal_id,contact_id,deals(name),contacts(first_name,last_name)").eq("status","open").gte("due_date",today).lte("due_date",in30).order("due_date",{ascending:true}).limit(20),
     Promise.all([
-      supabase.from("deals").select("*",{count:"exact",head:true}).eq("deal_status","active"),
+      supabase.from("deals").select("*",{count:"exact",head:true}).eq("deal_status","open"),
       supabase.from("contacts").select("*",{count:"exact",head:true}),
       supabase.from("organizations").select("*",{count:"exact",head:true}),
       supabase.from("tasks").select("*",{count:"exact",head:true}).eq("task_status","open"),

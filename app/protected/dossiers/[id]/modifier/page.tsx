@@ -61,9 +61,10 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div>
                 <label style={{ cssText: lbl } as any}>Statut</label>
                 <select name="deal_status" defaultValue={deal.deal_status} style={{ cssText: sel } as any}>
-                  <option value="active">Actif</option>
-                  <option value="inactive">Inactif</option>
-                  <option value="closed">Clôturé</option>
+                  <option value="open">En cours</option>
+                  <option value="paused">En pause</option>
+                  <option value="won">Gagné</option>
+                  <option value="lost">Perdu</option>
                 </select>
               </div>
 

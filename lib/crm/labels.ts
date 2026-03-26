@@ -7,9 +7,10 @@ export const dealTypeLabels: Record<string, string> = {
 };
 
 export const dealStatusLabels: Record<string, string> = {
-  active: "Actif",
-  inactive: "Inactif",
-  closed: "Clôturé",
+  open:   "En cours",
+  paused: "En pause",
+  won:    "Gagné",
+  lost:   "Perdu",
 };
 
 export const dealStageLabels: Record<string, string> = {
