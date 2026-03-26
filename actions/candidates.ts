@@ -118,7 +118,6 @@ export async function updateCandidateStatusAction(formData: FormData) {
   if (!new_status) throw new Error("Nouveau statut manquant");
   if (!note)       throw new Error("La note est obligatoire pour changer le statut");
 
-  // Récupérer le statut actuel
   const { data: current } = await supabase
     .from("candidates")
     .select("candidate_status")
@@ -128,7 +127,6 @@ export async function updateCandidateStatusAction(formData: FormData) {
 
   if (!current) throw new Error("Candidat introuvable");
 
-  // Mettre à jour le statut
   const { error: updateError } = await supabase
     .from("candidates")
     .update({ candidate_status: new_status, updated_at: new Date().toISOString() })
@@ -137,7 +135,6 @@ export async function updateCandidateStatusAction(formData: FormData) {
 
   if (updateError) throw new Error(updateError.message);
 
-  // Log immuable
   const { error: logError } = await supabase
     .from("candidate_status_log")
     .insert({
@@ -153,4 +150,147 @@ export async function updateCandidateStatusAction(formData: FormData) {
   revalidatePath(`/protected/candidats/${id}`);
   revalidatePath("/protected/candidats");
   redirect(`/protected/candidats/${id}`);
+}
+
+// ── addJobAction ─────────────────────────────────────────────────────
+
+export async function addJobAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const candidate_id = ns(formData.get("candidate_id"));
+  const title        = ns(formData.get("title"));
+  if (!candidate_id) throw new Error("ID candidat manquant");
+  if (!title)        throw new Error("Intitulé de poste obligatoire");
+
+  const is_current = formData.get("is_current") === "on";
+
+  const { error } = await supabase.from("candidate_jobs").insert({
+    candidate_id,
+    user_id:      user.id,
+    title,
+    company_name: ns(formData.get("company_name")),
+    start_date:   ns(formData.get("start_date")),
+    end_date:     is_current ? null : ns(formData.get("end_date")),
+    is_current,
+    description:  ns(formData.get("description")),
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
+}
+
+// ── deleteJobAction ──────────────────────────────────────────────────
+
+export async function deleteJobAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const job_id       = ns(formData.get("job_id"));
+  const candidate_id = ns(formData.get("candidate_id"));
+  if (!job_id || !candidate_id) throw new Error("IDs manquants");
+
+  const { error } = await supabase
+    .from("candidate_jobs")
+    .delete()
+    .eq("id", job_id)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
+}
+
+// ── addSkillAction ───────────────────────────────────────────────────
+
+export async function addSkillAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const candidate_id = ns(formData.get("candidate_id"));
+  const skill_name   = ns(formData.get("skill_name"));
+  if (!candidate_id) throw new Error("ID candidat manquant");
+  if (!skill_name)   throw new Error("Compétence obligatoire");
+
+  const { error } = await supabase.from("candidate_skills").insert({
+    candidate_id,
+    user_id:      user.id,
+    skill_name,
+    level:        ns(formData.get("level")),
+    is_shareable: formData.get("is_shareable") !== "false",
+    weight:       formData.get("weight") ? Number(formData.get("weight")) : 1,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
+}
+
+// ── deleteSkillAction ────────────────────────────────────────────────
+
+export async function deleteSkillAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const skill_id     = ns(formData.get("skill_id"));
+  const candidate_id = ns(formData.get("candidate_id"));
+  if (!skill_id || !candidate_id) throw new Error("IDs manquants");
+
+  const { error } = await supabase
+    .from("candidate_skills")
+    .delete()
+    .eq("id", skill_id)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
+}
+
+// ── addInterviewAction ───────────────────────────────────────────────
+
+export async function addInterviewAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const candidate_id = ns(formData.get("candidate_id"));
+  if (!candidate_id) throw new Error("ID candidat manquant");
+
+  const scoreRaw = formData.get("score");
+  const score    = scoreRaw && String(scoreRaw).trim() !== "" ? Number(scoreRaw) : null;
+
+  const { error } = await supabase.from("candidate_interviews").insert({
+    candidate_id,
+    user_id:         user.id,
+    deal_id:         ns(formData.get("deal_id")),
+    interviewer:     ns(formData.get("interviewer")),
+    interview_date:  ns(formData.get("interview_date")),
+    interview_type:  ns(formData.get("interview_type")),
+    score,
+    feedback:        ns(formData.get("feedback")),
+    recommendation:  ns(formData.get("recommendation")),
+    is_confidential: formData.get("is_confidential") === "on",
+  });
+
+  if (error) throw new Error(error.message);
+
+  // Mettre à jour last_contact_date du candidat
+  await supabase
+    .from("candidates")
+    .update({ last_contact_date: new Date().toISOString().split("T")[0], updated_at: new Date().toISOString() })
+    .eq("id", candidate_id)
+    .eq("user_id", user.id);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
 }

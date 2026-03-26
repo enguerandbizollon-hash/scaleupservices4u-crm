@@ -16,6 +16,51 @@ export interface CandidateRow {
   created_at: string;
 }
 
+export interface CandidateJob {
+  id: string;
+  company_name: string | null;
+  title: string;
+  start_date: string | null;
+  end_date: string | null;
+  is_current: boolean;
+  description: string | null;
+}
+
+export interface CandidateSkill {
+  id: string;
+  skill_name: string;
+  level: string | null;
+  is_shareable: boolean;
+  weight: number;
+}
+
+export interface CandidateInterview {
+  id: string;
+  deal_id: string | null;
+  interviewer: string | null;
+  interview_date: string | null;
+  interview_type: string | null;
+  score: number | null;
+  feedback: string | null;
+  recommendation: string | null;
+  is_confidential: boolean;
+  created_at: string;
+}
+
+export interface LinkedDeal {
+  id: string;
+  stage: string;
+  combined_score: number | null;
+  notes: string | null;
+  added_at: string;
+  deal: {
+    id: string;
+    name: string;
+    deal_type: string;
+    deal_status: string;
+  } | null;
+}
+
 export interface CandidateDetail extends CandidateRow {
   linkedin_url: string | null;
   cv_url: string | null;
@@ -33,6 +78,10 @@ export interface CandidateDetail extends CandidateRow {
     note: string;
     created_at: string;
   }[];
+  jobs: CandidateJob[];
+  skills: CandidateSkill[];
+  interviews: CandidateInterview[];
+  linked_deals: LinkedDeal[];
 }
 
 export async function getCandidatesView(filters?: {
@@ -71,14 +120,50 @@ export async function getCandidateDetail(id: string): Promise<CandidateDetail | 
   if (error) throw new Error(error.message);
   if (!candidate) return null;
 
-  const { data: log } = await supabase
-    .from("candidate_status_log")
-    .select("id,old_status,new_status,note,created_at")
-    .eq("candidate_id", id)
-    .order("created_at", { ascending: false });
+  const [logResult, jobsResult, skillsResult, interviewsResult, linkedDealsResult] = await Promise.all([
+    supabase
+      .from("candidate_status_log")
+      .select("id,old_status,new_status,note,created_at")
+      .eq("candidate_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("candidate_jobs")
+      .select("id,company_name,title,start_date,end_date,is_current,description")
+      .eq("candidate_id", id)
+      .order("start_date", { ascending: false }),
+    supabase
+      .from("candidate_skills")
+      .select("id,skill_name,level,is_shareable,weight")
+      .eq("candidate_id", id)
+      .order("skill_name"),
+    supabase
+      .from("candidate_interviews")
+      .select("id,deal_id,interviewer,interview_date,interview_type,score,feedback,recommendation,is_confidential,created_at")
+      .eq("candidate_id", id)
+      .order("interview_date", { ascending: false }),
+    supabase
+      .from("deal_candidates")
+      .select("id,stage,combined_score,notes,added_at,deals(id,name,deal_type,deal_status)")
+      .eq("candidate_id", id)
+      .order("added_at", { ascending: false }),
+  ]);
 
   return {
     ...candidate,
-    status_log: (log ?? []) as CandidateDetail["status_log"],
+    status_log:   (logResult.data   ?? []) as CandidateDetail["status_log"],
+    jobs:         (jobsResult.data  ?? []) as CandidateJob[],
+    skills:       (skillsResult.data ?? []) as CandidateSkill[],
+    interviews:   (interviewsResult.data ?? []) as CandidateInterview[],
+    linked_deals: ((linkedDealsResult.data ?? []) as unknown[]).map((row: unknown) => {
+      const r = row as { id: string; stage: string; combined_score: number | null; notes: string | null; added_at: string; deals: unknown };
+      return {
+        id:            r.id,
+        stage:         r.stage,
+        combined_score: r.combined_score,
+        notes:         r.notes,
+        added_at:      r.added_at,
+        deal:          r.deals as LinkedDeal["deal"],
+      };
+    }),
   } as CandidateDetail;
 }
