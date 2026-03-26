@@ -13,6 +13,7 @@ import {
   deleteCandidateDocumentAction,
 } from "@/actions/candidates";
 import { DriveDocumentPicker } from "@/components/candidates/DriveDocumentPicker";
+import { ReportGenerator } from "@/components/candidates/ReportGenerator";
 import { dealTypeLabels, dealStatusLabels } from "@/lib/crm/labels";
 import { getMatchingDeals } from "@/actions/recruitment-matching";
 import { scoreColor } from "@/lib/crm/recruitment-scoring";
@@ -56,7 +57,21 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   const candidate = await getCandidateDetail(id);
   if (!candidate) notFound();
 
-  const matchingDeals = await getMatchingDeals(id);
+  const [matchingDeals, reportsResult] = await Promise.all([
+    getMatchingDeals(id),
+    (await import("@/lib/supabase/server").then(m => m.createClient()))
+      .from("candidate_reports")
+      .select("id,label,token,expires_at,created_at")
+      .eq("candidate_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const existingReports = (reportsResult.data ?? []) as {
+    id: string; label: string | null; token: string; expires_at: string; created_at: string;
+  }[];
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
   const st = CANDIDATE_STATUSES.find(s => s.value === candidate.candidate_status);
 
   const inp = "width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);box-sizing:border-box";
@@ -462,6 +477,16 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </div>
         )}
+
+        {/* ── RAPPORT CLIENT ──────────────────────────────────────────── */}
+        <div style={{ cssText: section } as React.CSSProperties}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", marginBottom: 14 }}>Rapport client partageable</div>
+          <ReportGenerator
+            candidateId={id}
+            existingReports={existingReports}
+            appUrl={appUrl}
+          />
+        </div>
 
         {/* ── DOCUMENTS ───────────────────────────────────────────────── */}
         <div style={{ cssText: section } as React.CSSProperties}>

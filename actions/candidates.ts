@@ -425,3 +425,49 @@ export async function deleteCandidateDocumentAction(formData: FormData) {
   revalidatePath(`/protected/candidats/${candidate_id}`);
   redirect(`/protected/candidats/${candidate_id}`);
 }
+
+// ── generateReportAction ─────────────────────────────────────────────
+// M6 : crée un token de rapport partageable (30 jours)
+
+export async function generateReportAction(formData: FormData): Promise<{ token: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const candidate_id = ns(formData.get("candidate_id"));
+  const label        = ns(formData.get("label"));
+  if (!candidate_id) throw new Error("ID candidat manquant");
+
+  const { data, error } = await supabase
+    .from("candidate_reports")
+    .insert({ candidate_id, user_id: user.id, label })
+    .select("token")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  return { token: data.token };
+}
+
+// ── deleteReportAction ───────────────────────────────────────────────
+
+export async function deleteReportAction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const report_id    = ns(formData.get("report_id"));
+  const candidate_id = ns(formData.get("candidate_id"));
+  if (!report_id || !candidate_id) throw new Error("IDs manquants");
+
+  await supabase
+    .from("candidate_reports")
+    .delete()
+    .eq("id", report_id)
+    .eq("user_id", user.id);
+
+  revalidatePath(`/protected/candidats/${candidate_id}`);
+  redirect(`/protected/candidats/${candidate_id}`);
+}
+

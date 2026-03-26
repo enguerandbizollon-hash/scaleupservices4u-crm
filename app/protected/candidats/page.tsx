@@ -45,12 +45,20 @@ async function Content() {
             ) : null)}
           </div>
         </div>
-        <Link
-          href="/protected/candidats/nouveau"
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}
-        >
-          <Plus size={14} /> Nouveau candidat
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link
+            href="/protected/candidats/stats"
+            style={{ padding: "9px 16px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-3)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}
+          >
+            Statistiques
+          </Link>
+          <Link
+            href="/protected/candidats/nouveau"
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}
+          >
+            <Plus size={14} /> Nouveau candidat
+          </Link>
+        </div>
       </div>
 
       {/* Alertes réactivation M5 */}
