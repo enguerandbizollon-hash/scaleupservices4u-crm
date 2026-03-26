@@ -2,6 +2,11 @@
 import { useState } from "react";
 import type { InvestorMatch } from "@/actions/matching";
 import { setInvestorStatusAction } from "@/actions/matching";
+import { GEOGRAPHIES } from "@/lib/crm/matching-maps";
+
+const GEO_LABELS: Record<string, string> = Object.fromEntries(
+  GEOGRAPHIES.map(({ value, label }) => [value, label])
+);
 
 interface InvestorMatchCardProps {
   match: InvestorMatch;
@@ -33,24 +38,20 @@ function ScoreBadge({ score }: { score: number | null }) {
   );
 }
 
-function CriterionBar({ label, earned, max, filled }: { label: string; earned: number; max: number; filled: boolean }) {
-  const pct = filled && max > 0 ? Math.round(earned / max * 100) : 0;
-  const active = filled && earned > 0;
-  const color = filled ? (active ? "var(--fund-tx)" : "#e5e7eb") : "var(--surface-3)";
+function CriterionText({ label, value, earned, filled }: {
+  label: string; value: string | null; earned: number; filled: boolean;
+}) {
+  const style = !filled
+    ? { bg: "var(--surface-3)", tx: "var(--text-5)" }
+    : earned > 0
+    ? { bg: "#D1FAE5", tx: "#065F46" }
+    : { bg: "#FEF3C7", tx: "#92400E" };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-      <span style={{ fontSize: 10.5, color: filled ? (active ? "var(--text-3)" : "var(--text-4)") : "var(--text-5)", fontWeight: active ? 600 : 400, whiteSpace: "nowrap", minWidth: 56 }}>
-        {label}
-        {!filled && <span style={{ marginLeft: 3, color: "var(--text-5)" }}>—</span>}
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: 10.5, color: "var(--text-5)", minWidth: 46, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 20, background: style.bg, color: style.tx, fontWeight: 600 }}>
+        {filled ? (value || "—") : "Non renseigné"}
       </span>
-      <div style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width .3s" }} />
-      </div>
-      {filled && (
-        <span style={{ fontSize: 10, color: active ? "var(--fund-tx)" : "var(--text-5)", fontWeight: 600, minWidth: 24, textAlign: "right" }}>
-          {earned}/{max}
-        </span>
-      )}
     </div>
   );
 }
@@ -134,12 +135,32 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
         </div>
       </div>
 
-      {/* Ligne 2 : breakdown critères */}
+      {/* Ligne 2 : critères en texte coloré — vert=match, orange=mismatch, gris=non renseigné */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <CriterionBar label="Ticket"  earned={breakdown.ticket.earned}    max={breakdown.ticket.max}    filled={breakdown.ticket.filled} />
-        <CriterionBar label="Secteur" earned={breakdown.sector.earned}    max={breakdown.sector.max}    filled={breakdown.sector.filled} />
-        <CriterionBar label="Stade"   earned={breakdown.stage.earned}     max={breakdown.stage.max}     filled={breakdown.stage.filled} />
-        <CriterionBar label="Géo"     earned={breakdown.geography.earned} max={breakdown.geography.max} filled={breakdown.geography.filled} />
+        <CriterionText
+          label="Ticket"
+          value={ticketLabel}
+          earned={breakdown.ticket.earned}
+          filled={breakdown.ticket.filled}
+        />
+        <CriterionText
+          label="Secteur"
+          value={org.investor_sectors.slice(0, 2).join(", ") || null}
+          earned={breakdown.sector.earned}
+          filled={breakdown.sector.filled}
+        />
+        <CriterionText
+          label="Stade"
+          value={org.investor_stages.slice(0, 2).join(", ") || null}
+          earned={breakdown.stage.earned}
+          filled={breakdown.stage.filled}
+        />
+        <CriterionText
+          label="Géo"
+          value={org.investor_geographies.slice(0, 2).map(g => GEO_LABELS[g] ?? g).join(", ") || null}
+          earned={breakdown.geography.earned}
+          filled={breakdown.geography.filled}
+        />
       </div>
 
       {/* Ligne 3 : tags + action */}

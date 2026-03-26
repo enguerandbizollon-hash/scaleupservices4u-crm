@@ -23,13 +23,15 @@ export async function createDealAction(formData: FormData) {
     deal_status: ns(formData.get("deal_status"))  ?? "active",
     deal_stage:  ns(formData.get("deal_stage"))   ?? "kickoff",
     priority_level: ns(formData.get("priority_level")) ?? "medium",
-    sector:      ns(formData.get("sector")),
-    location:    ns(formData.get("location")),
-    description: ns(formData.get("description")),
-    target_amount: ns(formData.get("target_amount")) ? Number(formData.get("target_amount")) : null,
-    currency: ns(formData.get("currency")) ?? "EUR",
-    start_date:  ns(formData.get("start_date")),
-    target_date: ns(formData.get("target_date")),
+    sector:            ns(formData.get("sector")),
+    location:          ns(formData.get("location")),
+    description:       ns(formData.get("description")),
+    target_amount:     ns(formData.get("target_amount")) ? Number(formData.get("target_amount")) : null,
+    currency:          ns(formData.get("currency")) ?? "EUR",
+    start_date:        ns(formData.get("start_date")),
+    target_date:       ns(formData.get("target_date")),
+    company_stage:     ns(formData.get("company_stage")),
+    company_geography: ns(formData.get("company_geography")),
     client_organization_id: null,  // Les orgs se lient aux dossiers, pas l'inverse
     user_id: user.id,
   }).select("id").single();
@@ -59,8 +61,10 @@ export async function updateDealAction(formData: FormData) {
     description:    ns(formData.get("description")),
     start_date:     ns(formData.get("start_date")),
     target_date:    ns(formData.get("target_date")),
-    target_amount:  targetAmount ? Number(targetAmount) : null,
-    currency:       ns(formData.get("currency")) ?? "EUR",
+    target_amount:     targetAmount ? Number(targetAmount) : null,
+    currency:          ns(formData.get("currency")) ?? "EUR",
+    company_stage:     ns(formData.get("company_stage")),
+    company_geography: ns(formData.get("company_geography")),
   }).eq("id", dealId);
 
   if (error) throw new Error(error.message);

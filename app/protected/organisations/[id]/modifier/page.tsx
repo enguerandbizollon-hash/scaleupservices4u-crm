@@ -37,6 +37,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
         investor_ticket_max:  (org as any).investor_ticket_max ?? null,
         investor_sectors:     ((org as any).investor_sectors as string[]) ?? [],
         investor_stages:      ((org as any).investor_stages as string[]) ?? [],
+        investor_geographies: ((org as any).investor_geographies as string[]) ?? [],
         investor_thesis:      (org as any).investor_thesis ?? null,
       }}
     />

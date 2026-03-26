@@ -9,10 +9,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: deal } = await supabase
+  const { data: deal, error: dealError } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,description,start_date,target_date,target_amount,committed_amount,closed_amount,currency")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,description,start_date,target_date,target_amount,committed_amount,closed_amount,currency,company_stage")
     .eq("id", id).maybeSingle();
+  if (dealError) throw new Error(dealError.message);
   if (!deal) notFound();
 
   const [orgsRes, docsRes, tasksRes, activitiesRes, commitmentsRes] = await Promise.all([

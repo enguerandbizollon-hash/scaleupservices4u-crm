@@ -1,11 +1,8 @@
 "use client";
+import { SECTORS } from "@/lib/crm/matching-maps";
 
-export const SECTOR_OPTIONS = [
-  "Généraliste", "SaaS", "Fintech", "Healthtech", "Deeptech",
-  "Industrie", "Retail", "Energie", "Juridique", "Transport",
-  "Impact", "Food", "Immobilier", "Edtech", "Cybersécurité",
-  "Marketplace", "Hardware", "Autre",
-];
+// Alias pour la compatibilité des imports existants
+export const SECTOR_OPTIONS = [...SECTORS];
 
 interface SectorsMultiSelectProps {
   value: string[];

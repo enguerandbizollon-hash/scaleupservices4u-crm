@@ -1,6 +1,12 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  normalizeDealSector,
+  STAGE_MAP,
+  GEO_COMPATIBILITY,
+  scoreGeography,
+} from "@/lib/crm/matching-maps";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -33,43 +39,140 @@ export interface InvestorMatch {
 // ── Investor org types ────────────────────────────────────────────────
 const INVESTOR_ORG_TYPES = ["investor", "business_angel", "family_office", "corporate"];
 
+// ── Fallback parsers (anciens champs texte → valeurs structurées) ─────
+
+/** Parse "< 500k€", "1M – 3M€", "> 25M€" → {min, max} en euros */
+function parseTicketText(text: string | null): { min: number | null; max: number | null } | null {
+  if (!text) return null;
+  const t = text.replace(/\s/g, "").toLowerCase();
+
+  function toNum(s: string): number {
+    const m = s.match(/(\d+(?:[.,]\d+)?)(k|m)?/);
+    if (!m) return 0;
+    const n = parseFloat(m[1].replace(",", "."));
+    return m[2] === "m" ? n * 1_000_000 : m[2] === "k" ? n * 1_000 : n;
+  }
+
+  if (t.startsWith("<")) return { min: null, max: toNum(t.slice(1)) };
+  if (t.startsWith(">")) return { min: toNum(t.slice(1)), max: null };
+  const parts = t.split(/[–-]/).map(s => s.replace(/[€chfusd$]/g, ""));
+  if (parts.length === 2) return { min: toNum(parts[0]), max: toNum(parts[1]) };
+  return null;
+}
+
+/** Normalise un texte de stage vers nos valeurs de STAGE_OPTIONS */
+function normalizeStageText(text: string | null): string | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (t.includes("pre-seed") || t.includes("preseed") || t.includes("pré-seed")) return "Seed";
+  if (t.includes("pré-série a") || t.includes("pre-series a") || t.includes("pre-a")) return "Pré-Série A";
+  if (t.includes("série a") || t.includes("series a")) return "Série A";
+  if (t.includes("série b") || t.includes("series b")) return "Série B";
+  if (t.includes("late") || t.includes("buyout")) return "Late Stage";
+  if (t.includes("growth")) return "Growth";
+  if (t.includes("seed")) return "Seed";
+  if (t.includes("toutes") || t.includes("généraliste") || t.includes("generaliste")) return "Généraliste";
+  return text;
+}
+
+/** Normalise un texte de secteur vers nos valeurs du référentiel */
+function normalizeSectorText(text: string | null): string | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (t.includes("généraliste") || t.includes("generaliste")) return "Généraliste";
+  if (t.includes("saas") || t.includes("logiciel") || t.includes("software")) return "SaaS";
+  if (t.includes("fintech") || t.includes("insurtech")) return "Fintech";
+  if (t.includes("santé") || t.includes("medtech") || t.includes("health")) return "Healthtech";
+  if (t.includes("ia") || t.includes("intelligence artificielle") || t.includes("ai") || t.includes("deeptech")) return "Deeptech";
+  if (t.includes("cyber")) return "Cybersécurité";
+  if (t.includes("industrie") || t.includes("industrial") || t.includes("manufacturing")) return "Industrie";
+  if (t.includes("retail") || t.includes("e-commerce") || t.includes("commerce") || t.includes("distribution")) return "Retail";
+  if (t.includes("energie") || t.includes("énergie") || t.includes("cleantech")) return "Energie";
+  if (t.includes("immobilier") || t.includes("real estate")) return "Immobilier";
+  if (t.includes("transport") || t.includes("mobility") || t.includes("logistique")) return "Transport";
+  if (t.includes("food") || t.includes("agri") || t.includes("agroalimentaire")) return "Food";
+  if (t.includes("edtech") || t.includes("éducation") || t.includes("education")) return "Edtech";
+  if (t.includes("marketplace")) return "Marketplace";
+  if (t.includes("hardware")) return "Hardware";
+  if (t.includes("impact")) return "Impact";
+  if (t.includes("juridique") || t.includes("legal")) return "Juridique";
+  return text;
+}
+
+/**
+ * Résout les champs investisseur en privilégiant les nouvelles colonnes V15
+ * et en tombant en fallback sur les anciens champs texte si les nouvelles sont vides.
+ */
+function resolveInvestorFields(inv: {
+  investor_ticket_min?: number | null;
+  investor_ticket_max?: number | null;
+  investor_sectors?: string[] | null;
+  investor_stages?: string[] | null;
+  investor_geographies?: string[] | null;
+  investment_ticket?: string | null;
+  investment_stage?: string | null;
+  sector?: string | null;
+}) {
+  // Ticket
+  let ticketMin = inv.investor_ticket_min ?? null;
+  let ticketMax = inv.investor_ticket_max ?? null;
+  if (ticketMin === null && ticketMax === null && inv.investment_ticket) {
+    const parsed = parseTicketText(inv.investment_ticket);
+    if (parsed) { ticketMin = parsed.min; ticketMax = parsed.max; }
+  }
+
+  // Stages
+  let stages: string[] = (inv.investor_stages ?? []).filter(Boolean);
+  if (stages.length === 0 && inv.investment_stage) {
+    const norm = normalizeStageText(inv.investment_stage);
+    if (norm) stages = [norm];
+  }
+
+  // Sectors
+  let sectors: string[] = (inv.investor_sectors ?? []).filter(Boolean);
+  if (sectors.length === 0 && inv.sector) {
+    const norm = normalizeSectorText(inv.sector);
+    if (norm) sectors = [norm];
+  }
+
+  // Geographies
+  const geographies: string[] = (inv.investor_geographies ?? []).filter(Boolean);
+
+  return { ticketMin, ticketMax, stages, sectors, geographies };
+}
+
 // ── Scoring ───────────────────────────────────────────────────────────
 
 function scoreTicket(targetAmount: number | null, min: number | null, max: number | null): number {
   if (!targetAmount) return 0;
-  if (min !== null && max !== null) {
-    if (targetAmount >= min && targetAmount <= max) return 30;
-    const lowerOk = targetAmount >= min * 0.5 && targetAmount < min;
-    const upperOk = targetAmount > max && targetAmount <= max * 1.5;
-    return (lowerOk || upperOk) ? 15 : 0;
-  }
-  if (min !== null) return targetAmount >= min ? 30 : (targetAmount >= min * 0.5 ? 15 : 0);
-  if (max !== null) return targetAmount <= max ? 30 : (targetAmount <= max * 1.5 ? 15 : 0);
+  const lo = min ?? 0;
+  const hi = max ?? Infinity;
+  if (targetAmount >= lo && targetAmount <= hi) return 30;
+  if (targetAmount >= lo * 0.5 && targetAmount <= hi * 2) return 15;
   return 0;
 }
 
 function scoreSector(dealSector: string | null, investorSectors: string[]): number {
   if (!dealSector || !investorSectors?.length) return 0;
-  // Règle Généraliste : match parfait automatique
+  // Généraliste : match automatique
   if (investorSectors.some(s => s.toLowerCase() === "généraliste")) return 30;
-  const deal = dealSector.toLowerCase();
+  // Normalise le secteur deal (anciens labels → référentiel court)
+  const normalized = normalizeDealSector(dealSector) ?? dealSector;
+  const deal = normalized.toLowerCase();
   return investorSectors.some(s =>
-    s.toLowerCase() === deal || deal.includes(s.toLowerCase()) || s.toLowerCase().includes(deal)
+    s.toLowerCase() === deal ||
+    deal.includes(s.toLowerCase()) ||
+    s.toLowerCase().includes(deal)
   ) ? 30 : 0;
 }
 
 function scoreStage(dealStage: string | null, investorStages: string[]): number {
   if (!dealStage || !investorStages?.length) return 0;
-  return investorStages.some(s => s.toLowerCase() === dealStage.toLowerCase()) ? 25 : 0;
-}
-
-function scoreGeography(dealGeo: string | null, investorGeos: string[]): number {
-  if (!dealGeo || !investorGeos?.length) return 0;
-  const deal = dealGeo.toLowerCase();
-  return investorGeos.some(g => {
-    const geo = g.toLowerCase();
-    return geo === deal || geo === "global" || deal.includes(geo) || geo.includes(deal);
-  }) ? 15 : 0;
+  // Généraliste (investisseur "toutes étapes") → match automatique
+  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 25;
+  // STAGE_MAP : clé = company_stage du deal, valeurs = labels investor_stages compatibles
+  const compatible = STAGE_MAP[dealStage] ?? [];
+  return investorStages.some(s => compatible.includes(s)) ? 25 : 0;
 }
 
 function computePipelineStatus(
@@ -99,16 +202,20 @@ function computeScore(
     investor_geographies: string[];
   }
 ): { score: number | null; breakdown: InvestorMatchBreakdown } {
-  const ticketFilled  = inv.investor_ticket_min !== null || inv.investor_ticket_max !== null;
-  const sectorsFilled = inv.investor_sectors?.length > 0;
-  const stagesFilled  = inv.investor_stages?.length > 0;
-  const geoFilled     = inv.investor_geographies?.length > 0;
+  // Un critère est "filled" (scoré) seulement si LES DEUX CÔTÉS ont la donnée.
+  // Si le dossier n'a pas de stade/géo/montant, on ne pénalise pas l'investisseur.
+  const ticketFilled  = (inv.investor_ticket_min !== null || inv.investor_ticket_max !== null) && dealAmount !== null;
+  const sectorsFilled = inv.investor_sectors?.length > 0 && dealSector !== null;
+  const stagesFilled  = inv.investor_stages?.length > 0 && dealStage !== null;
+  const geoFilled     = inv.investor_geographies?.length > 0 && dealGeo !== null;
+
+  const geoEarned = geoFilled ? scoreGeography(dealGeo, inv.investor_geographies) : 0;
 
   const breakdown: InvestorMatchBreakdown = {
     ticket:    { earned: ticketFilled  ? scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max) : 0, max: 30, filled: ticketFilled },
-    sector:    { earned: sectorsFilled ? scoreSector(dealSector, inv.investor_sectors)   : 0, max: 30, filled: sectorsFilled },
-    stage:     { earned: stagesFilled  ? scoreStage(dealStage, inv.investor_stages)      : 0, max: 25, filled: stagesFilled },
-    geography: { earned: geoFilled     ? scoreGeography(dealGeo, inv.investor_geographies) : 0, max: 15, filled: geoFilled },
+    sector:    { earned: sectorsFilled ? scoreSector(dealSector, inv.investor_sectors) : 0,   max: 30, filled: sectorsFilled },
+    stage:     { earned: stagesFilled  ? scoreStage(dealStage, inv.investor_stages) : 0,       max: 25, filled: stagesFilled },
+    geography: { earned: geoEarned,   max: 15, filled: geoFilled },
   };
 
   const criteria = [breakdown.ticket, breakdown.sector, breakdown.stage, breakdown.geography].filter(c => c.filled);
@@ -139,13 +246,13 @@ export async function getInvestorMatches(
 
   let query = supabase
     .from("organizations")
-    .select("id, name, organization_type, base_status, investor_ticket_min, investor_ticket_max, investor_sectors, investor_stages, investor_geographies, investor_thesis")
+    .select("id, name, organization_type, base_status, investor_ticket_min, investor_ticket_max, investor_sectors, investor_stages, investor_geographies, investor_thesis, investment_ticket, investment_stage, sector")
     .eq("user_id", user.id)
     .in("organization_type", INVESTOR_ORG_TYPES);
 
-  // Par défaut : uniquement les actifs
   if (!includeInactive) {
-    query = query.eq("base_status", "active");
+    // Inclure active, qualified (ancien), priority (ancien)
+    query = query.in("base_status", ["active", "qualified", "priority"]);
   }
 
   const { data: investors, error: invErr } = await query;
@@ -167,18 +274,22 @@ export async function getInvestorMatches(
   const activityOrgIds = (activities ?? []).map((a: any) => a.organization_id).filter(Boolean) as string[];
   const commitmentsList = (commitments ?? []) as { organization_id: string | null; status: string }[];
 
+  // Géo effective : company_geography si la colonne existe (migration V15b), sinon null
+  const dealGeo = (deal as any).company_geography ?? null;
+
   const matches: InvestorMatch[] = (investors ?? []).map(inv => {
+    const resolved = resolveInvestorFields(inv as any);
     const { score, breakdown } = computeScore(
       deal.target_amount ?? null,
       deal.sector ?? null,
       (deal as any).company_stage ?? null,
-      deal.location ?? null,
+      dealGeo,
       {
-        investor_ticket_min:  inv.investor_ticket_min ?? null,
-        investor_ticket_max:  inv.investor_ticket_max ?? null,
-        investor_sectors:     inv.investor_sectors ?? [],
-        investor_stages:      inv.investor_stages ?? [],
-        investor_geographies: inv.investor_geographies ?? [],
+        investor_ticket_min:  resolved.ticketMin,
+        investor_ticket_max:  resolved.ticketMax,
+        investor_sectors:     resolved.sectors,
+        investor_stages:      resolved.stages,
+        investor_geographies: resolved.geographies,
       }
     );
     return {
@@ -187,11 +298,11 @@ export async function getInvestorMatches(
         name:                 inv.name,
         organization_type:    inv.organization_type,
         base_status:          inv.base_status,
-        investor_ticket_min:  inv.investor_ticket_min ?? null,
-        investor_ticket_max:  inv.investor_ticket_max ?? null,
-        investor_sectors:     inv.investor_sectors ?? [],
-        investor_stages:      inv.investor_stages ?? [],
-        investor_geographies: inv.investor_geographies ?? [],
+        investor_ticket_min:  resolved.ticketMin,
+        investor_ticket_max:  resolved.ticketMax,
+        investor_sectors:     resolved.sectors,
+        investor_stages:      resolved.stages,
+        investor_geographies: resolved.geographies,
         investor_thesis:      inv.investor_thesis ?? null,
       },
       score,
@@ -227,5 +338,32 @@ export async function setInvestorStatusAction(
 
   if (error) return { success: false, error: error.message };
   revalidatePath("/protected/dossiers");
+  return { success: true };
+}
+
+// ── updateDealMatchingProfile — met à jour les champs de matching d'un dossier ──
+
+export async function updateDealMatchingProfile(
+  dealId: string,
+  data: {
+    company_stage?: string | null;
+    company_geography?: string | null;
+  },
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({
+      company_stage:     data.company_stage     ?? null,
+      company_geography: data.company_geography ?? null,
+    })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true };
 }

@@ -26,7 +26,7 @@ export function StatusDropdown({ id, status, entity, size = "sm" }: {
   const [current, setCurrent] = useState(status);
   const [saving, setSaving] = useState(false);
   const statuses = entity === "contacts" ? CONTACT_STATUSES : ORG_STATUSES;
-  const cur_s = statuses.find(s => s.value === current) ?? statuses[3];
+  const cur_s = statuses.find(s => s.value === current) ?? statuses[0];
   const pad = size === "sm" ? "2px 8px" : "5px 12px";
   const fz  = size === "sm" ? "10.5px"  : "12px";
 

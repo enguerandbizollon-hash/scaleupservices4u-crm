@@ -16,7 +16,8 @@ CREATE INDEX IF NOT EXISTS idx_org_investor_stages      ON organizations USING g
 CREATE INDEX IF NOT EXISTS idx_org_investor_geographies ON organizations USING gin(investor_geographies);
 
 -- ── 2. CHAMPS STARTUP SUR DEALS ──────────────────────────────────────
-ALTER TABLE deals ADD COLUMN IF NOT EXISTS company_stage TEXT;
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS company_stage     TEXT;
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS company_geography TEXT;
 
 -- ── 3. SIMPLIFICATION BASE_STATUS ORGANISATIONS (3 valeurs) ─────────
 -- Convertir toutes les anciennes valeurs vers les 3 nouvelles

@@ -1,15 +1,6 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { createDealAction } from "./actions";
-
-const SECTORS = ["Généraliste","Technologie / SaaS","Intelligence Artificielle",
-  "Fintech / Insurtech","Santé / Medtech","Industrie / Manufacturing","Énergie / CleanTech",
-  "Immobilier","Distribution / Retail","Médias / Entertainment","Transport / Logistique",
-  "Agroalimentaire","Éducation / EdTech","Défense / Sécurité","Tourisme / Hospitality",
-  "Services B2B","Conseil / Advisory","Juridique","Finance / Investissement",
-  "Ressources Humaines","Luxe / Premium","Construction / BTP","Télécommunications",
-  "Agriculture / AgriTech","Chimie / Matériaux","Aérospatial","Environnement",
-  "Sport / Loisirs","Bien-être / Beauté","Cybersécurité","Autre"];
+import { SECTORS, COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 
 export default function NouveauDossierPage() {
   return (
@@ -93,6 +84,24 @@ export default function NouveauDossierPage() {
               <div>
                 <label className="lbl">LOCALISATION</label>
                 <input name="location" className="inp" placeholder="Ex. Paris (FR), Lyon (FR)"/>
+              </div>
+            </div>
+
+            {/* Profil matching (fundraising) */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+              <div>
+                <label className="lbl">STADE DE LEVÉE</label>
+                <select name="company_stage" className="inp">
+                  <option value="">— Non renseigné —</option>
+                  {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="lbl">GÉOGRAPHIE CIBLE</label>
+                <select name="company_geography" className="inp">
+                  <option value="">— Non renseignée —</option>
+                  {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                </select>
               </div>
             </div>
 

@@ -1,5 +1,6 @@
 "use client";
 import { SectorsMultiSelect } from "./SectorsMultiSelect";
+import { GeographiesMultiSelect } from "./GeographiesMultiSelect";
 
 export const TICKET_OPTIONS = [
   { key: "",        label: "— Non renseigné —", min: null,       max: null },
@@ -11,9 +12,13 @@ export const TICKET_OPTIONS = [
   { key: "gt_25m",  label: "> 25M€",            min: 25000000,   max: null },
 ];
 
+// Valeurs UI investisseur = union de toutes les valeurs compatibles dans STAGE_MAP
+// L'ordre reflète la progression des stades
 export const STAGE_OPTIONS = [
   "", "Seed", "Pré-Série A", "Série A", "Série B", "Growth", "Late Stage",
 ];
+// Note : ces libellés correspondent aux valeurs stockées dans investor_stages (TEXT[])
+// et sont utilisés comme clés dans STAGE_MAP côté scoring
 
 export function ticketKeyFromMinMax(min: number | null, max: number | null): string {
   if (!min && !max) return "";
@@ -29,6 +34,7 @@ export interface InvestorProfileData {
   ticketKey: string;
   stage: string;
   sectors: string[];
+  geographies: string[];
   thesis: string;
 }
 
@@ -98,6 +104,12 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
       <div style={{ marginBottom: 14 }}>
         <label style={lbl}>Secteurs d'investissement <span style={{ fontWeight: 400, color: "#9ca3af" }}>(max 3)</span></label>
         <SectorsMultiSelect value={data.sectors} onChange={val => set("sectors")(val)} />
+      </div>
+
+      {/* Géographies */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={lbl}>Géographies d'investissement</label>
+        <GeographiesMultiSelect value={data.geographies} onChange={val => set("geographies")(val)} />
       </div>
 
       {/* Thèse */}

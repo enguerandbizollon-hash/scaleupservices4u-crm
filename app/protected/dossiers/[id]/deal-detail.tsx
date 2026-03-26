@@ -6,6 +6,8 @@ import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
 import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
 import { MatchingTab } from "./matching-tab";
+import { updateDealMatchingProfile } from "@/actions/matching";
+import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
@@ -161,6 +163,12 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [form, setForm] = useState<Record<string,string>>({});
 
   const [activeTab, setActiveTab] = useState<"dossier" | "matching">("dossier");
+
+  // Matching profile inline edit
+  const [matchingEditOpen, setMatchingEditOpen] = useState(false);
+  const [matchingStage, setMatchingStage] = useState<string>(deal.company_stage ?? "");
+  const [matchingGeo, setMatchingGeo] = useState<string>(deal.company_geography ?? "");
+  const [matchingSaving, setMatchingSaving] = useState(false);
 
   const dt = DT[deal.deal_type] ?? DT.fundraising;
   const isFundraising = deal.deal_type === "fundraising";
@@ -477,6 +485,79 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                     })}
                     {commitments.length===0 && <div style={{ padding:"20px 16px", fontSize:13, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>Aucun engagement</div>}
                   </>
+                )}
+              </div>
+            )}
+
+            {/* PROFIL POUR MATCHING — fundraising uniquement */}
+            {isFundraising && (
+              <div style={cardStyle}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <TrendingUp size={14} color="var(--text-4)"/>
+                    <span style={{ fontSize:13, fontWeight:700, color:"var(--text-2)", textTransform:"uppercase", letterSpacing:".06em" }}>Profil matching</span>
+                  </div>
+                  <button onClick={()=>setMatchingEditOpen(p=>!p)} style={{ padding:"4px 10px", border:"1px solid var(--border)", borderRadius:7, background:"var(--surface-2)", color:"var(--text-3)", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+                    {matchingEditOpen ? "Annuler" : "Modifier"}
+                  </button>
+                </div>
+                {!matchingEditOpen ? (
+                  <div style={{ padding:"10px 16px 14px", borderTop:"1px solid var(--border)", display:"flex", gap:16, flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Stade</div>
+                      <div style={{ fontSize:13, color:"var(--text-2)" }}>
+                        {COMPANY_STAGES.find(s=>s.value===deal.company_stage)?.label ?? <span style={{ color:"var(--text-5)" }}>—</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Géographie</div>
+                      <div style={{ fontSize:13, color:"var(--text-2)" }}>
+                        {GEOGRAPHIES.find(g=>g.value===deal.company_geography)?.label ?? <span style={{ color:"var(--text-5)" }}>—</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Secteur</div>
+                      <div style={{ fontSize:13, color:"var(--text-2)" }}>{deal.sector ?? <span style={{ color:"var(--text-5)" }}>—</span>}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Montant cible</div>
+                      <div style={{ fontSize:13, color:"var(--text-2)" }}>{target > 0 ? fmtA(target, deal.currency) : <span style={{ color:"var(--text-5)" }}>—</span>}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding:"12px 16px 14px", borderTop:"1px solid var(--border)", display:"flex", flexDirection:"column", gap:12 }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                      <div>
+                        <label style={{ display:"block", fontSize:11.5, fontWeight:600, color:"var(--text-4)", marginBottom:5 }}>Stade</label>
+                        <select value={matchingStage} onChange={e=>setMatchingStage(e.target.value)} style={sel}>
+                          <option value="">— Non renseigné —</option>
+                          {COMPANY_STAGES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display:"block", fontSize:11.5, fontWeight:600, color:"var(--text-4)", marginBottom:5 }}>Géographie</label>
+                        <select value={matchingGeo} onChange={e=>setMatchingGeo(e.target.value)} style={sel}>
+                          <option value="">— Non renseignée —</option>
+                          {GEOGRAPHIES.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"flex-end" }}>
+                      <BtnPrimary loading={matchingSaving} onClick={async ()=>{
+                        setMatchingSaving(true);
+                        const res = await updateDealMatchingProfile(deal.id, {
+                          company_stage:     matchingStage || null,
+                          company_geography: matchingGeo   || null,
+                        });
+                        setMatchingSaving(false);
+                        if (res.success) {
+                          deal.company_stage     = matchingStage     || null;
+                          deal.company_geography = matchingGeo       || null;
+                          setMatchingEditOpen(false);
+                        }
+                      }}>Enregistrer</BtnPrimary>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

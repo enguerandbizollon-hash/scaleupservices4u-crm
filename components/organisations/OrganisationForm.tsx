@@ -23,6 +23,7 @@ export interface OrgFormInitialData {
   investor_ticket_max?: number | null;
   investor_sectors?: string[];
   investor_stages?: string[];
+  investor_geographies?: string[];
   investor_thesis?: string | null;
 }
 
@@ -69,10 +70,11 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
 
   // Investor profile
   const [investorData, setInvestorData] = useState<InvestorProfileData>({
-    ticketKey: ticketKeyFromMinMax(initialData.investor_ticket_min ?? null, initialData.investor_ticket_max ?? null),
-    stage: (initialData.investor_stages ?? [])[0] ?? "",
-    sectors: initialData.investor_sectors ?? [],
-    thesis: initialData.investor_thesis ?? "",
+    ticketKey:   ticketKeyFromMinMax(initialData.investor_ticket_min ?? null, initialData.investor_ticket_max ?? null),
+    stage:       (initialData.investor_stages ?? [])[0] ?? "",
+    sectors:     initialData.investor_sectors ?? [],
+    geographies: initialData.investor_geographies ?? [],
+    thesis:      initialData.investor_thesis ?? "",
   });
 
   const isInvestorType = INVESTOR_TYPES.includes(orgType);
@@ -113,11 +115,12 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     };
 
     if (isInvestorType) {
-      body.investor_ticket_min  = ticketOpt?.min ?? null;
-      body.investor_ticket_max  = ticketOpt?.max ?? null;
-      body.investor_stages      = investorData.stage ? [investorData.stage] : [];
-      body.investor_sectors     = investorData.sectors;
-      body.investor_thesis      = investorData.thesis.trim() || null;
+      body.investor_ticket_min   = ticketOpt?.min ?? null;
+      body.investor_ticket_max   = ticketOpt?.max ?? null;
+      body.investor_stages       = investorData.stage ? [investorData.stage] : [];
+      body.investor_sectors      = investorData.sectors;
+      body.investor_geographies  = investorData.geographies;
+      body.investor_thesis       = investorData.thesis.trim() || null;
     }
 
     try {
