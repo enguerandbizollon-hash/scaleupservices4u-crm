@@ -7,6 +7,8 @@ import {
   addCandidateToDealAction,
   moveCandidateStageAction,
   removeCandidateFromDealAction,
+  clearNeedsReviewAction,
+  setPlacementFeeAction,
   type KanbanData,
   type KanbanCandidate,
 } from "@/actions/recruitment-kanban";
@@ -18,15 +20,19 @@ const SENIORITY_SHORT: Record<string, string> = {
 };
 
 function CandidateCard({
-  item, stages, dealId, onMove, onRemove,
+  item, stages, dealId, onMove, onRemove, onClearReview, onFeeSet,
 }: {
   item: KanbanCandidate;
   stages: { value: string; label: string }[];
   dealId: string;
   onMove: (dcId: string, newStage: string) => Promise<void>;
   onRemove: (dcId: string) => Promise<void>;
+  onClearReview: (dcId: string) => Promise<void>;
+  onFeeSet: (dcId: string, fee: number | null) => Promise<void>;
 }) {
-  const [moving, setMoving] = useState(false);
+  const [moving, setMoving]   = useState(false);
+  const [feeEdit, setFeeEdit] = useState(false);
+  const [feeVal, setFeeVal]   = useState(item.placement_fee != null ? String(item.placement_fee) : "");
   const cand = item.candidate;
   if (!cand) return null;
 
@@ -34,6 +40,7 @@ function CandidateCard({
   const stageIdx = stages.findIndex(s => s.value === item.stage);
   const hasPrev = stageIdx > 0;
   const hasNext = stageIdx < stages.length - 1;
+  const isClosing = item.stage === "closing";
 
   async function move(dir: "prev" | "next") {
     const newStage = dir === "prev" ? stages[stageIdx - 1].value : stages[stageIdx + 1].value;
@@ -42,16 +49,36 @@ function CandidateCard({
     setMoving(false);
   }
 
+  async function saveFee() {
+    const fee = feeVal.trim() ? Number(feeVal) : null;
+    await onFeeSet(item.dc_id, fee);
+    setFeeEdit(false);
+  }
+
   return (
     <div style={{
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
+      background: item.needs_review ? "#FFFBEB" : "var(--surface)",
+      border: `1px solid ${item.needs_review ? "#F59E0B" : "var(--border)"}`,
       borderRadius: 9,
       padding: "10px 11px",
       marginBottom: 6,
       opacity: moving ? .5 : 1,
       transition: "opacity .15s",
     }}>
+      {/* Alerte à revoir M5 */}
+      {item.needs_review && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7, padding: "3px 7px", background: "#FEF3C7", borderRadius: 6 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E" }}>⚠ À revoir — dossier fermé</span>
+          <button
+            onClick={() => onClearReview(item.dc_id)}
+            title="Marquer comme revu"
+            style={{ border: "none", background: "transparent", color: "#92400E", cursor: "pointer", fontSize: 11, padding: 0, fontFamily: "inherit", fontWeight: 700 }}
+          >
+            ✓ Revu
+          </button>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <Link
@@ -113,6 +140,39 @@ function CandidateCard({
           </button>
         </div>
       </div>
+
+      {/* Fee de placement M5 — visible en colonne Closing */}
+      {isClosing && (
+        <div style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid var(--border)" }}>
+          {feeEdit ? (
+            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+              <input
+                autoFocus
+                type="number"
+                value={feeVal}
+                onChange={e => setFeeVal(e.target.value)}
+                placeholder="Fee (€)"
+                style={{ flex: 1, padding: "4px 7px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, fontFamily: "inherit", background: "var(--surface)", color: "var(--text-1)", outline: "none" }}
+              />
+              <button onClick={saveFee} style={{ padding: "4px 9px", border: "none", borderRadius: 6, background: "#1a56db", color: "#fff", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                OK
+              </button>
+              <button onClick={() => setFeeEdit(false)} style={{ padding: "4px 7px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", color: "var(--text-4)", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setFeeEdit(true)}
+              style={{ fontSize: 11, color: item.placement_fee != null ? "#065F46" : "var(--text-4)", background: item.placement_fee != null ? "#D1FAE5" : "var(--surface-3)", border: "none", borderRadius: 20, padding: "1px 8px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
+            >
+              {item.placement_fee != null
+                ? `Fee : ${new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(item.placement_fee)}`
+                : "Saisir fee de placement"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -242,11 +302,11 @@ export function RecruitmentKanban({ dealId }: { dealId: string }) {
     }
     const res = await moveCandidateStageAction(dcId, newStage, dealId);
     if (!res.success) load(); // revert on error
+    else load(); // reload to get updated statuses from M5 triggers
   }
 
   async function handleRemove(dcId: string) {
     if (!data) return;
-    // Optimistic update
     const newColumns = { ...data.columns };
     for (const stage of Object.keys(newColumns)) {
       newColumns[stage] = newColumns[stage].filter(c => c.dc_id !== dcId);
@@ -254,6 +314,26 @@ export function RecruitmentKanban({ dealId }: { dealId: string }) {
     setData({ ...data, columns: newColumns });
     const res = await removeCandidateFromDealAction(dcId, dealId);
     if (!res.success) load();
+  }
+
+  async function handleClearReview(dcId: string) {
+    if (!data) return;
+    // Optimistic update
+    const newColumns = { ...data.columns };
+    for (const stage of Object.keys(newColumns)) {
+      const idx = newColumns[stage].findIndex(c => c.dc_id === dcId);
+      if (idx !== -1) {
+        newColumns[stage][idx] = { ...newColumns[stage][idx], needs_review: false };
+        break;
+      }
+    }
+    setData({ ...data, columns: newColumns });
+    await clearNeedsReviewAction(dcId, dealId);
+  }
+
+  async function handleFeeSet(dcId: string, fee: number | null) {
+    await setPlacementFeeAction(dcId, dealId, fee);
+    load();
   }
 
   if (loading) return (
@@ -271,11 +351,12 @@ export function RecruitmentKanban({ dealId }: { dealId: string }) {
   if (!data) return null;
 
   const totalCandidates = Object.values(data.columns).flat().length;
+  const needsReviewCount = Object.values(data.columns).flat().filter(c => c.needs_review).length;
 
   return (
     <div>
       {/* En-tête */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: needsReviewCount > 0 ? 10 : 16 }}>
         <UserSearch size={15} color="var(--text-4)" />
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: ".06em" }}>
           Pipeline candidats
@@ -283,6 +364,11 @@ export function RecruitmentKanban({ dealId }: { dealId: string }) {
         <span style={{ fontSize: 11.5, background: "var(--surface-3)", color: "var(--text-4)", borderRadius: 20, padding: "1px 7px", fontWeight: 600 }}>
           {totalCandidates}
         </span>
+        {needsReviewCount > 0 && (
+          <span style={{ fontSize: 11.5, background: "#FEF3C7", color: "#92400E", borderRadius: 20, padding: "1px 7px", fontWeight: 700 }}>
+            ⚠ {needsReviewCount} à revoir
+          </span>
+        )}
       </div>
 
       {/* Kanban */}
@@ -317,6 +403,8 @@ export function RecruitmentKanban({ dealId }: { dealId: string }) {
                       dealId={dealId}
                       onMove={handleMove}
                       onRemove={handleRemove}
+                      onClearReview={handleClearReview}
+                      onFeeSet={handleFeeSet}
                     />
                   ))}
                   {cards.length === 0 && (

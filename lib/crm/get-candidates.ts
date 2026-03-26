@@ -96,6 +96,34 @@ export interface CandidateDetail extends CandidateRow {
   documents: CandidateDocument[];
 }
 
+export interface ReactivationAlert {
+  id: string;
+  first_name: string;
+  last_name: string;
+  last_contact_date: string | null;
+  months_since_contact: number;
+}
+
+// Candidats placés sans contact depuis 18+ mois
+export async function getReactivationAlerts(): Promise<ReactivationAlert[]> {
+  const supabase = await createClient();
+  const threshold = new Date();
+  threshold.setMonth(threshold.getMonth() - 18);
+
+  const { data } = await supabase
+    .from("candidates")
+    .select("id,first_name,last_name,last_contact_date")
+    .eq("candidate_status", "placed")
+    .or(`last_contact_date.is.null,last_contact_date.lte.${threshold.toISOString().split("T")[0]}`);
+
+  return (data ?? []).map(c => {
+    const lastContact = c.last_contact_date ? new Date(c.last_contact_date) : null;
+    const diffMs = lastContact ? Date.now() - lastContact.getTime() : Date.now() - threshold.getTime();
+    const months = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30));
+    return { ...c, months_since_contact: months };
+  });
+}
+
 export async function getCandidatesView(filters?: {
   status?: string;
   search?: string;

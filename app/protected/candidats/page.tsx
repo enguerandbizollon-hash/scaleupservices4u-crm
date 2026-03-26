@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Plus } from "lucide-react";
 import { CANDIDATE_STATUSES } from "@/lib/crm/matching-maps";
+import { getReactivationAlerts } from "@/lib/crm/get-candidates";
 
 export const revalidate = 0;
 
@@ -12,12 +13,15 @@ const fmt = (d: string | null) =>
 async function Content() {
   const supabase = await createClient();
 
-  const { data: candidates } = await supabase
-    .from("candidates")
-    .select("id,first_name,last_name,email,title,current_company,location,seniority,candidate_status,last_contact_date,created_at")
-    .order("last_name");
+  const [candidatesResult, alerts] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select("id,first_name,last_name,email,title,current_company,location,seniority,candidate_status,last_contact_date,created_at")
+      .order("last_name"),
+    getReactivationAlerts(),
+  ]);
 
-  const list = candidates ?? [];
+  const list = candidatesResult.data ?? [];
 
   // Comptages par statut
   const counts: Record<string, number> = {};
@@ -48,6 +52,22 @@ async function Content() {
           <Plus size={14} /> Nouveau candidat
         </Link>
       </div>
+
+      {/* Alertes réactivation M5 */}
+      {alerts.length > 0 && (
+        <div style={{ marginBottom: 16, padding: "12px 16px", background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#92400E", marginBottom: 6 }}>
+            ⏰ {alerts.length} candidat{alerts.length > 1 ? "s" : ""} placé{alerts.length > 1 ? "s" : ""} sans contact depuis 18+ mois
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {alerts.map(a => (
+              <Link key={a.id} href={`/protected/candidats/${a.id}`} style={{ fontSize: 12, padding: "2px 10px", borderRadius: 20, background: "#FDE68A", color: "#78350F", textDecoration: "none", fontWeight: 600 }}>
+                {a.last_name} {a.first_name} · {a.months_since_contact} mois
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {list.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--text-5)", fontSize: 14 }}>

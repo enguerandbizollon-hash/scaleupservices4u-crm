@@ -48,6 +48,13 @@ export async function updateDealAction(formData: FormData) {
   const dealId = ns(formData.get("deal_id"));
   if (!dealId) throw new Error("ID manquant");
 
+  // M5 : Lire le statut actuel avant mise à jour
+  const { data: currentDeal } = await supabase
+    .from("deals")
+    .select("deal_status")
+    .eq("id", dealId)
+    .maybeSingle();
+
   const targetAmount = formData.get("target_amount");
 
   const { error } = await supabase.from("deals").update({
@@ -75,6 +82,17 @@ export async function updateDealAction(formData: FormData) {
   }).eq("id", dealId);
 
   if (error) throw new Error(error.message);
+
+  // M5 trigger : deal_status → "won" → flaguer les candidats non-closing à revoir
+  const newStatus = ns(formData.get("deal_status"));
+  if (newStatus === "won" && currentDeal?.deal_status !== "won") {
+    await supabase
+      .from("deal_candidates")
+      .update({ needs_review: true })
+      .eq("deal_id", dealId)
+      .neq("stage", "closing");
+  }
+
   revalidatePath(`/protected/dossiers/${dealId}`);
   redirect(`/protected/dossiers/${dealId}`);
 }

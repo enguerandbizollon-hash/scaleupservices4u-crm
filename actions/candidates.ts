@@ -291,6 +291,80 @@ export async function addInterviewAction(formData: FormData) {
     .eq("id", candidate_id)
     .eq("user_id", user.id);
 
+  // M5 trigger : entretien avec date → événement Google Calendar (non-bloquant)
+  const interviewDate = ns(formData.get("interview_date"));
+  if (interviewDate) {
+    try {
+      const { data: settings } = await supabase
+        .from("user_settings")
+        .select("gcal_access_token,gcal_refresh_token,gcal_token_expiry")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (settings?.gcal_access_token) {
+        let token = settings.gcal_access_token;
+
+        // Refresh si expiré
+        if (settings.gcal_token_expiry && new Date(settings.gcal_token_expiry) <= new Date()) {
+          if (settings.gcal_refresh_token) {
+            const r = await fetch("https://oauth2.googleapis.com/token", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                client_id:     process.env.GOOGLE_CLIENT_ID!,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+                refresh_token: settings.gcal_refresh_token,
+                grant_type:    "refresh_token",
+              }),
+            });
+            const t = await r.json();
+            if (t.access_token) {
+              token = t.access_token;
+              await supabase.from("user_settings").update({
+                gcal_access_token: t.access_token,
+                gcal_token_expiry: new Date(Date.now() + t.expires_in * 1000).toISOString(),
+              }).eq("user_id", user.id);
+            }
+          }
+        }
+
+        // Récupérer nom du candidat pour le titre
+        const { data: cand } = await supabase
+          .from("candidates")
+          .select("first_name,last_name")
+          .eq("id", candidate_id)
+          .single();
+
+        const interviewTypeLabel: Record<string, string> = {
+          rh: "Entretien RH", client: "Entretien client", technique: "Technique", autre: "Entretien",
+        };
+        const typeRaw = ns(formData.get("interview_type")) ?? "autre";
+        const typeLabel = interviewTypeLabel[typeRaw] ?? "Entretien";
+        const candidateName = cand ? `${cand.first_name} ${cand.last_name}` : "Candidat";
+
+        const tz = "Europe/Paris";
+        const event = {
+          summary:     `${typeLabel} — ${candidateName}`,
+          description: ns(formData.get("feedback")) ?? "",
+          start: { date: interviewDate, timeZone: tz },
+          end:   { date: interviewDate, timeZone: tz },
+        };
+
+        await fetch(
+          "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+          {
+            method:  "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body:    JSON.stringify(event),
+          }
+        );
+        // Erreur ignorée intentionnellement — ne bloque pas la création de l'entretien
+      }
+    } catch {
+      // Non-bloquant : si calendar échoue, l'entretien est quand même créé
+    }
+  }
+
   revalidatePath(`/protected/candidats/${candidate_id}`);
   redirect(`/protected/candidats/${candidate_id}`);
 }
