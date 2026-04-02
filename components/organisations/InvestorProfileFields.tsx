@@ -72,7 +72,7 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
         <label style={{ ...lbl, paddingTop: 4 }}>Ticket d&apos;investissement</label>
         <div style={{ padding: "6px 0 0" }}>
           <TicketRangeSlider
-            value={{ min: data.ticketMin, max: data.ticketMax }}
+            value={{ min: data.ticketMin ?? null, max: data.ticketMax ?? null }}
             onChange={v => onChange({ ...data, ticketMin: v.min, ticketMax: v.max })}
           />
         </div>
@@ -81,19 +81,19 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Stades d&apos;investissement</label>
         <StageRangeSelector
-          value={{ min: data.stageMin, max: data.stageMax }}
+          value={{ min: data.stageMin ?? null, max: data.stageMax ?? null }}
           onChange={v => onChange({ ...data, stageMin: v.min, stageMax: v.max })}
         />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Secteurs d&apos;investissement</label>
-        <SectorsMultiSelect value={data.sectors} onChange={val => onChange({ ...data, sectors: val })} />
+        <SectorsMultiSelect value={data.sectors ?? []} onChange={val => onChange({ ...data, sectors: val })} />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Géographies d&apos;investissement</label>
-        <GeographiesMultiSelect value={data.geographies} onChange={val => onChange({ ...data, geographies: val })} />
+        <GeographiesMultiSelect value={data.geographies ?? []} onChange={val => onChange({ ...data, geographies: val })} />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18 }}>
