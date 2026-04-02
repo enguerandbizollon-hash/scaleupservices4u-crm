@@ -68,16 +68,17 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
       </div>
 
       {/* Ticket — range slider */}
-      <div style={{ marginBottom: 18 }}>
-        <label style={lbl}>Ticket d&apos;investissement</label>
-        <TicketRangeSlider
-          value={{ min: data.ticketMin, max: data.ticketMax }}
-          onChange={v => onChange({ ...data, ticketMin: v.min, ticketMax: v.max })}
-        />
+      <div style={{ paddingBottom: 20 }}>
+        <label style={{ ...lbl, paddingTop: 4 }}>Ticket d&apos;investissement</label>
+        <div style={{ padding: "6px 0 0" }}>
+          <TicketRangeSlider
+            value={{ min: data.ticketMin, max: data.ticketMax }}
+            onChange={v => onChange({ ...data, ticketMin: v.min, ticketMax: v.max })}
+          />
+        </div>
       </div>
 
-      {/* Stades — range selector */}
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Stades d&apos;investissement</label>
         <StageRangeSelector
           value={{ min: data.stageMin, max: data.stageMax }}
@@ -85,20 +86,17 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
         />
       </div>
 
-      {/* Secteurs */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Secteurs d&apos;investissement</label>
         <SectorsMultiSelect value={data.sectors} onChange={val => onChange({ ...data, sectors: val })} />
       </div>
 
-      {/* Géographies */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Géographies d&apos;investissement</label>
         <GeographiesMultiSelect value={data.geographies} onChange={val => onChange({ ...data, geographies: val })} />
       </div>
 
-      {/* Thèse */}
-      <div>
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18 }}>
         <label style={lbl}>Thèse / Profil d&apos;investissement</label>
         <textarea
           rows={3}
