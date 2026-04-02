@@ -11,23 +11,16 @@ interface SectorsMultiSelectProps {
 
 export function SectorsMultiSelect({ value, onChange }: SectorsMultiSelectProps) {
   const isGeneraliste = value.includes("Généraliste");
-  const atMax = value.length >= 3;
 
   function toggle(sector: string) {
     if (sector === "Généraliste") {
-      // Généraliste est exclusif : désactive tous les autres
-      if (isGeneraliste) {
-        onChange([]);
-      } else {
-        onChange(["Généraliste"]);
-      }
+      onChange(isGeneraliste ? [] : ["Généraliste"]);
       return;
     }
-    // Si Généraliste est actif, on le retire d'abord
     const base = value.filter(s => s !== "Généraliste");
     if (base.includes(sector)) {
       onChange(base.filter(s => s !== sector));
-    } else if (base.length < 3) {
+    } else {
       onChange([...base, sector]);
     }
   }
@@ -37,10 +30,9 @@ export function SectorsMultiSelect({ value, onChange }: SectorsMultiSelectProps)
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {SECTOR_OPTIONS.map(sector => {
           const active = value.includes(sector);
-          const disabled = !active && (
+          const disabled =
             (sector === "Généraliste" && value.length > 0 && !isGeneraliste) ||
-            (sector !== "Généraliste" && (isGeneraliste || atMax))
-          );
+            (sector !== "Généraliste" && isGeneraliste);
           return (
             <button
               key={sector}
@@ -68,10 +60,7 @@ export function SectorsMultiSelect({ value, onChange }: SectorsMultiSelectProps)
       </div>
       {value.length > 0 && (
         <div style={{ marginTop: 6, fontSize: 11.5, color: "#6b7280" }}>
-          {value.length}/3 secteur{value.length > 1 ? "s" : ""} sélectionné{value.length > 1 ? "s" : ""}
-          {atMax && !isGeneraliste && (
-            <span style={{ color: "#92400E", fontWeight: 600 }}> · Maximum 3 secteurs atteint</span>
-          )}
+          {value.length} secteur{value.length > 1 ? "s" : ""} sélectionné{value.length > 1 ? "s" : ""}
         </div>
       )}
     </div>

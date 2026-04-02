@@ -137,23 +137,9 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
   const isMaTarget         = orgType === "target";
   const isMaBuyer          = orgType === "buyer";
 
-  // Validate sectors max 3
-  function validateSectors(sectors: string[]): string | null {
-    if (sectors.length > 3) {
-      return "Un fonds peut sélectionner au maximum 3 secteurs d'investissement";
-    }
-    return null;
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { setError("Le nom est obligatoire"); return; }
-
-    // Validate sectors
-    if (isInvestorType) {
-      const sectorError = validateSectors(investorData.sectors);
-      if (sectorError) { setError(sectorError); return; }
-    }
 
     setLoading(true);
     setError("");

@@ -87,7 +87,7 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
 
       {/* Secteurs */}
       <div style={{ marginBottom: 14 }}>
-        <label style={lbl}>Secteurs d&apos;investissement <span style={{ fontWeight: 400, color: "#9ca3af" }}>(max 3)</span></label>
+        <label style={lbl}>Secteurs d&apos;investissement</label>
         <SectorsMultiSelect value={data.sectors} onChange={val => onChange({ ...data, sectors: val })} />
       </div>
 

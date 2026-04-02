@@ -57,9 +57,6 @@ export async function createOrganisationAction(
   const name = data.name.trim();
   if (!name) return { success: false, error: "Le nom est obligatoire" };
 
-  if (data.investor_sectors.length > 3) {
-    return { success: false, error: "Un fonds peut sélectionner au maximum 3 secteurs d'investissement" };
-  }
 
   // Vérif doublon
   const { data: existing } = await supabase
@@ -131,9 +128,6 @@ export async function updateOrganisationAction(
 
   if (!id) return { success: false, error: "ID manquant" };
 
-  if (data.investor_sectors.length > 3) {
-    return { success: false, error: "Un fonds peut sélectionner au maximum 3 secteurs d'investissement" };
-  }
 
   const { error } = await supabase
     .from("organizations")
