@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { GEO_ZONES, GEO_REGIONS_FRANCE, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { GEO_ZONES, GEO_REGIONS_FRANCE, GEO_REGIONS_SUISSE, GEO_LABELS } from "@/lib/crm/matching-maps";
 
 interface GeoSelectSingleProps {
   mode: "single";
@@ -43,13 +43,19 @@ function GeoSelectSingle({ value, onChange, placeholder }: GeoSelectSingleProps)
       <optgroup label="Régions France">
         {GEO_REGIONS_FRANCE.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
       </optgroup>
+      <optgroup label="Régions Suisse">
+        {GEO_REGIONS_SUISSE.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
+      </optgroup>
     </select>
   );
 }
 
 function GeoSelectMulti({ value, onChange, placeholder }: GeoSelectMultiProps) {
-  const [showRegions, setShowRegions] = useState(
+  const [showRegionsFR, setShowRegionsFR] = useState(
     value.some(v => (GEO_REGIONS_FRANCE as readonly string[]).includes(v))
+  );
+  const [showRegionsCH, setShowRegionsCH] = useState(
+    value.some(v => (GEO_REGIONS_SUISSE as readonly string[]).includes(v))
   );
 
   function toggle(geo: string) {
@@ -94,13 +100,41 @@ function GeoSelectMulti({ value, onChange, placeholder }: GeoSelectMultiProps) {
       </div>
 
       {/* Régions France (dépliable) */}
-      <button type="button" onClick={() => setShowRegions(p => !p)}
-        style={{ fontSize: 11.5, color: "#6b7280", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", marginBottom: showRegions ? 6 : 0, textDecoration: "underline" }}>
-        {showRegions ? "▾ Régions France" : "▸ Régions France"}
+      <button type="button" onClick={() => setShowRegionsFR(p => !p)}
+        style={{ fontSize: 11.5, color: "#6b7280", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", marginBottom: showRegionsFR ? 6 : 0, textDecoration: "underline" }}>
+        {showRegionsFR ? "▾ Régions France" : "▸ Régions France"}
       </button>
-      {showRegions && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+      {showRegionsFR && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
           {GEO_REGIONS_FRANCE.map(g => {
+            const active = value.includes(g);
+            const disabled = isGlobal;
+            return (
+              <button key={g} type="button" disabled={disabled} onClick={() => toggle(g)}
+                style={{
+                  padding: "4px 9px", borderRadius: 20,
+                  border: `1.5px solid ${active ? "#1a56db" : "#e5e7eb"}`,
+                  background: active ? "#EFF6FF" : "#fff",
+                  color: active ? "#1a56db" : disabled ? "#9ca3af" : "#374151",
+                  fontSize: 11.5, fontWeight: active ? 600 : 400,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  fontFamily: "inherit", opacity: disabled ? 0.55 : 1,
+                }}>
+                {active && "✓ "}{GEO_LABELS[g] ?? g}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Régions Suisse (dépliable) */}
+      <button type="button" onClick={() => setShowRegionsCH(p => !p)}
+        style={{ fontSize: 11.5, color: "#6b7280", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", marginBottom: showRegionsCH ? 6 : 0, textDecoration: "underline" }}>
+        {showRegionsCH ? "▾ Régions Suisse" : "▸ Régions Suisse"}
+      </button>
+      {showRegionsCH && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {GEO_REGIONS_SUISSE.map(g => {
             const active = value.includes(g);
             const disabled = isGlobal;
             return (
