@@ -136,7 +136,13 @@ export const GEO_REGIONS_FRANCE = [
   "bourgogne_franche_comte", "dom_tom",
 ] as const;
 
-export const GEO_ALL = [...GEO_ZONES, ...GEO_REGIONS_FRANCE] as const;
+export const GEO_REGIONS_SUISSE = [
+  "suisse_romande",
+  "suisse_alemanique",
+  "suisse_italienne",
+] as const;
+
+export const GEO_ALL = [...GEO_ZONES, ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE] as const;
 export type GeoValue = (typeof GEO_ALL)[number];
 
 export const GEO_LABELS: Record<string, string> = {
@@ -168,6 +174,9 @@ export const GEO_LABELS: Record<string, string> = {
   centre_val_de_loire:     "Centre-Val de Loire",
   bourgogne_franche_comte: "Bourgogne-Franche-Comté",
   dom_tom:                 "DOM-TOM",
+  suisse_romande:          "Suisse romande (GE, VD, VS, FR, NE, JU)",
+  suisse_alemanique:       "Suisse alémanique (ZH, BS, BE, SG, LU)",
+  suisse_italienne:        "Suisse italienne (Tessin / Ticino)",
 };
 
 // Backward compat : ancien format { value, label } pour composants existants
@@ -175,12 +184,12 @@ export const GEOGRAPHIES = GEO_ZONES.map(v => ({ value: v, label: GEO_LABELS[v] 
 export type Geography = (typeof GEO_ZONES)[number];
 
 export const GEO_COMPATIBILITY: Record<string, string[]> = {
-  global: [...GEO_ZONES, ...GEO_REGIONS_FRANCE],
-  europe: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "uk_ireland", "ue", "europe", ...GEO_REGIONS_FRANCE],
-  ue: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "ue", ...GEO_REGIONS_FRANCE],
+  global: [...GEO_ZONES, ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE],
+  europe: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "uk_ireland", "ue", "europe", ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE],
+  ue: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "ue", ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE],
   france:                  ["france", ...GEO_REGIONS_FRANCE],
   benelux:                 ["benelux"],
-  dach:                    ["dach"],
+  dach:                    ["dach", "suisse_romande", "suisse_alemanique", "suisse_italienne"],
   europe_sud:              ["europe_sud"],
   nordics:                 ["nordics"],
   europe_est:              ["europe_est"],
@@ -203,6 +212,9 @@ export const GEO_COMPATIBILITY: Record<string, string[]> = {
   centre_val_de_loire:     ["centre_val_de_loire", "france"],
   bourgogne_franche_comte: ["bourgogne_franche_comte", "france"],
   dom_tom:                 ["dom_tom", "france"],
+  suisse_romande:          ["suisse_romande", "dach", "france"],
+  suisse_alemanique:       ["suisse_alemanique", "dach"],
+  suisse_italienne:        ["suisse_italienne", "dach"],
 };
 
 /** Score géographique (plus utilisé directement — le scoring est dans matching.ts) */

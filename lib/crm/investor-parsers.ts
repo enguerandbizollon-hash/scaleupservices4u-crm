@@ -120,8 +120,12 @@ export function normalizeGeoText(text: string | null): string | null {
   if (t.includes("dom") || t.includes("réunion") || t.includes("martinique") || t.includes("guadeloupe")) return "dom_tom";
   // France (générique — après les régions)
   if (t.includes("france")) return "france";
-  // Zones Europe
-  if (t.includes("suisse") || t.includes("switzerland") || t.includes("zürich") || t.includes("genève") || t.includes("allemagne") || t.includes("germany") || t.includes("autriche") || t.includes("austria") || t.includes("dach")) return "dach";
+  // Régions Suisse (avant suisse générique)
+  if (t.includes("romand") || t.includes("genève") || t.includes("geneva") || t.includes("lausanne") || t.includes("vaud") || t.includes("valais") || t.includes("neuchâtel") || t.includes("fribourg") || t.includes("jura")) return "suisse_romande";
+  if (t.includes("zürich") || t.includes("zurich") || t.includes("bâle") || t.includes("basel") || t.includes("berne") || t.includes("bern") || t.includes("alémanique") || t.includes("aléman") || t.includes("saint-gall") || t.includes("lucerne")) return "suisse_alemanique";
+  if (t.includes("tessin") || t.includes("ticino") || t.includes("lugano") || t.includes("italienne")) return "suisse_italienne";
+  // Suisse générique + DACH
+  if (t.includes("suisse") || t.includes("switzerland") || t.includes("swiss") || t.includes("allemagne") || t.includes("germany") || t.includes("autriche") || t.includes("austria") || t.includes("dach")) return "dach";
   if (t.includes("benelux") || t.includes("belgique") || t.includes("belgium") || t.includes("pays-bas") || t.includes("netherlands") || t.includes("luxembourg")) return "benelux";
   if (t.includes("nordics") || t.includes("scandinavie") || t.includes("suède") || t.includes("danemark") || t.includes("norvège") || t.includes("finlande")) return "nordics";
   if (t.includes("uk") || t.includes("royaume-uni") || t.includes("angleterre") || t.includes("london") || t.includes("irlande") || t.includes("ireland")) return "uk_ireland";
