@@ -190,25 +190,40 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
         </div>
       )}
 
-      {/* Ligne 3 : tags + action */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {org.investor_sectors.slice(0, 3).map(s => (
-            <span key={s} style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 20, background: "var(--surface-2)", color: "var(--text-4)", border: "1px solid var(--border)" }}>{s}</span>
-          ))}
-          {org.investor_stages.slice(0, 1).map(s => (
-            <span key={s} style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 20, background: "var(--surface-2)", color: "var(--text-4)", border: "1px solid var(--border)" }}>{s}</span>
-          ))}
-          {org.investor_geographies.slice(0, 1).map(g => (
-            <span key={g} style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 20, background: "var(--surface-2)", color: "var(--text-4)", border: "1px solid var(--border)" }}>{g}</span>
-          ))}
+      {/* Ligne 3 : tags groupés par type + action */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        {org.investor_sectors.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: "var(--text-5)", fontWeight: 600, minWidth: 48 }}>Secteurs</span>
+            {org.investor_sectors.map(s => (
+              <span key={s} style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 20, background: "var(--surface-2)", color: "var(--text-4)", border: "1px solid var(--border)" }}>{s}</span>
+            ))}
+          </div>
+        )}
+        {org.investor_stages.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: "var(--text-5)", fontWeight: 600, minWidth: 48 }}>Stades</span>
+            {org.investor_stages.map(s => (
+              <span key={s} style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 20, background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>{s}</span>
+            ))}
+          </div>
+        )}
+        {org.investor_geographies.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: "var(--text-5)", fontWeight: 600, minWidth: 48 }}>Géo</span>
+            {org.investor_geographies.map(g => (
+              <span key={g} style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 20, background: "#DBEAFE", color: "#1D4ED8", border: "1px solid #93C5FD" }}>{GEO_LABELS[g] ?? g}</span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 2 }}>
+          <button
+            onClick={() => onCreateActivity(org.id, org.name)}
+            style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 500, whiteSpace: "nowrap" }}
+          >
+            + Activité
+          </button>
         </div>
-        <button
-          onClick={() => onCreateActivity(org.id, org.name)}
-          style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 500, whiteSpace: "nowrap" }}
-        >
-          + Activité
-        </button>
       </div>
     </div>
   );
