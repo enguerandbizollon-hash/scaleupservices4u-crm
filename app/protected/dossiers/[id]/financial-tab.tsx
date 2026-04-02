@@ -160,8 +160,9 @@ const S = {
   tab: (active: boolean): React.CSSProperties => ({
     padding: "7px 14px", fontSize: 12.5, fontWeight: active ? 700 : 500, cursor: "pointer",
     color: active ? "var(--text-1)" : "var(--text-4)",
-    borderTop: "none", borderLeft: "none", borderRight: "none",
-    borderBottom: active ? "2px solid #1a56db" : "2px solid transparent",
+    borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 0,
+    borderBottomWidth: 2, borderBottomStyle: "solid",
+    borderBottomColor: active ? "#1a56db" : "transparent",
     background: "none", fontFamily: "inherit", whiteSpace: "nowrap",
   }),
   yearPill: (active: boolean): React.CSSProperties => ({
@@ -852,7 +853,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
       )}
 
       {/* Sub-tabs */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", marginBottom: 16, overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: 0, borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", marginBottom: 16, overflowX: "auto" }}>
         {(Object.keys(SUB_TAB_LABELS) as SubTab[])
           .filter(t => t !== "recurrent" || hasRecurrent)
           .map(t => (
