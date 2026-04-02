@@ -17,16 +17,13 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
-import { UnifiedActivityModal } from "../components/unified-activity-modal";
+// ActionModal importé depuis @/components/actions/ActionModal
 import {
-  getActivitiesAgendaAction,
   getAgendaFiltersMetaAction,
 } from "../actions/get-activities-agenda";
-import {
-  deleteUnifiedActivityAction,
-  updateUnifiedActivityAction,
-} from "../actions/unified-activity-actions";
 import { getGCalStatus } from "../actions/gcal-status";
+import { getActions, deleteAction, type ActionRow } from "@/actions/actions";
+import ActionModal from "@/components/actions/ActionModal";
 
 // ─────────────────────────────────────────────────────────────
 // TYPE DEFINITIONS
@@ -159,12 +156,30 @@ export default function AgendaPage() {
     loadData();
   }, []);
 
+  // Mapper ActionRow → Activity pour compatibilité avec le reste du composant
+  function actionToActivity(a: ActionRow): Activity {
+    return {
+      id: a.id, title: a.title, summary: a.description ?? undefined,
+      activity_type: a.type, activity_date: a.start_datetime ?? undefined,
+      due_date: a.due_date ?? undefined, due_time: a.due_time ?? undefined,
+      location: a.location ?? undefined, is_all_day: a.is_all_day,
+      task_status: (a.status === "done" || a.status === "completed" || a.status === "met") ? "done"
+        : a.status === "cancelled" ? "cancelled" : "open",
+      deal_id: a.deal_id ?? undefined, contact_id: undefined,
+      organization_id: a.organization_id ?? undefined,
+      created_at: a.created_at,
+      deals: a.deals ? { id: a.deals.id, name: a.deals.name, deal_type: a.deals.deal_type } : null,
+      contacts: null, organisations: a.organizations ? { id: a.organizations.id, name: a.organizations.name } : null,
+      participants: (a.action_contacts ?? []).map(ac => ac.contacts).filter(Boolean),
+    };
+  }
+
   async function loadData() {
     setLoading(true);
     try {
-      const [filterMeta, allActivities, gcalStatus] = await Promise.all([
+      const [filterMeta, allActions, gcalStatus] = await Promise.all([
         getAgendaFiltersMetaAction(),
-        getActivitiesAgendaAction(),
+        getActions(),
         getGCalStatus(),
       ]);
       setGcalConnected(gcalStatus.connected);
@@ -177,9 +192,7 @@ export default function AgendaPage() {
         setActivityTypes(filterMeta.activityTypes);
       }
 
-      if (allActivities.success) {
-        setActivities(allActivities.activities);
-      }
+      setActivities(allActions.map(actionToActivity));
     } finally {
       setLoading(false);
     }
@@ -197,40 +210,15 @@ export default function AgendaPage() {
 
   async function handleDeleteActivity(id: string) {
     if (!confirm("Supprimer cette activité ?")) return;
-    await deleteUnifiedActivityAction(id);
+    await deleteAction(id);
     setActivities((prev) => prev.filter((a) => a.id !== id));
   }
 
-  async function handleSaveActivity(formData: any) {
-    try {
-      if (selectedActivity) {
-        const result = await updateUnifiedActivityAction(selectedActivity.id, {
-          title: formData.title,
-          summary: formData.summary,
-          activityType: formData.activityType,
-          status: formData.status,
-          dueDate: formData.dueDate,
-          dueTime: formData.dueTime,
-          location: formData.location,
-          isAllDay: formData.isAllDay,
-        });
-
-        if (result.success) {
-          setActivities((prev) =>
-            prev.map((a) => (a.id === selectedActivity.id ? result.activity : a))
-          );
-          return true;
-        }
-      } else {
-        // Create new activity - use createUnifiedActivityAction if available
-        // For now, we'll just return false since the modal should handle new creations
-        return false;
-      }
-      return false;
-    } catch (err) {
-      console.error("Error saving activity:", err);
-      return false;
-    }
+  async function handleSaveActivity() {
+    // Reload toutes les actions après save (géré par ActionModal)
+    await loadData();
+    setModalOpen(false);
+    setSelectedActivity(null);
   }
 
   const year = currentMonth.getFullYear();
@@ -1298,17 +1286,11 @@ export default function AgendaPage() {
         )}
       </div>
 
-      {/* Unified activity modal */}
-      <UnifiedActivityModal
-        isOpen={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setSelectedActivity(null);
-        }}
-        onSave={handleSaveActivity}
-        mode={selectedActivity ? "edit" : "create"}
-        editingActivity={selectedActivity}
-        organisations={organisations}
+      {/* Action modal */}
+      <ActionModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setSelectedActivity(null); }}
+        onSaved={handleSaveActivity}
       />
     </div>
   );
