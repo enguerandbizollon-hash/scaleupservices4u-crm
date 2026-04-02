@@ -184,18 +184,20 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
     );
   }
 
-  // Sync GCal
-  if (["meeting", "call", "deadline", "task"].includes(input.type) && (input.due_date || input.start_datetime)) {
+  // Sync GCal (meeting, call, deadline, task — pas note ni email)
+  const syncTypes = ["meeting", "call", "deadline", "task", "document_request"];
+  if (syncTypes.includes(input.type) && (input.due_date || input.start_datetime)) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const descParts = [input.description, input.agenda_notes, input.meet_link ? `Meet : ${input.meet_link}` : ""].filter(Boolean);
     syncToGCal({
       action: "create", source_type: "activity", source_id: action.id,
       event: {
         summary: input.title,
-        description: input.description ?? undefined,
+        description: descParts.join("\n\n") || undefined,
         start: input.start_datetime ?? input.due_date ?? "",
         end: input.end_datetime ?? input.start_datetime ?? input.due_date ?? "",
         allDay: input.is_all_day ?? !input.start_datetime,
-        sourceUrl: input.deal_id ? `${baseUrl}/protected/dossiers/${input.deal_id}` : undefined,
+        sourceUrl: input.deal_id ? `${baseUrl}/protected/dossiers/${input.deal_id}` : `${baseUrl}/protected/agenda`,
       },
     });
   }
