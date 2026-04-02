@@ -134,6 +134,28 @@ export async function getActivitiesAgendaAction(filters?: {
       }
     }
 
+    // Deals — next_action_date (relances)
+    if (!filters?.activityType) {
+      let rq = supabase.from("deals")
+        .select("id, name, next_action_date")
+        .eq("user_id", user.id)
+        .eq("deal_status", "open")
+        .not("next_action_date", "is", null);
+      if (filters?.startDate) rq = rq.gte("next_action_date", filters.startDate);
+      if (filters?.endDate) rq = rq.lte("next_action_date", filters.endDate);
+      const { data: relances } = await rq;
+      for (const r of relances ?? []) {
+        extraEvents.push({
+          id: `deal_relance_${r.id}`, title: `Relance : ${r.name}`,
+          activity_type: "follow_up", activity_date: r.next_action_date, due_date: r.next_action_date,
+          due_time: null, is_all_day: true, task_status: "open", location: null, summary: null,
+          deal_id: r.id, contact_id: null, organization_id: null,
+          created_at: r.next_action_date, source_type: "deal_relance", source_id: r.id,
+          deals: { id: r.id, name: r.name, deal_type: null }, contacts: null, organisations: null, participants: [],
+        });
+      }
+    }
+
     // Mandats — target_close_date
     if (!filters?.activityType) {
       let mq = supabase.from("mandates")
