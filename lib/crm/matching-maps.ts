@@ -119,78 +119,100 @@ export const STAGE_MAP: Record<string, string[]> = {
   "growth":        ["Growth", "Late Stage", "Série B"],
 };
 
-// ── Géographies ───────────────────────────────────────────────────────────────
+// ── Géographies — référentiel unique CRM ─────────────────────────────────────
 
-export const GEOGRAPHIES = [
-  { value: "france",        label: "France" },
-  { value: "suisse",        label: "Suisse" },
-  { value: "dach",          label: "DACH (DE, AT, CH)" },
-  { value: "ue",            label: "Union Européenne" },
-  { value: "europe",        label: "Europe (hors UE)" },
-  { value: "amerique_nord", label: "Amérique du Nord" },
-  { value: "amerique_sud",  label: "Amérique du Sud" },
-  { value: "asie",          label: "Asie" },
-  { value: "moyen_orient",  label: "Moyen-Orient" },
-  { value: "afrique",       label: "Afrique" },
-  { value: "oceanie",       label: "Océanie" },
-  { value: "global",        label: "Global / Worldwide" },
+export const GEO_ZONES = [
+  "france", "benelux", "dach", "europe_sud", "nordics",
+  "europe_est", "uk_ireland", "ue", "europe",
+  "amerique_nord", "amerique_sud", "asie",
+  "moyen_orient", "afrique", "global",
 ] as const;
 
-export type Geography = (typeof GEOGRAPHIES)[number]["value"];
+export const GEO_REGIONS_FRANCE = [
+  "ile_de_france", "auvergne_rhone_alpes", "paca",
+  "occitanie", "nouvelle_aquitaine", "bretagne",
+  "grand_est", "hauts_de_france", "normandie",
+  "pays_de_la_loire", "centre_val_de_loire",
+  "bourgogne_franche_comte", "dom_tom",
+] as const;
 
-/**
- * Compatibilité géo deal → zones couvertes par l'investisseur
- *
- * Logique : la clé est la géo du DEAL.
- * On vérifie si une des investor_geographies est dans cette liste.
- *   - Correspondance exacte  → 15 pts
- *   - Correspondance large (UE, Europe, Global) → 8 pts
- *   - Aucune correspondance → 0 pts
- */
+export const GEO_ALL = [...GEO_ZONES, ...GEO_REGIONS_FRANCE] as const;
+export type GeoValue = (typeof GEO_ALL)[number];
+
+export const GEO_LABELS: Record<string, string> = {
+  france:                  "France",
+  benelux:                 "Benelux (BE, NL, LU)",
+  dach:                    "DACH (DE, AT, CH)",
+  europe_sud:              "Europe du Sud",
+  nordics:                 "Nordics",
+  europe_est:              "Europe de l'Est",
+  uk_ireland:              "UK / Irlande",
+  ue:                      "Union Européenne",
+  europe:                  "Europe (hors UE)",
+  amerique_nord:           "Amérique du Nord",
+  amerique_sud:            "Amérique du Sud",
+  asie:                    "Asie",
+  moyen_orient:            "Moyen-Orient",
+  afrique:                 "Afrique",
+  global:                  "Global / Worldwide",
+  ile_de_france:           "Île-de-France",
+  auvergne_rhone_alpes:    "Auvergne-Rhône-Alpes",
+  paca:                    "PACA",
+  occitanie:               "Occitanie",
+  nouvelle_aquitaine:      "Nouvelle-Aquitaine",
+  bretagne:                "Bretagne",
+  grand_est:               "Grand Est",
+  hauts_de_france:         "Hauts-de-France",
+  normandie:               "Normandie",
+  pays_de_la_loire:        "Pays de la Loire",
+  centre_val_de_loire:     "Centre-Val de Loire",
+  bourgogne_franche_comte: "Bourgogne-Franche-Comté",
+  dom_tom:                 "DOM-TOM",
+};
+
+// Backward compat : ancien format { value, label } pour composants existants
+export const GEOGRAPHIES = GEO_ZONES.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
+export type Geography = (typeof GEO_ZONES)[number];
+
 export const GEO_COMPATIBILITY: Record<string, string[]> = {
-  "france":        ["france", "ue", "europe", "global"],
-  "suisse":        ["suisse", "dach", "ue", "europe", "global"],
-  "dach":          ["dach", "ue", "europe", "global"],
-  "ue":            ["ue", "europe", "global"],
-  "europe":        ["europe", "ue", "global"],
-  "amerique_nord": ["amerique_nord", "global"],
-  "amerique_sud":  ["amerique_sud", "global"],
-  "asie":          ["asie", "global"],
-  "moyen_orient":  ["moyen_orient", "global"],
-  "afrique":       ["afrique", "global"],
-  "oceanie":       ["oceanie", "global"],
-  "global":        ["global"],
+  global: [...GEO_ZONES, ...GEO_REGIONS_FRANCE],
+  europe: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "uk_ireland", "ue", "europe", ...GEO_REGIONS_FRANCE],
+  ue: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "ue", ...GEO_REGIONS_FRANCE],
+  france:                  ["france", ...GEO_REGIONS_FRANCE],
+  benelux:                 ["benelux"],
+  dach:                    ["dach"],
+  europe_sud:              ["europe_sud"],
+  nordics:                 ["nordics"],
+  europe_est:              ["europe_est"],
+  uk_ireland:              ["uk_ireland"],
+  amerique_nord:           ["amerique_nord"],
+  amerique_sud:            ["amerique_sud"],
+  asie:                    ["asie"],
+  moyen_orient:            ["moyen_orient"],
+  afrique:                 ["afrique"],
+  ile_de_france:           ["ile_de_france", "france"],
+  auvergne_rhone_alpes:    ["auvergne_rhone_alpes", "france"],
+  paca:                    ["paca", "france"],
+  occitanie:               ["occitanie", "france"],
+  nouvelle_aquitaine:      ["nouvelle_aquitaine", "france"],
+  bretagne:                ["bretagne", "france"],
+  grand_est:               ["grand_est", "france"],
+  hauts_de_france:         ["hauts_de_france", "france"],
+  normandie:               ["normandie", "france"],
+  pays_de_la_loire:        ["pays_de_la_loire", "france"],
+  centre_val_de_loire:     ["centre_val_de_loire", "france"],
+  bourgogne_franche_comte: ["bourgogne_franche_comte", "france"],
+  dom_tom:                 ["dom_tom", "france"],
 };
 
-/** Zones "larges" : correspondent mais ne sont pas un match exact */
-const GEO_BROAD: Record<string, string[]> = {
-  "france":        ["ue", "europe", "global"],
-  "suisse":        ["dach", "ue", "europe", "global"],
-  "dach":          ["ue", "europe", "global"],
-  "ue":            ["europe", "global"],
-  "europe":        ["ue", "global"],
-  "amerique_nord": ["global"],
-  "amerique_sud":  ["global"],
-  "asie":          ["global"],
-  "moyen_orient":  ["global"],
-  "afrique":       ["global"],
-  "oceanie":       ["global"],
-  "global":        [],
-};
-
-/**
- * Score géographique : 15pts exact, 8pts large, 0pts aucune
- */
+/** Score géographique (plus utilisé directement — le scoring est dans matching.ts) */
 export function scoreGeography(
   dealGeo: string | null | undefined,
   investorGeos: string[],
 ): number {
   if (!dealGeo || !investorGeos?.length) return 0;
-  const compatible = GEO_COMPATIBILITY[dealGeo] ?? [];
-  const broad      = GEO_BROAD[dealGeo] ?? [];
-  if (investorGeos.some(g => g === dealGeo)) return 15;
-  if (investorGeos.some(g => compatible.includes(g) && !broad.includes(g))) return 15;
-  if (investorGeos.some(g => broad.includes(g))) return 8;
+  const compatible = GEO_COMPATIBILITY[dealGeo] ?? [dealGeo];
+  if (investorGeos.some(g => compatible.includes(g) || g === "global")) return 15;
   return 0;
 }
 
