@@ -124,10 +124,14 @@ const STAGE_INDEX: Record<string, number> = {
 };
 
 /** Éliminatoire géo : aucune intersection entre deal et investisseur */
-function isGeoEliminated(dealGeo: string | null, investorGeos: string[]): boolean {
-  if (!dealGeo || investorGeos.length === 0) return false;
-  const compatible = GEO_COMPATIBILITY[dealGeo] ?? [];
-  return !investorGeos.some(g => compatible.includes(g));
+function isGeoEliminated(dealGeos: string[], investorGeos: string[]): boolean {
+  if (investorGeos.length === 0) return false;
+  if (investorGeos.includes("global")) return false;
+  if (dealGeos.length === 0) return false;
+  return !dealGeos.some(dealGeo => {
+    const compatible = GEO_COMPATIBILITY[dealGeo] ?? [dealGeo];
+    return investorGeos.some(invGeo => compatible.includes(invGeo));
+  });
 }
 
 /** Éliminatoire secteur : investisseur a des secteurs, pas Généraliste, et aucune intersection */
@@ -240,7 +244,7 @@ function computeScore(
     || inv.investor_geographies.length > 0;
 
   // Éliminatoires
-  const geoMismatch    = isGeoEliminated(dealGeo, inv.investor_geographies);
+  const geoMismatch    = isGeoEliminated(dealGeo ? [dealGeo] : [], inv.investor_geographies);
   const sectorMismatch = isSectorEliminated(dealSector, inv.investor_sectors);
 
   if (!hasAnyCriteria) {
@@ -346,7 +350,7 @@ export async function getInvestorMatches(
 
     // DEBUG temporaire — investisseur "0001"
     if (inv.name.includes("0001")) {
-      const geoElim = isGeoEliminated(deal.company_geography ?? null, resolved.geographies);
+      const geoElim = isGeoEliminated(deal.company_geography ? [deal.company_geography] : [], resolved.geographies);
       const secElim = isSectorEliminated(deal.sector ?? null, resolved.sectors);
       console.log("[MATCH DEBUG 0001]", JSON.stringify({
         name: inv.name,
