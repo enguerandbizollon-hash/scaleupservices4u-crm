@@ -2,7 +2,8 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { checkDuplicates, type DuplicateCandidate } from "@/actions/dedup";
+import { checkDuplicates } from "@/actions/dedup";
+import type { DuplicateCandidate } from "@/lib/dedup/organisations";
 
 interface DedupAlertProps {
   name: string;
