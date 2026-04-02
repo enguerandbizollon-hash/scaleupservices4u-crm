@@ -26,6 +26,7 @@ import {
   deleteUnifiedActivityAction,
   updateUnifiedActivityAction,
 } from "../actions/unified-activity-actions";
+import { getGCalStatus } from "../actions/gcal-status";
 
 // ─────────────────────────────────────────────────────────────
 // TYPE DEFINITIONS
@@ -149,6 +150,9 @@ export default function AgendaPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gcalConnected, setGcalConnected] = useState(false);
+  const [gcalEmail, setGcalEmail] = useState<string | undefined>();
+  const [gcalDisconnecting, setGcalDisconnecting] = useState(false);
 
   // Charger les données au montage
   useEffect(() => {
@@ -158,10 +162,13 @@ export default function AgendaPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [filterMeta, allActivities] = await Promise.all([
+      const [filterMeta, allActivities, gcalStatus] = await Promise.all([
         getAgendaFiltersMetaAction(),
         getActivitiesAgendaAction(),
+        getGCalStatus(),
       ]);
+      setGcalConnected(gcalStatus.connected);
+      setGcalEmail(gcalStatus.email);
 
       if (filterMeta.success) {
         setContacts(filterMeta.contacts);
@@ -759,6 +766,42 @@ export default function AgendaPage() {
               >
                 Gérez toutes vos activités, tâches et événements en un seul endroit
               </p>
+              {/* Badge GCal */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                {gcalConnected ? (
+                  <>
+                    <span style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 20, background: "#D1FAE5", color: "#065F46", fontWeight: 600 }}>
+                      Google Agenda connecté
+                    </span>
+                    {gcalEmail && <span style={{ fontSize: 11, color: "var(--text-5)" }}>{gcalEmail}</span>}
+                    <button
+                      disabled={gcalDisconnecting}
+                      onClick={async () => {
+                        setGcalDisconnecting(true);
+                        await fetch("/api/gcal/disconnect", { method: "DELETE" });
+                        setGcalConnected(false);
+                        setGcalEmail(undefined);
+                        setGcalDisconnecting(false);
+                      }}
+                      style={{ fontSize: 11, color: "var(--text-5)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" }}
+                    >
+                      {gcalDisconnecting ? "…" : "Déconnecter"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 20, background: "var(--surface-3)", color: "var(--text-5)", fontWeight: 600 }}>
+                      Google Agenda non connecté
+                    </span>
+                    <a
+                      href="/api/gcal"
+                      style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 20, background: "#1a56db", color: "#fff", fontWeight: 600, textDecoration: "none" }}
+                    >
+                      Connecter
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Top right buttons */}
