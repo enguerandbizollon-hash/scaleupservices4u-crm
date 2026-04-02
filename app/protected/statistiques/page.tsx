@@ -52,7 +52,7 @@ async function Content() {
       .select("id, type, status, estimated_fee_amount, confirmed_fee_amount, currency")
       .eq("user_id", user.id),
     supabase.from("candidates")
-      .select("id, global_status, placed_at")
+      .select("id, candidate_status, updated_at")
       .eq("user_id", user.id),
     supabase.from("fee_milestones")
       .select("amount, currency, status, paid_date")
@@ -106,10 +106,10 @@ async function Content() {
   const confirmedTotal = allMandates.reduce((s, m) => s + (m.confirmed_fee_amount ?? 0), 0);
 
   // ── Recrutement ──────────────────────────────────────────────────────────
-  const placed       = allCandidates.filter(c => c.global_status === "placed");
-  const searching    = allCandidates.filter(c => c.global_status === "searching").length;
-  const inProcess    = allCandidates.filter(c => c.global_status === "in_process").length;
-  const placedYtd    = placed.filter(c => c.placed_at?.startsWith(String(year))).length;
+  const placed       = allCandidates.filter((c: any) => c.candidate_status === "placed");
+  const searching    = allCandidates.filter((c: any) => c.candidate_status === "searching").length;
+  const inProcess    = allCandidates.filter((c: any) => c.candidate_status === "in_process").length;
+  const placedYtd    = placed.filter((c: any) => c.updated_at?.startsWith(String(year))).length;
   const convRate     = pct(placed.length, allCandidates.length);
   const rhDeals      = allDeals.filter(d => d.deal_type === "recruitment");
   const rhOpen       = rhDeals.filter(d => d.deal_status === "open").length;
