@@ -53,7 +53,6 @@ export interface DealInput {
   full_acquisition_required?: boolean;
   strategic_rationale?: string | null;
   excluded_sectors?: string[];
-  excluded_geographies?: string[];
   target_stage?: string | null;
 }
 
@@ -149,7 +148,6 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
     full_acquisition_required: data.full_acquisition_required ?? false,
     strategic_rationale:       data.strategic_rationale       ?? null,
     excluded_sectors:          data.excluded_sectors          ?? [],
-    excluded_geographies:      data.excluded_geographies      ?? [],
     target_stage:              data.target_stage              ?? null,
   }).select("id").single();
 

@@ -36,7 +36,6 @@ export interface MaDealProfile {
   target_ev_max?: number | null;
   full_acquisition_required?: boolean | null;
   excluded_sectors?: string[] | null;
-  excluded_geographies?: string[] | null;
   target_stage?: string | null;         // startup|pme|eti|grand_groupe
   // Données financières du deal (via financial_data)
   financial?: MaFinancialData | null;
@@ -59,7 +58,6 @@ export interface MaOrganisationProfile {
   target_revenue_min?: number | null;
   target_revenue_max?: number | null;
   excluded_sectors?: string[] | null;
-  excluded_geographies?: string[] | null;
   // Données financières de l'organisation
   financial?: MaFinancialData | null;
 }

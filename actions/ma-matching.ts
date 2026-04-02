@@ -34,7 +34,7 @@ export async function getMaBuyerMatches(
       target_ev_min, target_ev_max,
       full_acquisition_required,
       strategic_rationale,
-      excluded_sectors, excluded_geographies,
+      excluded_sectors,
       target_stage
     `)
     .eq("id", dealId)
@@ -77,7 +77,7 @@ export async function getMaBuyerMatches(
       id, name, organization_type, base_status, sector, location,
       company_stage, revenue_range, sale_readiness, partial_sale_ok,
       acquisition_rationale, target_sectors, target_geographies,
-      target_revenue_min, target_revenue_max, excluded_sectors, excluded_geographies
+      target_revenue_min, target_revenue_max, excluded_sectors
     `)
     .eq("user_id", user.id)
     .in("organization_type", BUYER_TYPES);
@@ -106,7 +106,6 @@ export async function getMaBuyerMatches(
       target_revenue_min:    (buyer as any).target_revenue_min  ?? null,
       target_revenue_max:    (buyer as any).target_revenue_max  ?? null,
       excluded_sectors:      (buyer as any).excluded_sectors    ?? [],
-      excluded_geographies:  (buyer as any).excluded_geographies ?? [],
     };
     return scoreMaMatch(deal, orgProfile);
   });
@@ -146,7 +145,7 @@ export async function getMaTargetMatches(
       acquisition_budget_min, acquisition_budget_max,
       full_acquisition_required,
       strategic_rationale,
-      excluded_sectors, excluded_geographies,
+      excluded_sectors,
       target_stage, deal_timing
     `)
     .eq("id", dealId)
@@ -170,7 +169,6 @@ export async function getMaTargetMatches(
     target_ev_max:             (dealRow as any).target_ev_max         ?? null,
     full_acquisition_required: (dealRow as any).full_acquisition_required ?? false,
     excluded_sectors:          (dealRow as any).excluded_sectors      ?? [],
-    excluded_geographies:      (dealRow as any).excluded_geographies  ?? [],
     target_stage:              (dealRow as any).target_stage          ?? null,
     deal_timing:               (dealRow as any).deal_timing           ?? null,
   };
