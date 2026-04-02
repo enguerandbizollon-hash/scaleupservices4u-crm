@@ -12,7 +12,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     .select(`
       id,name,organization_type,base_status,sector,location,website,description,notes,
       investment_ticket,investment_stage,deal_name_hint,
-      investor_ticket_min,investor_ticket_max,investor_sectors,investor_stages,investor_geographies,investor_thesis,
+      investor_ticket_min,investor_ticket_max,investor_sectors,investor_stages,investor_geographies,investor_thesis,investor_stage_min,investor_stage_max,linkedin_url,
       founded_year,employee_count,company_stage,revenue_range,
       sale_readiness,partial_sale_ok,
       acquisition_rationale,target_sectors,excluded_sectors,target_geographies,target_revenue_min,target_revenue_max
