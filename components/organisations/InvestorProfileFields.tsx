@@ -1,6 +1,6 @@
 "use client";
 import { SectorsMultiSelect } from "./SectorsMultiSelect";
-import { GeographiesMultiSelect } from "./GeographiesMultiSelect";
+import { GeoSelect } from "@/components/ui/GeoSelect";
 import { TicketRangeSlider } from "@/components/ui/TicketRangeSlider";
 import { StageRangeSelector } from "@/components/ui/StageRangeSelector";
 
@@ -93,7 +93,7 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Géographies d&apos;investissement</label>
-        <GeographiesMultiSelect value={data.geographies ?? []} onChange={val => onChange({ ...data, geographies: val })} />
+        <GeoSelect mode="multi" value={data.geographies ?? []} onChange={val => onChange({ ...data, geographies: val })} />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18 }}>

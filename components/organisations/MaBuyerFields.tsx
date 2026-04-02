@@ -1,5 +1,6 @@
 "use client";
-import { SECTORS, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { SECTORS } from "@/lib/crm/matching-maps";
+import { GeoSelect } from "@/components/ui/GeoSelect";
 
 export interface MaBuyerData {
   acquisition_rationale: string;
@@ -166,37 +167,7 @@ export function MaBuyerFields({ data, onChange }: Props) {
       {/* Géographies cibles */}
       <div>
         <label style={lbl}>Géographies cibles</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-          {GEOGRAPHIES.map(({ value, label }) => {
-            const active = data.target_geographies.includes(value);
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => toggleGeo(value)}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 20,
-                  border: `1.5px solid ${active ? "#0891B2" : "#e5e7eb"}`,
-                  background: active ? "#ECFEFF" : "#fff",
-                  color: active ? "#0E7490" : "#374151",
-                  fontSize: 12,
-                  fontWeight: active ? 600 : 400,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  transition: "all .1s",
-                }}
-              >
-                {active && "✓ "}{label}
-              </button>
-            );
-          })}
-        </div>
-        {data.target_geographies.length > 0 && (
-          <div style={{ marginTop: 4, fontSize: 11.5, color: "#6b7280" }}>
-            {data.target_geographies.length} zone{data.target_geographies.length > 1 ? "s" : ""} sélectionnée{data.target_geographies.length > 1 ? "s" : ""}
-          </div>
-        )}
+        <GeoSelect mode="multi" value={data.target_geographies} onChange={v => set("target_geographies", v)} />
       </div>
     </div>
   );
