@@ -11,7 +11,8 @@
 //                              Si financial absent → combined = strategic
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { normalizeDealSector, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { normalizeDealSector, GEO_LABELS, GEO_COMPATIBILITY } from "@/lib/crm/matching-maps";
+import { normalizeGeoText } from "@/lib/crm/investor-parsers";
 
 // ── Types d'entrée ────────────────────────────────────────────────────────────
 
@@ -105,20 +106,9 @@ export interface MaMatchResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const GEO_LABELS = Object.fromEntries(GEOGRAPHIES.map(g => [g.value, g.label]));
-
-/** Normalise une géo texte libre vers un value GEOGRAPHIES */
+// normalizeGeo : utilise normalizeGeoText depuis investor-parsers (référentiel GEO_ALL)
 function normalizeGeo(geo: string | null | undefined): string | null {
-  if (!geo) return null;
-  const g = geo.toLowerCase();
-  if (g.includes("france") || g.includes("paris") || g.includes("lyon") || g.includes("fr")) return "france";
-  if (g.includes("suisse") || g.includes("swiss") || g.includes("ch") || g.includes("geneva") || g.includes("genève")) return "suisse";
-  if (g.includes("belgique") || g.includes("luxembourg")) return "ue";
-  if (g.includes("allemagne") || g.includes("germany") || g.includes("autriche") || g.includes("austria")) return "dach";
-  if (g.includes("europe")) return "europe";
-  if (g.includes("uk") || g.includes("royaume") || g.includes("london")) return "europe";
-  if (g.includes("usa") || g.includes("etats") || g.includes("états") || g.includes("america") || g.includes("us ")) return "amerique_nord";
-  return null;
+  return normalizeGeoText(geo ?? null);
 }
 
 /** Parse revenue_range → {min, max} en unité native */
@@ -273,7 +263,8 @@ function scoreGeography(deal: MaDealProfile, org: MaOrganisationProfile): { earn
   if (deal.deal_type === "ma_sell") {
     if (!dealGeo) return { earned: 8, reason: "Localisation deal non renseignée — neutre" };
     if (!org.target_geographies?.length) return { earned: 8, reason: "Géographies buyer non définies — neutre" };
-    const match = org.target_geographies.some(g => g === dealGeo || g === "global" || g === "europe");
+    const compatible = GEO_COMPATIBILITY[dealGeo] ?? [dealGeo];
+    const match = org.target_geographies.some(g => compatible.includes(g) || g === "global");
     const label = GEO_LABELS[dealGeo] ?? dealGeo;
     return match
       ? { earned: 15, reason: `${label} dans les géographies cibles du buyer` }
@@ -284,7 +275,8 @@ function scoreGeography(deal: MaDealProfile, org: MaOrganisationProfile): { earn
   const orgGeo = normalizeGeo(org.location);
   if (!orgGeo) return { earned: 8, reason: "Localisation cible inconnue — neutre" };
   if (!deal.target_geographies?.length) return { earned: 8, reason: "Géographies d'acquisition non définies — neutre" };
-  const match = deal.target_geographies.some(g => g === orgGeo || g === "global" || g === "europe");
+  const compatibleOrg = GEO_COMPATIBILITY[orgGeo] ?? [orgGeo];
+  const match = deal.target_geographies.some(g => compatibleOrg.includes(g) || g === "global");
   const label = GEO_LABELS[orgGeo] ?? orgGeo;
   return match
     ? { earned: 15, reason: `${label} dans les géographies d'acquisition` }
