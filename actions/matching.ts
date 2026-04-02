@@ -17,10 +17,10 @@ import {
 // ── Types ────────────────────────────────────────────────────────────────
 
 export interface InvestorMatchBreakdown {
-  thesis:    { earned: number; max: number; filled: boolean };
-  stage:     { earned: number; max: number; filled: boolean };
-  ticket:    { earned: number; max: number; filled: boolean };
-  relation:  { earned: number; max: number; filled: boolean };
+  sectorOverlap: { earned: number; max: number; filled: boolean };
+  stage:         { earned: number; max: number; filled: boolean };
+  ticket:        { earned: number; max: number; filled: boolean };
+  relation:      { earned: number; max: number; filled: boolean };
   /** true si deal éliminé par géo (drop-dead) */
   geoMismatch: boolean;
   /** true si deal éliminé par secteur (drop-dead) */
@@ -143,23 +143,24 @@ function isSectorEliminated(dealSector: string | null, investorSectors: string[]
   );
 }
 
-/** Thèse (40pts) : matching thesis texte vs secteur+description deal */
-function scoreThesis(investorThesis: string | null, dealSector: string | null, dealDescription: string | null): number {
-  if (!investorThesis) return 20; // Non renseigné → 20/40
-  const thesis = investorThesis.toLowerCase();
-  let score = 0;
-  // Secteur deal mentionné dans la thèse
-  if (dealSector) {
-    const normalized = (normalizeDealSector(dealSector) ?? dealSector).toLowerCase();
-    if (thesis.includes(normalized)) score += 20;
-  }
-  // Mots-clés de la description deal dans la thèse
-  if (dealDescription) {
-    const keywords = dealDescription.toLowerCase().split(/\s+/).filter(w => w.length > 4);
-    const matched = keywords.filter(k => thesis.includes(k)).length;
-    score += Math.min(20, Math.round((matched / Math.max(keywords.length, 1)) * 20));
-  }
-  return Math.min(40, score || 20); // Thèse renseignée sans match → 20/40 (neutre)
+/** Sector overlap (35pts) : intersection secteurs investisseur × deal */
+function scoreSectorOverlap(dealSector: string | null, investorSectors: string[]): number {
+  // Généraliste ou pas de secteurs → score neutre
+  if (investorSectors.length === 0 || investorSectors.some(s => s.toLowerCase() === "généraliste")) return 18;
+  if (!dealSector) return 18;
+
+  const normalized = (normalizeDealSector(dealSector) ?? dealSector).toLowerCase();
+  const dealSectors = [normalized];
+
+  const matches = investorSectors.filter(s =>
+    dealSectors.includes(s.toLowerCase()) ||
+    normalized.includes(s.toLowerCase()) ||
+    s.toLowerCase().includes(normalized)
+  ).length;
+
+  if (matches === 0) return 0;
+  const ratio = matches / Math.max(dealSectors.length, investorSectors.length);
+  return Math.round(ratio * 35);
 }
 
 /** Stage (30pts) : distance entre stade deal et plage investisseur */
@@ -225,7 +226,6 @@ function computeScore(
   dealSector: string | null,
   dealStage: string | null,
   dealGeo: string | null,
-  dealDescription: string | null,
   hasInteraction: boolean,
   inv: {
     investor_ticket_min: number | null;
@@ -233,12 +233,11 @@ function computeScore(
     investor_sectors: string[];
     investor_stages: string[];
     investor_geographies: string[];
-    investor_thesis: string | null;
   }
 ): { score: number | null; breakdown: InvestorMatchBreakdown } {
   const hasAnyCriteria = inv.investor_ticket_min !== null || inv.investor_ticket_max !== null
     || inv.investor_sectors.length > 0 || inv.investor_stages.length > 0
-    || inv.investor_geographies.length > 0 || !!inv.investor_thesis;
+    || inv.investor_geographies.length > 0;
 
   // Éliminatoires
   const geoMismatch    = isGeoEliminated(dealGeo, inv.investor_geographies);
@@ -248,10 +247,10 @@ function computeScore(
     return {
       score: null,
       breakdown: {
-        thesis:   { earned: 0, max: 40, filled: false },
-        stage:    { earned: 0, max: 30, filled: false },
-        ticket:   { earned: 0, max: 20, filled: false },
-        relation: { earned: 0, max: 10, filled: true },
+        sectorOverlap: { earned: 0, max: 35, filled: false },
+        stage:         { earned: 0, max: 35, filled: false },
+        ticket:        { earned: 0, max: 20, filled: false },
+        relation:      { earned: 0, max: 10, filled: true },
         geoMismatch, sectorMismatch,
       },
     };
@@ -261,30 +260,30 @@ function computeScore(
     return {
       score: 0,
       breakdown: {
-        thesis:   { earned: 0, max: 40, filled: !!inv.investor_thesis },
-        stage:    { earned: 0, max: 30, filled: inv.investor_stages.length > 0 },
-        ticket:   { earned: 0, max: 20, filled: inv.investor_ticket_min !== null || inv.investor_ticket_max !== null },
-        relation: { earned: 0, max: 10, filled: true },
+        sectorOverlap: { earned: 0, max: 35, filled: inv.investor_sectors.length > 0 },
+        stage:         { earned: 0, max: 35, filled: inv.investor_stages.length > 0 },
+        ticket:        { earned: 0, max: 20, filled: inv.investor_ticket_min !== null || inv.investor_ticket_max !== null },
+        relation:      { earned: 0, max: 10, filled: true },
         geoMismatch, sectorMismatch,
       },
     };
   }
 
-  // Pondérés (100pts)
-  const thesisEarned  = scoreThesis(inv.investor_thesis, dealSector, dealDescription);
-  const stageEarned   = scoreStageRange(dealStage, inv.investor_stages);
-  const ticketEarned  = scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max);
+  // Pondérés (100pts) : SectorOverlap 35 + Stage 35 + Ticket 20 + Relation 10
+  const sectorEarned   = scoreSectorOverlap(dealSector, inv.investor_sectors);
+  const stageEarned    = scoreStageRange(dealStage, inv.investor_stages);
+  const ticketEarned   = scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max);
   const relationEarned = scoreRelation(hasInteraction);
 
-  const total = thesisEarned + stageEarned + ticketEarned + relationEarned;
+  const total = sectorEarned + stageEarned + ticketEarned + relationEarned;
 
   return {
     score: Math.min(100, total),
     breakdown: {
-      thesis:   { earned: thesisEarned,   max: 40, filled: !!inv.investor_thesis },
-      stage:    { earned: stageEarned,    max: 30, filled: inv.investor_stages.length > 0 },
-      ticket:   { earned: ticketEarned,   max: 20, filled: inv.investor_ticket_min !== null || inv.investor_ticket_max !== null },
-      relation: { earned: relationEarned, max: 10, filled: true },
+      sectorOverlap: { earned: sectorEarned,   max: 35, filled: inv.investor_sectors.length > 0 },
+      stage:         { earned: stageEarned,     max: 35, filled: inv.investor_stages.length > 0 },
+      ticket:        { earned: ticketEarned,    max: 20, filled: inv.investor_ticket_min !== null || inv.investor_ticket_max !== null },
+      relation:      { earned: relationEarned,  max: 10, filled: true },
       geoMismatch, sectorMismatch,
     },
   };
@@ -367,7 +366,6 @@ export async function getInvestorMatches(
       deal.sector ?? null,
       deal.company_stage ?? null,
       dealGeo,
-      deal.description ?? null,
       hasInteraction,
       {
         investor_ticket_min:  resolved.ticketMin,
@@ -375,14 +373,13 @@ export async function getInvestorMatches(
         investor_sectors:     resolved.sectors,
         investor_stages:      resolved.stages,
         investor_geographies: resolved.geographies,
-        investor_thesis:      inv.investor_thesis ?? null,
       }
     );
     // DEBUG temporaire — score investisseur "0001"
     if (inv.name.includes("0001")) {
       console.log("[MATCH SCORE 0001]", JSON.stringify({
         score,
-        thesis: breakdown.thesis.earned,
+        sectorOverlap: breakdown.sectorOverlap.earned,
         stage: breakdown.stage.earned,
         ticket: breakdown.ticket.earned,
         relation: breakdown.relation.earned,

@@ -167,11 +167,11 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
       {!breakdown.geoMismatch && !breakdown.sectorMismatch && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <CriterionText
-            label="Thèse"
-            value={org.investor_thesis ? org.investor_thesis.slice(0, 40) + (org.investor_thesis.length > 40 ? "…" : "") : null}
-            earned={breakdown.thesis.earned}
-            max={breakdown.thesis.max}
-            filled={breakdown.thesis.filled}
+            label="Secteur"
+            value={org.investor_sectors.slice(0, 3).join(", ") || null}
+            earned={breakdown.sectorOverlap.earned}
+            max={breakdown.sectorOverlap.max}
+            filled={breakdown.sectorOverlap.filled}
           />
           <CriterionText
             label="Stade"
