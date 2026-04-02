@@ -348,23 +348,6 @@ export async function getInvestorMatches(
     const hasInteraction = activityOrgIds.includes(inv.id)
       || commitmentsList.some(c => c.organization_id === inv.id);
 
-    // DEBUG temporaire — investisseur "0001"
-    if (inv.name.includes("0001")) {
-      const geoElim = isGeoEliminated(deal.company_geography ? [deal.company_geography] : [], resolved.geographies);
-      const secElim = isSectorEliminated(deal.sector ?? null, resolved.sectors);
-      console.log("[MATCH DEBUG 0001]", JSON.stringify({
-        name: inv.name,
-        deal: { sector: deal.sector, stage: deal.company_stage, geo: deal.company_geography, amount: deal.target_amount, desc: deal.description?.slice(0, 50) },
-        resolved_sectors: resolved.sectors,
-        resolved_geographies: resolved.geographies,
-        resolved_stages: resolved.stages,
-        resolved_ticket: { min: resolved.ticketMin, max: resolved.ticketMax },
-        geo_eliminated: geoElim,
-        sector_eliminated: secElim,
-        thesis: inv.investor_thesis?.slice(0, 60),
-      }, null, 2));
-    }
-
     const { score, breakdown } = computeScore(
       deal.target_amount ?? null,
       deal.sector ?? null,
@@ -379,19 +362,6 @@ export async function getInvestorMatches(
         investor_geographies: resolved.geographies,
       }
     );
-    // DEBUG temporaire — score investisseur "0001"
-    if (inv.name.includes("0001")) {
-      console.log("[MATCH SCORE 0001]", JSON.stringify({
-        score,
-        sectorOverlap: breakdown.sectorOverlap.earned,
-        stage: breakdown.stage.earned,
-        ticket: breakdown.ticket.earned,
-        relation: breakdown.relation.earned,
-        geoMismatch: breakdown.geoMismatch,
-        sectorMismatch: breakdown.sectorMismatch,
-      }));
-    }
-
     return {
       org: {
         id:                   inv.id,
