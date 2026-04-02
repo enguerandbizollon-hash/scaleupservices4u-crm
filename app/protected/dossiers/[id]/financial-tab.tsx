@@ -4,6 +4,7 @@ import { Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2 } from "lucide-r
 import { computeFinancials, type FinancialInputs } from "@/lib/crm/financial-calcs";
 import { getBenchmark, getRatingColor } from "@/lib/crm/financial-benchmarks";
 import { upsertFinancialData, getFinancialDataByDeal, deleteFinancialData } from "@/actions/financial-data";
+import { FinancialImport } from "@/components/financials/FinancialImport";
 
 // ── Exported type ──────────────────────────────────────────────────────────────
 
@@ -385,6 +386,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("pl");
   const [selectedYearIdx, setSelectedYearIdx] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [newYear, setNewYear] = useState(CURRENT_YEAR);
   const [newIsForecast, setNewIsForecast] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -394,6 +396,13 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasRecurrent = rows.some(r => (r.revenue_recurring ?? 0) > 0 || (r.arr ?? 0) > 0);
+
+  const refreshRows = useCallback(async () => {
+    const refreshed = dealId
+      ? await getFinancialDataByDeal(dealId)
+      : await (await import("@/actions/financial-data")).getFinancialDataByOrganization(organizationId!);
+    setRows([...(refreshed as FinancialRow[])].sort((a, b) => b.fiscal_year - a.fiscal_year));
+  }, [dealId, organizationId]);
 
   // Get 3 years: selected, selected+1, selected+2
   const sel = rows[selectedYearIdx];
@@ -819,7 +828,27 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
         >
           <Plus size={12} /> Exercice
         </button>
+        <button
+          onClick={() => setShowImport(p => !p)}
+          style={{ ...S.yearPill(false), background: "none", border: "1px dashed var(--border)", color: "var(--text-4)", fontSize: 12 }}
+        >
+          {showImport ? "✕ Fermer import" : "↑ Importer CSV / Excel"}
+        </button>
       </div>
+
+      {/* Import CSV/Excel */}
+      {showImport && (
+        <div style={{ marginBottom: 16 }}>
+          <FinancialImport
+            dealId={dealId}
+            organizationId={organizationId}
+            onImported={async () => {
+              setShowImport(false);
+              await refreshRows();
+            }}
+          />
+        </div>
+      )}
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", marginBottom: 16, overflowX: "auto" }}>
