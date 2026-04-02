@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Linkedin, MapPin, ChevronRight, Building2 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
+import ActionTimeline from "@/components/actions/ActionTimeline";
 import { ContactOrgAssignmentWarning } from "../../components/contact-org-assignment-warning";
 import { TagInput } from "@/components/tags/TagInput";
 
@@ -161,34 +162,9 @@ export function ContactDetail({ contact, orgs, activities }: { contact: any; org
         </div>
       )}
 
-      {/* Activités */}
-      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
-        <div style={{ padding:"12px 20px", borderBottom:"1px solid var(--border)", fontSize:12, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em" }}>
-          Historique
-        </div>
-        {activities.length === 0 ? (
-          <div style={{ padding:"32px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
-            Aucune activité enregistrée
-          </div>
-        ) : activities.map((a, i) => {
-          const deal = Array.isArray(a.deals) ? a.deals[0] : a.deals as any;
-          return (
-            <div key={a.id} style={{
-              display:"flex", alignItems:"flex-start", gap:12, padding:"13px 20px",
-              borderBottom: i < activities.length-1 ? "1px solid var(--border)" : "none",
-            }}>
-              <div style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
-                {ACT_ICON[a.activity_type] ?? "📌"}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{a.title}</div>
-                {a.summary && <div style={{ fontSize:12.5, color:"var(--text-4)", marginTop:2 }}>{a.summary}</div>}
-                {deal?.name && <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:3 }}>Dossier : {deal.name}</div>}
-              </div>
-              <div style={{ fontSize:12, color:"var(--text-5)", flexShrink:0 }}>{fmtDate(a.activity_date)}</div>
-            </div>
-          );
-        })}
+      {/* Activités (ActionTimeline) */}
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"4px 20px 20px" }}>
+        <ActionTimeline filters={{ contact_id: contact.id }} />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { FinancialTab, type FinancialRow } from "../../dossiers/[id]/financial-t
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
 import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
 
 const INVESTOR_TYPES = ["investor", "business_angel", "family_office", "corporate"];
@@ -500,26 +501,8 @@ export function OrgDetail({ org, contacts, deals, activities, mandates, financia
 
       {/* Onglet Activités */}
       {tab === "activites" && (
-        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
-          {activities.length === 0 ? (
-            <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
-              Aucune activité enregistrée
-            </div>
-          ) : activities.map((a, i) => (
-            <div key={a.id} style={{
-              display:"flex", alignItems:"flex-start", gap:12, padding:"14px 20px",
-              borderBottom: i < activities.length-1 ? "1px solid var(--border)" : "none",
-            }}>
-              <div style={{ width:30, height:30, borderRadius:8, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
-                {ACT_ICON[a.activity_type] ?? "📌"}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{a.title}</div>
-                {a.summary && <div style={{ fontSize:12.5, color:"var(--text-4)", marginTop:2 }}>{a.summary}</div>}
-              </div>
-              <div style={{ fontSize:12, color:"var(--text-5)", flexShrink:0 }}>{fmtDate(a.activity_date)}</div>
-            </div>
-          ))}
+        <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"4px 20px 20px" }}>
+          <ActionTimeline filters={{ organization_id: org.id }} />
         </div>
       )}
 
