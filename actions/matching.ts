@@ -163,10 +163,10 @@ function scoreSectorOverlap(dealSector: string | null, investorSectors: string[]
   return Math.round(ratio * 35);
 }
 
-/** Stage (30pts) : distance entre stade deal et plage investisseur */
+/** Stage (35pts) : distance entre stade deal et plage investisseur */
 function scoreStageRange(dealStage: string | null, investorStages: string[]): number {
-  if (!dealStage || investorStages.length === 0) return 5; // Non renseigné → 5/30
-  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 30;
+  if (!dealStage || investorStages.length === 0) return 5; // Non renseigné → 5/35
+  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 35;
 
   // Trouver min/max index des stages investisseur
   const indices = investorStages.map(s => STAGE_INDEX[s]).filter(i => i !== undefined);
@@ -185,8 +185,8 @@ function scoreStageRange(dealStage: string | null, investorStages: string[]): nu
   if (dealIdx < invMin) ecart = invMin - dealIdx;
   else if (dealIdx > invMax) ecart = dealIdx - invMax;
 
-  if (ecart === 0) return 30;
-  if (ecart === 1) return 15;
+  if (ecart === 0) return 35;
+  if (ecart === 1) return 17;
   return 0;
 }
 
