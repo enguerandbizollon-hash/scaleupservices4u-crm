@@ -164,12 +164,12 @@ function scoreThesis(investorThesis: string | null, dealSector: string | null, d
 
 /** Stage (30pts) : distance entre stade deal et plage investisseur */
 function scoreStageRange(dealStage: string | null, investorStages: string[]): number {
-  if (!dealStage || investorStages.length === 0) return 15; // Non renseigné → 15/30
+  if (!dealStage || investorStages.length === 0) return 5; // Non renseigné → 5/30
   if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 30;
 
   // Trouver min/max index des stages investisseur
   const indices = investorStages.map(s => STAGE_INDEX[s]).filter(i => i !== undefined);
-  if (indices.length === 0) return 15;
+  if (indices.length === 0) return 5;
   const invMin = Math.min(...indices);
   const invMax = Math.max(...indices);
 
@@ -191,8 +191,8 @@ function scoreStageRange(dealStage: string | null, investorStages: string[]): nu
 
 /** Ticket (20pts) : deal amount dans fourchette investisseur */
 function scoreTicket(dealAmount: number | null, min: number | null, max: number | null): number {
-  if (!dealAmount) return 10; // Non renseigné → 10/20
-  if (min === null && max === null) return 10;
+  if (!dealAmount) return 5; // Non renseigné → 5/20
+  if (min === null && max === null) return 5;
   const lo = min ?? 0;
   const hi = max ?? Infinity;
   if (dealAmount >= lo && dealAmount <= hi) return 20;
