@@ -2,63 +2,78 @@
 import { useState, useRef } from "react";
 import { Upload, AlertTriangle, Check, X } from "lucide-react";
 
-// Column mapping: flexible, case-insensitive, accent-insensitive
-const COLUMN_MAP: Record<string, string> = {
-  // Revenue
-  "chiffre d'affaires": "revenue", "ca": "revenue", "revenue": "revenue", "revenus": "revenue",
-  "récurrent": "revenue_recurring", "recurring": "revenue_recurring", "revenue_recurring": "revenue_recurring",
-  "non récurrent": "revenue_non_recurring", "non_recurring": "revenue_non_recurring",
-  // Charges
-  "cogs": "cogs", "cout des ventes": "cogs", "coût des ventes": "cogs",
-  "masse salariale": "payroll", "payroll": "payroll", "personnel": "payroll",
-  "r&d": "payroll_rd", "payroll_rd": "payroll_rd",
-  "commercial": "payroll_sales", "payroll_sales": "payroll_sales",
-  "g&a": "payroll_ga", "payroll_ga": "payroll_ga",
-  "marketing": "marketing", "acquisition": "marketing",
-  "loyers": "rent", "loyer": "rent", "rent": "rent",
-  "autres charges": "other_opex", "other_opex": "other_opex",
-  "d&a": "da", "da": "da", "amortissement": "da", "depreciation": "da",
-  "charges financieres": "financial_charges", "financial_charges": "financial_charges",
-  "impots": "taxes", "taxes": "taxes", "is": "taxes",
-  "capex": "capex", "investissements": "capex",
-  // Récurrent
-  "arr": "arr", "churn": "churn_rate", "churn_rate": "churn_rate",
-  "nrr": "nrr", "cac": "cac", "growth": "growth_fcst", "croissance": "growth_fcst",
-  "other opex": "other_opex", "autres charges externes": "other_opex",
-  "financial charges": "financial_charges", "charges financières": "financial_charges",
-  "sector": "sector", "secteur": "sector",
-  // Bilan actif
+// Tous les noms de champs BDD valides (priorité 1 : exact match sur le nom BDD)
+const DB_FIELDS = new Set([
+  "fiscal_year", "currency", "is_forecast", "sector",
+  "revenue", "revenue_recurring", "revenue_non_recurring",
+  "cogs", "payroll", "payroll_rd", "payroll_sales", "payroll_ga",
+  "marketing", "rent", "other_opex", "da", "financial_charges", "taxes", "capex",
+  "arr", "churn_rate", "nrr", "cac", "growth_fcst",
+  "intangible_assets", "tangible_assets", "financial_assets",
+  "inventory", "accounts_receivable", "other_current_assets", "cash",
+  "share_capital", "reserves", "net_income_bs",
+  "debt_lt", "debt_st", "accounts_payable", "other_current_liabilities",
+  "contingent_liabilities", "excess_cash", "misc_adjustments",
+  "multiple_ev_ebitda_low", "multiple_ev_ebitda_mid", "multiple_ev_ebitda_high",
+  "multiple_ev_ebit_low", "multiple_ev_ebit_mid", "multiple_ev_ebit_high",
+  "multiple_ev_revenue_low", "multiple_ev_revenue_mid", "multiple_ev_revenue_high",
+  "multiple_ev_arr_low", "multiple_ev_arr_mid", "multiple_ev_arr_high",
+  "wacc", "terminal_growth_rate", "fcf_n1", "fcf_n2", "fcf_n3", "fcf_n4", "fcf_n5",
+]);
+
+// Alias manuels (priorité 2 : correspondance sur alias FR/EN)
+const ALIAS_MAP: Record<string, string> = {
+  "chiffre d'affaires": "revenue", "ca": "revenue", "revenus": "revenue",
+  "récurrent": "revenue_recurring", "recurring": "revenue_recurring",
+  "non récurrent": "revenue_non_recurring", "non recurring": "revenue_non_recurring",
+  "cout des ventes": "cogs", "coût des ventes": "cogs",
+  "masse salariale": "payroll", "personnel": "payroll",
+  "r&d": "payroll_rd", "commercial": "payroll_sales", "g&a": "payroll_ga",
+  "acquisition": "marketing",
+  "loyers": "rent", "loyer": "rent",
+  "autres charges": "other_opex", "autres charges externes": "other_opex",
+  "d&a": "da", "amortissement": "da", "depreciation": "da",
+  "charges financières": "financial_charges", "charges financieres": "financial_charges",
+  "impots": "taxes", "impôts": "taxes", "is": "taxes",
+  "investissements": "capex",
+  "churn": "churn_rate", "growth": "growth_fcst", "croissance": "growth_fcst",
+  "secteur": "sector",
   "immobilisations incorporelles": "intangible_assets", "goodwill": "intangible_assets",
-  "intangible assets": "intangible_assets",
-  "immobilisations corporelles": "tangible_assets", "tangible assets": "tangible_assets",
-  "immobilisations financieres": "financial_assets", "financial assets": "financial_assets",
-  "stocks": "inventory", "inventory": "inventory",
-  "creances clients": "accounts_receivable", "accounts receivable": "accounts_receivable",
-  "other current assets": "other_current_assets", "autres actifs courants": "other_current_assets",
-  "tresorerie": "cash", "cash": "cash", "trésorerie": "cash",
-  // Bilan passif
-  "capital social": "share_capital", "capital": "share_capital", "share capital": "share_capital",
-  "reserves": "reserves", "réserves": "reserves",
-  "resultat exercice": "net_income_bs", "résultat exercice": "net_income_bs", "net income bs": "net_income_bs",
-  "dettes lt": "debt_lt", "dette lt": "debt_lt", "debt lt": "debt_lt",
-  "dettes ct": "debt_st", "dette ct": "debt_st", "debt st": "debt_st",
-  "dettes fournisseurs": "accounts_payable", "accounts payable": "accounts_payable",
-  "other current liabilities": "other_current_liabilities", "autres passifs courants": "other_current_liabilities",
-  "contingent liabilities": "contingent_liabilities", "passifs eventuels": "contingent_liabilities",
-  // Valorisation
+  "immobilisations corporelles": "tangible_assets",
+  "immobilisations financieres": "financial_assets", "immobilisations financières": "financial_assets",
+  "stocks": "inventory",
+  "creances clients": "accounts_receivable", "créances clients": "accounts_receivable",
+  "autres actifs courants": "other_current_assets",
+  "tresorerie": "cash", "trésorerie": "cash",
+  "capital social": "share_capital", "capital": "share_capital",
+  "réserves": "reserves",
+  "resultat exercice": "net_income_bs", "résultat exercice": "net_income_bs",
+  "dettes lt": "debt_lt", "dette lt": "debt_lt",
+  "dettes ct": "debt_st", "dette ct": "debt_st",
+  "dettes fournisseurs": "accounts_payable",
+  "autres passifs courants": "other_current_liabilities",
+  "passifs éventuels": "contingent_liabilities", "passifs eventuels": "contingent_liabilities",
+  "trésorerie excédentaire": "excess_cash",
   "ev/ebitda low": "multiple_ev_ebitda_low", "ev/ebitda mid": "multiple_ev_ebitda_mid", "ev/ebitda high": "multiple_ev_ebitda_high",
   "ev/ebit low": "multiple_ev_ebit_low", "ev/ebit mid": "multiple_ev_ebit_mid", "ev/ebit high": "multiple_ev_ebit_high",
   "ev/ca low": "multiple_ev_revenue_low", "ev/ca mid": "multiple_ev_revenue_mid", "ev/ca high": "multiple_ev_revenue_high",
-  "wacc": "wacc", "taux croissance terminal": "terminal_growth_rate",
-  // Meta
+  "taux croissance terminal": "terminal_growth_rate",
   "annee": "fiscal_year", "année": "fiscal_year", "year": "fiscal_year",
-  "type": "_type", "devise": "currency", "currency": "currency",
+  "type": "_type", "devise": "currency",
 };
 
-function normalizeHeader(h: string): string {
-  return h.toLowerCase().trim()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[_\-]/g, " ");
+/** Résout un header CSV vers un champ BDD. Priorité : exact BDD name → alias → null */
+function resolveHeader(header: string): string | null {
+  const lower = header.toLowerCase().trim();
+  // Priorité 1 : correspondance exacte sur le nom de champ BDD
+  if (DB_FIELDS.has(lower)) return lower;
+  // Priorité 2 : alias manuels (insensible casse + accents)
+  if (ALIAS_MAP[lower]) return ALIAS_MAP[lower];
+  const normalized = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\-]/g, " ");
+  if (ALIAS_MAP[normalized]) return ALIAS_MAP[normalized];
+  // Meta spéciaux
+  if (lower === "type") return "_type";
+  return null;
 }
 
 type MappedRow = Record<string, number | string | null>;
@@ -90,25 +105,20 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
 
     if (raw.length === 0) return;
 
-    // Map headers
+    // Map headers — priorité : exact BDD name → alias → ignoré
     const headers = Object.keys(raw[0]);
     const map: Record<string, string> = {};
     const ign: string[] = [];
     const usedFields = new Set<string>();
     for (const h of headers) {
-      const norm = normalizeHeader(h);
-      const lower = h.toLowerCase().trim();
-      // Essayer : normalisé → lowercase brut → partial match
-      const mapped = COLUMN_MAP[norm] ?? COLUMN_MAP[lower];
-      if (mapped && !usedFields.has(mapped)) {
-        map[h] = mapped;
-        usedFields.add(mapped);
-      } else if (!mapped) {
-        const partial = Object.entries(COLUMN_MAP).find(([k, v]) => !usedFields.has(v) && (norm.includes(k) || k.includes(norm)));
-        if (partial) { map[h] = partial[1]; usedFields.add(partial[1]); }
-        else ign.push(h);
+      const resolved = resolveHeader(h);
+      if (resolved && !usedFields.has(resolved)) {
+        map[h] = resolved;
+        usedFields.add(resolved);
+      } else if (resolved) {
+        ign.push(h); // Doublon : même champ déjà mappé
       } else {
-        ign.push(h); // Doublon : même champ déjà mappé par une autre colonne
+        ign.push(h);
       }
     }
 
