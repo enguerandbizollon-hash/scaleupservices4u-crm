@@ -249,7 +249,7 @@ export async function getAgendaFiltersMetaAction() {
 
     // Récupérer toutes les organisations
     const { data: organisations } = await supabase
-      .from("organisations")
+      .from("organizations")
       .select("id, name")
       .eq("user_id", user.id)
       .order("name");
