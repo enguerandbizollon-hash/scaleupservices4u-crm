@@ -159,9 +159,10 @@ function parseNum(v: string): number | undefined {
 const S = {
   tab: (active: boolean): React.CSSProperties => ({
     padding: "7px 14px", fontSize: 12.5, fontWeight: active ? 700 : 500, cursor: "pointer",
-    color: active ? "var(--text-1)" : "var(--text-4)", borderBottom: active ? "2px solid #1a56db" : "2px solid transparent",
-    background: "none", border: "none", borderBottomStyle: "solid", fontFamily: "inherit",
-    whiteSpace: "nowrap",
+    color: active ? "var(--text-1)" : "var(--text-4)",
+    borderTop: "none", borderLeft: "none", borderRight: "none",
+    borderBottom: active ? "2px solid #1a56db" : "2px solid transparent",
+    background: "none", fontFamily: "inherit", whiteSpace: "nowrap",
   }),
   yearPill: (active: boolean): React.CSSProperties => ({
     padding: "5px 12px", borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
