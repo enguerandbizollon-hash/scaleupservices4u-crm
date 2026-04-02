@@ -10,6 +10,7 @@ import { MaSellerFields, type MaSellerData } from "./MaSellerFields";
 import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
 import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
 import { GeoSelect } from "@/components/ui/GeoSelect";
+import { DedupAlert } from "./DedupAlert";
 
 // Types qui affichent le profil entreprise (hors investisseurs)
 const COMPANY_PROFILE_TYPES = [
@@ -273,6 +274,14 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
               </div>
             </div>
           </div>
+
+          {/* Alerte doublons */}
+          <DedupAlert
+            name={name}
+            website={website}
+            linkedinUrl={linkedin}
+            excludeId={initialData.id}
+          />
 
           {/* Bloc 3 — Profil Investisseur (conditionnel) */}
           {isInvestorType && (
