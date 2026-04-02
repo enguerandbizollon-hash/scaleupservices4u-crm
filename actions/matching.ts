@@ -11,6 +11,7 @@ import {
   parseTicketText,
   normalizeStageText,
   normalizeSectorText,
+  normalizeGeoText,
 } from "@/lib/crm/investor-parsers";
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -54,15 +55,21 @@ const INVESTOR_ORG_TYPES = ["investor", "business_angel", "family_office", "corp
  * Résout les champs investisseur en privilégiant les nouvelles colonnes V15
  * et en tombant en fallback sur les anciens champs texte si les nouvelles sont vides.
  */
+// Ordre fixe des stades pour dériver la plage depuis min/max
+const STAGE_ORDER = ["Seed", "Pré-Série A", "Série A", "Série B", "Growth", "Late Stage"];
+
 function resolveInvestorFields(inv: {
   investor_ticket_min?: number | null;
   investor_ticket_max?: number | null;
   investor_sectors?: string[] | null;
   investor_stages?: string[] | null;
   investor_geographies?: string[] | null;
+  investor_stage_min?: string | null;
+  investor_stage_max?: string | null;
   investment_ticket?: string | null;
   investment_stage?: string | null;
   sector?: string | null;
+  location?: string | null;
 }) {
   // Ticket
   let ticketMin = inv.investor_ticket_min ?? null;
@@ -72,8 +79,21 @@ function resolveInvestorFields(inv: {
     if (parsed) { ticketMin = parsed.min; ticketMax = parsed.max; }
   }
 
-  // Stages
+  // Stages — priorité : investor_stages[] > stage_min/max > investment_stage texte
   let stages: string[] = (inv.investor_stages ?? []).filter(Boolean);
+  if (stages.length === 0 && (inv.investor_stage_min || inv.investor_stage_max)) {
+    const sMin = inv.investor_stage_min ?? inv.investor_stage_max!;
+    const sMax = inv.investor_stage_max ?? inv.investor_stage_min!;
+    const iMin = STAGE_ORDER.indexOf(sMin);
+    const iMax = STAGE_ORDER.indexOf(sMax);
+    if (iMin >= 0 && iMax >= 0) {
+      stages = STAGE_ORDER.slice(Math.min(iMin, iMax), Math.max(iMin, iMax) + 1);
+    } else if (iMin >= 0) {
+      stages = [sMin];
+    } else if (iMax >= 0) {
+      stages = [sMax];
+    }
+  }
   if (stages.length === 0 && inv.investment_stage) {
     const norm = normalizeStageText(inv.investment_stage);
     if (norm) stages = [norm];
@@ -86,8 +106,12 @@ function resolveInvestorFields(inv: {
     if (norm) sectors = [norm];
   }
 
-  // Geographies
-  const geographies: string[] = (inv.investor_geographies ?? []).filter(Boolean);
+  // Geographies — fallback depuis location
+  let geographies: string[] = (inv.investor_geographies ?? []).filter(Boolean);
+  if (geographies.length === 0 && inv.location) {
+    const norm = normalizeGeoText(inv.location);
+    if (norm) geographies = [norm];
+  }
 
   return { ticketMin, ticketMax, stages, sectors, geographies };
 }
@@ -135,7 +159,7 @@ function scoreThesis(investorThesis: string | null, dealSector: string | null, d
     const matched = keywords.filter(k => thesis.includes(k)).length;
     score += Math.min(20, Math.round((matched / Math.max(keywords.length, 1)) * 20));
   }
-  return Math.min(40, score || 10); // Au moins 10 si thèse renseignée mais pas de match
+  return Math.min(40, score || 20); // Thèse renseignée sans match → 20/40 (neutre)
 }
 
 /** Stage (30pts) : distance entre stade deal et plage investisseur */
@@ -286,7 +310,7 @@ export async function getInvestorMatches(
 
   let query = supabase
     .from("organizations")
-    .select("id, name, organization_type, base_status, investor_ticket_min, investor_ticket_max, investor_sectors, investor_stages, investor_geographies, investor_thesis, investment_ticket, investment_stage, sector")
+    .select("id, name, organization_type, base_status, investor_ticket_min, investor_ticket_max, investor_sectors, investor_stages, investor_geographies, investor_thesis, investor_stage_min, investor_stage_max, investment_ticket, investment_stage, sector, location")
     .eq("user_id", user.id)
     .in("organization_type", INVESTOR_ORG_TYPES);
 
@@ -320,6 +344,24 @@ export async function getInvestorMatches(
     const resolved = resolveInvestorFields(inv as any);
     const hasInteraction = activityOrgIds.includes(inv.id)
       || commitmentsList.some(c => c.organization_id === inv.id);
+
+    // DEBUG temporaire — investisseur "0001"
+    if (inv.name.includes("0001")) {
+      const geoElim = isGeoEliminated(deal.company_geography ?? null, resolved.geographies);
+      const secElim = isSectorEliminated(deal.sector ?? null, resolved.sectors);
+      console.log("[MATCH DEBUG 0001]", JSON.stringify({
+        name: inv.name,
+        deal: { sector: deal.sector, stage: deal.company_stage, geo: deal.company_geography, amount: deal.target_amount, desc: deal.description?.slice(0, 50) },
+        resolved_sectors: resolved.sectors,
+        resolved_geographies: resolved.geographies,
+        resolved_stages: resolved.stages,
+        resolved_ticket: { min: resolved.ticketMin, max: resolved.ticketMax },
+        geo_eliminated: geoElim,
+        sector_eliminated: secElim,
+        thesis: inv.investor_thesis?.slice(0, 60),
+      }, null, 2));
+    }
+
     const { score, breakdown } = computeScore(
       deal.target_amount ?? null,
       deal.sector ?? null,
@@ -336,6 +378,19 @@ export async function getInvestorMatches(
         investor_thesis:      inv.investor_thesis ?? null,
       }
     );
+    // DEBUG temporaire — score investisseur "0001"
+    if (inv.name.includes("0001")) {
+      console.log("[MATCH SCORE 0001]", JSON.stringify({
+        score,
+        thesis: breakdown.thesis.earned,
+        stage: breakdown.stage.earned,
+        ticket: breakdown.ticket.earned,
+        relation: breakdown.relation.earned,
+        geoMismatch: breakdown.geoMismatch,
+        sectorMismatch: breakdown.sectorMismatch,
+      }));
+    }
+
     return {
       org: {
         id:                   inv.id,
