@@ -57,6 +57,8 @@ const COLUMNS: Record<string, { required: string[]; optional: string[] }> = {
     required: ["name"],
     optional: ["organization_type","base_status","sector","location","website",
                "investment_ticket","investment_stage","investor_thesis",
+               "investor_ticket_min","investor_ticket_max",
+               "investor_sectors","investor_stages","investor_geographies",
                "founded_year","employee_count","description","notes"],
   },
   contacts: {
