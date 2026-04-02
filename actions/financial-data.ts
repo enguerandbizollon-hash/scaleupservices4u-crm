@@ -11,49 +11,104 @@ export interface FinancialDataInput {
   period_type?: string;
   period_label?: string;
   currency: string;
-  
-  // P&L
+  is_forecast?: boolean;
+
+  // P&L détaillé
   revenue?: number;
+  revenue_recurring?: number;
+  revenue_non_recurring?: number;
+  cogs?: number;
   gross_profit?: number;
   gross_margin?: number;
+  payroll?: number;
+  payroll_rd?: number;
+  payroll_sales?: number;
+  payroll_ga?: number;
+  marketing?: number;
+  rent?: number;
+  other_opex?: number;
   ebitda?: number;
   ebitda_margin?: number;
+  da?: number;
   ebit?: number;
+  financial_charges?: number;
+  taxes?: number;
   net_income?: number;
-  
-  // Bilan
+  capex?: number;
+
+  // Bilan détaillé
+  intangible_assets?: number;
+  tangible_assets?: number;
+  financial_assets?: number;
+  inventory?: number;
+  accounts_receivable?: number;
+  other_current_assets?: number;
+  cash?: number;
+  share_capital?: number;
+  reserves?: number;
+  net_income_bs?: number;
+  debt_lt?: number;
+  debt_st?: number;
+  accounts_payable?: number;
+  other_current_liabilities?: number;
   total_assets?: number;
   net_debt?: number;
   equity?: number;
-  cash?: number;
-  capex?: number;
   working_capital?: number;
-  
+
   // Opérationnel
   headcount?: number;
   revenue_per_employee?: number;
-  
-  // SaaS
+
+  // Récurrent
   arr?: number;
   mrr?: number;
   nrr?: number;
   grr?: number;
   churn_rate?: number;
   cagr?: number;
-  ltv?: number;
   cac?: number;
+  ltv?: number;
   ltv_cac_ratio?: number;
   payback_months?: number;
-  
-  // Valorisation
+  growth_fcst?: number;
+
+  // Valorisation multiples
   ev_estimate?: number;
   ev_revenue_multiple?: number;
   ev_ebitda_multiple?: number;
   ev_arr_multiple?: number;
   equity_value?: number;
-  
-  // Source
-  source: string; // manual|csv|excel|gdrive|harmonic|crunchbase|pitchbook|client_upload|api|portal
+  multiple_ev_ebitda_low?: number;
+  multiple_ev_ebitda_mid?: number;
+  multiple_ev_ebitda_high?: number;
+  multiple_ev_ebit_low?: number;
+  multiple_ev_ebit_mid?: number;
+  multiple_ev_ebit_high?: number;
+  multiple_ev_revenue_low?: number;
+  multiple_ev_revenue_mid?: number;
+  multiple_ev_revenue_high?: number;
+  multiple_ev_arr_low?: number;
+  multiple_ev_arr_mid?: number;
+  multiple_ev_arr_high?: number;
+
+  // DCF
+  wacc?: number;
+  terminal_growth_rate?: number;
+  fcf_n1?: number;
+  fcf_n2?: number;
+  fcf_n3?: number;
+  fcf_n4?: number;
+  fcf_n5?: number;
+
+  // Ajustements
+  misc_adjustments?: number;
+  contingent_liabilities?: number;
+  excess_cash?: number;
+
+  // Métadonnées
+  sector?: string;
+  source: string;
   external_id?: string;
   raw_data?: Record<string, unknown>;
   ai_extracted?: boolean;
@@ -176,12 +231,14 @@ export async function upsertFinancialData(data: FinancialDataInput) {
 
   let existingId: string | null = null;
 
+  const isForecast = data.is_forecast ?? false;
   if (data.deal_id) {
     const { data: found } = await supabase
       .from('financial_data')
       .select('id')
       .eq('deal_id', data.deal_id)
       .eq('fiscal_year', data.fiscal_year)
+      .eq('is_forecast', isForecast)
       .eq('user_id', user.id)
       .maybeSingle();
     existingId = found?.id ?? null;
@@ -191,6 +248,7 @@ export async function upsertFinancialData(data: FinancialDataInput) {
       .select('id')
       .eq('organization_id', data.organization_id)
       .eq('fiscal_year', data.fiscal_year)
+      .eq('is_forecast', isForecast)
       .eq('user_id', user.id)
       .maybeSingle();
     existingId = found?.id ?? null;
