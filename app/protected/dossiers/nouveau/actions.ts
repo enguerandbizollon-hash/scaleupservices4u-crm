@@ -68,8 +68,9 @@ export async function updateDealAction(formData: FormData) {
     location:       ns(formData.get("location")),
     description:    ns(formData.get("description")),
     start_date:     ns(formData.get("start_date")),
-    target_date:    ns(formData.get("target_date")),
-    target_amount:  targetAmount ? Number(targetAmount) : null,
+    target_date:       ns(formData.get("target_date")),
+    next_action_date:  ns(formData.get("next_action_date")),
+    target_amount:     targetAmount ? Number(targetAmount) : null,
     currency:       ns(formData.get("currency")) ?? "EUR",
     mandate_id:     ns(formData.get("mandate_id")),
   };

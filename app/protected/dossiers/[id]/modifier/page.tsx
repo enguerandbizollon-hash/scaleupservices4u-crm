@@ -11,7 +11,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,job_title,required_seniority,required_location,required_remote,salary_min,salary_max,mandate_id,company_stage")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,next_action_date,job_title,required_seniority,required_location,required_remote,salary_min,salary_max,mandate_id,company_stage")
     .eq("id", id)
     .maybeSingle();
 
@@ -125,6 +125,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div>
                 <label style={{ cssText: lbl } as any}>Date cible de closing</label>
                 <input name="target_date" type="date" defaultValue={deal.target_date ?? ""} style={{ cssText: inp } as any}/>
+              </div>
+
+              <div>
+                <label style={{ cssText: lbl } as any}>Prochaine relance</label>
+                <input name="next_action_date" type="date" defaultValue={(deal as any).next_action_date ?? ""} style={{ cssText: inp } as any}/>
               </div>
 
               <div>

@@ -19,6 +19,7 @@ export interface DealInput {
   currency?: string;
   start_date?: string | null;
   target_date?: string | null;
+  next_action_date?: string | null;
   company_stage?: string | null;
   company_geography?: string | null;
   mandate_id?: string | null;
@@ -113,8 +114,9 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
     target_amount:  data.target_amount ?? null,
     currency:       data.currency     ?? "EUR",
     start_date:     data.start_date   ?? null,
-    target_date:    data.target_date  ?? null,
-    company_stage:     data.company_stage     ?? null,
+    target_date:        data.target_date        ?? null,
+    next_action_date:   data.next_action_date   ?? null,
+    company_stage:      data.company_stage      ?? null,
     company_geography: data.company_geography ?? null,
     mandate_id:        data.mandate_id        ?? null,
     // Recrutement
@@ -155,12 +157,19 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
   if (error) return { success: false, error: error.message };
   if (!deal?.id) return { success: false, error: "Erreur création dossier" };
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   // Sync GCal closing cible
   if (data.target_date) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     syncToGCal({
       action: "create", source_type: "deal_closing", source_id: deal.id,
       event: { summary: `Closing cible : ${data.name}`, start: data.target_date, end: data.target_date, allDay: true, sourceUrl: `${baseUrl}/protected/dossiers/${deal.id}` },
+    });
+  }
+  // Sync GCal relance
+  if (data.next_action_date) {
+    syncToGCal({
+      action: "create", source_type: "deal_relance", source_id: deal.id,
+      event: { summary: `Relance : ${data.name}`, start: data.next_action_date, end: data.next_action_date, allDay: true, sourceUrl: `${baseUrl}/protected/dossiers/${deal.id}` },
     });
   }
 
@@ -192,13 +201,21 @@ export async function updateDeal(id: string, data: Partial<DealInput>): Promise<
 
   if (error) return { success: false, error: error.message };
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   // Sync GCal closing cible
   if (data.target_date !== undefined) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     syncToGCal({
       action: data.target_date ? "update" : "delete",
       source_type: "deal_closing", source_id: id,
       event: { summary: `Closing cible : ${data.name ?? ""}`, start: data.target_date ?? "", end: data.target_date ?? "", allDay: true, sourceUrl: `${baseUrl}/protected/dossiers/${id}` },
+    });
+  }
+  // Sync GCal relance
+  if (data.next_action_date !== undefined) {
+    syncToGCal({
+      action: data.next_action_date ? "update" : "delete",
+      source_type: "deal_relance", source_id: id,
+      event: { summary: `Relance : ${data.name ?? ""}`, start: data.next_action_date ?? "", end: data.next_action_date ?? "", allDay: true, sourceUrl: `${baseUrl}/protected/dossiers/${id}` },
     });
   }
 
