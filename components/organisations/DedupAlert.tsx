@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { checkDuplicates } from "@/actions/dedup";
+import { checkDuplicates, mergeOrganisations } from "@/actions/dedup";
 import type { DuplicateCandidate } from "@/lib/dedup/organisations";
 
 interface DedupAlertProps {
@@ -21,6 +21,8 @@ const MATCH_LABELS: Record<string, string> = {
 export function DedupAlert({ name, website, linkedinUrl, excludeId }: DedupAlertProps) {
   const [candidates, setCandidates] = useState<DuplicateCandidate[]>([]);
   const [dismissed, setDismissed] = useState(false);
+  const [merging, setMerging] = useState<string | null>(null);
+  const [merged, setMerged] = useState<Set<string>>(new Set());
 
   const check = useCallback(async () => {
     if (name.trim().length < 3) { setCandidates([]); return; }
@@ -57,7 +59,7 @@ export function DedupAlert({ name, website, linkedinUrl, excludeId }: DedupAlert
         </button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {candidates.map(c => (
+        {candidates.filter(c => !merged.has(c.id)).map(c => (
           <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
             <Link
               href={`/protected/organisations/${c.id}`}
@@ -70,6 +72,25 @@ export function DedupAlert({ name, website, linkedinUrl, excludeId }: DedupAlert
               {MATCH_LABELS[c.matchType] ?? c.matchType}
             </span>
             {c.website && <span style={{ fontSize: 11, color: "#92400E" }}>{c.website}</span>}
+            {excludeId && (
+              <button
+                disabled={merging === c.id}
+                onClick={async () => {
+                  if (!confirm(`Fusionner "${c.name}" dans l'organisation en cours ?\n\nTous les dossiers, contacts et activités liés à "${c.name}" seront transférés.`)) return;
+                  setMerging(c.id);
+                  const res = await mergeOrganisations(excludeId, c.id);
+                  setMerging(null);
+                  if (res.success) {
+                    setMerged(prev => new Set([...prev, c.id]));
+                  } else {
+                    alert(res.error ?? "Erreur lors de la fusion");
+                  }
+                }}
+                style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, border: "1px solid #92400E", background: "none", color: "#92400E", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
+              >
+                {merging === c.id ? "…" : "Fusionner ici"}
+              </button>
+            )}
           </div>
         ))}
       </div>
