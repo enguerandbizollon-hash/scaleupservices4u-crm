@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { syncToGCal } from "@/lib/gcal/sync-helper";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,15 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
   if (error) return { success: false, error: error.message };
   if (!deal?.id) return { success: false, error: "Erreur création dossier" };
 
+  // Sync GCal closing cible
+  if (data.target_date) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    syncToGCal({
+      action: "create", source_type: "deal_closing", source_id: deal.id,
+      event: { summary: `Closing cible : ${data.name}`, start: data.target_date, end: data.target_date, allDay: true, sourceUrl: `${baseUrl}/protected/dossiers/${deal.id}` },
+    });
+  }
+
   revalidatePath("/protected/dossiers");
   return { success: true, id: deal.id };
 }
@@ -181,6 +191,16 @@ export async function updateDeal(id: string, data: Partial<DealInput>): Promise<
     .eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
+
+  // Sync GCal closing cible
+  if (data.target_date !== undefined) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    syncToGCal({
+      action: data.target_date ? "update" : "delete",
+      source_type: "deal_closing", source_id: id,
+      event: { summary: `Closing cible : ${data.name ?? ""}`, start: data.target_date ?? "", end: data.target_date ?? "", allDay: true, sourceUrl: `${baseUrl}/protected/dossiers/${id}` },
+    });
+  }
 
   revalidatePath("/protected/dossiers");
   revalidatePath(`/protected/dossiers/${id}`);

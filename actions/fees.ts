@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { syncToGCal } from "@/lib/gcal/sync-helper";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,16 @@ export async function createFee(data: FeeInput): Promise<FeeActionResult> {
   }).select("id").single();
 
   if (error) return { success: false, error: error.message };
+
+  // Sync GCal jalon
+  if (data.due_date) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    syncToGCal({
+      action: "create", source_type: "fee_milestone", source_id: milestone.id,
+      event: { summary: `Jalon : ${data.name}`, start: data.due_date, end: data.due_date, allDay: true, sourceUrl: `${baseUrl}/protected/mandats/${data.mandate_id}` },
+    });
+  }
+
   revalidatePath(`/protected/mandats/${data.mandate_id}`);
   return { success: true, id: milestone.id };
 }
@@ -99,6 +110,15 @@ export async function updateFee(
         .eq("user_id", user.id);
     }
     revalidatePath(`/protected/mandats/${existing.mandate_id}`);
+  }
+
+  // Sync GCal jalon update
+  if (data.due_date !== undefined) {
+    syncToGCal({
+      action: data.due_date ? "update" : "delete",
+      source_type: "fee_milestone", source_id: id,
+      event: { summary: `Jalon : ${data.name ?? ""}`, start: data.due_date ?? "", end: data.due_date ?? "", allDay: true },
+    });
   }
 
   return { success: true, id };

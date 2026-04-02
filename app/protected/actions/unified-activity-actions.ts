@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { UnifiedActivityFormData } from "@/app/protected/components/unified-activity-modal";
+import { syncToGCal } from "@/lib/gcal/sync-helper";
 
 /**
  * Créer une nuvre activité unifiée (task, meeting, event, etc.)
@@ -77,6 +78,24 @@ export async function createUnifiedActivityAction(
     revalidatePath("/protected/ia");
     if (form.dealId) {
       revalidatePath(`/protected/dossiers/${form.dealId}`);
+    }
+
+    // Sync GCal (fire-and-forget)
+    if (activity.due_date) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      syncToGCal({
+        action: "create",
+        source_type: "activity",
+        source_id: activity.id,
+        event: {
+          summary: activity.title,
+          description: activity.summary ?? undefined,
+          start: activity.due_date,
+          end: activity.due_date,
+          allDay: activity.is_all_day ?? !activity.due_time,
+          sourceUrl: form.dealId ? `${baseUrl}/protected/dossiers/${form.dealId}` : undefined,
+        },
+      });
     }
 
     return {
@@ -174,6 +193,22 @@ export async function updateUnifiedActivityAction(
     revalidatePath("/protected/dashboard");
     revalidatePath("/protected/ia");
 
+    // Sync GCal (fire-and-forget)
+    if (activity.due_date) {
+      syncToGCal({
+        action: "update",
+        source_type: "activity",
+        source_id: activityId,
+        event: {
+          summary: activity.title,
+          description: activity.summary ?? undefined,
+          start: activity.due_date,
+          end: activity.due_date,
+          allDay: activity.is_all_day ?? !activity.due_time,
+        },
+      });
+    }
+
     return { success: true, activity };
   } catch (err) {
     console.error("Unexpected error in updateUnifiedActivityAction:", err);
@@ -216,6 +251,14 @@ export async function deleteUnifiedActivityAction(activityId: string) {
       console.error("Delete error:", deleteError);
       return { success: false, error: deleteError.message };
     }
+
+    // Sync GCal delete (fire-and-forget)
+    syncToGCal({
+      action: "delete",
+      source_type: "activity",
+      source_id: activityId,
+      event: { summary: "", start: "", end: "", allDay: true },
+    });
 
     revalidatePath("/protected/dashboard");
     revalidatePath("/protected/ia");

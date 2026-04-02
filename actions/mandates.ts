@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { syncToGCal } from "@/lib/gcal/sync-helper";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,16 @@ export async function createMandate(data: MandateInput): Promise<MandateActionRe
   }).select("id").single();
 
   if (error) return { success: false, error: error.message };
+
+  // Sync GCal closing mandat
+  if (data.target_close_date) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    syncToGCal({
+      action: "create", source_type: "mandate_closing", source_id: mandate.id,
+      event: { summary: `Closing mandat : ${data.name}`, start: data.target_close_date, end: data.target_close_date, allDay: true, sourceUrl: `${baseUrl}/protected/mandats/${mandate.id}` },
+    });
+  }
+
   revalidatePath("/protected/mandats");
   return { success: true, id: mandate.id };
 }
@@ -95,6 +106,17 @@ export async function updateMandate(id: string, data: Partial<MandateInput>): Pr
     .update(payload).eq("id", id).eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
+
+  // Sync GCal closing mandat
+  if (data.target_close_date !== undefined) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    syncToGCal({
+      action: data.target_close_date ? "update" : "delete",
+      source_type: "mandate_closing", source_id: id,
+      event: { summary: `Closing mandat : ${data.name ?? ""}`, start: data.target_close_date ?? "", end: data.target_close_date ?? "", allDay: true, sourceUrl: `${baseUrl}/protected/mandats/${id}` },
+    });
+  }
+
   revalidatePath("/protected/mandats");
   revalidatePath(`/protected/mandats/${id}`);
   return { success: true, id };
