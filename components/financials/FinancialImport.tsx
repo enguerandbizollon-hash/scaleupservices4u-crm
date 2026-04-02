@@ -24,20 +24,27 @@ const COLUMN_MAP: Record<string, string> = {
   // Récurrent
   "arr": "arr", "churn": "churn_rate", "churn_rate": "churn_rate",
   "nrr": "nrr", "cac": "cac", "growth": "growth_fcst", "croissance": "growth_fcst",
+  "other opex": "other_opex", "autres charges externes": "other_opex",
+  "financial charges": "financial_charges", "charges financières": "financial_charges",
+  "sector": "sector", "secteur": "sector",
   // Bilan actif
   "immobilisations incorporelles": "intangible_assets", "goodwill": "intangible_assets",
-  "immobilisations corporelles": "tangible_assets",
-  "immobilisations financieres": "financial_assets",
+  "intangible assets": "intangible_assets",
+  "immobilisations corporelles": "tangible_assets", "tangible assets": "tangible_assets",
+  "immobilisations financieres": "financial_assets", "financial assets": "financial_assets",
   "stocks": "inventory", "inventory": "inventory",
-  "creances clients": "accounts_receivable", "accounts_receivable": "accounts_receivable",
+  "creances clients": "accounts_receivable", "accounts receivable": "accounts_receivable",
+  "other current assets": "other_current_assets", "autres actifs courants": "other_current_assets",
   "tresorerie": "cash", "cash": "cash", "trésorerie": "cash",
   // Bilan passif
-  "capital social": "share_capital", "capital": "share_capital",
+  "capital social": "share_capital", "capital": "share_capital", "share capital": "share_capital",
   "reserves": "reserves", "réserves": "reserves",
-  "resultat exercice": "net_income_bs", "résultat exercice": "net_income_bs",
-  "dettes lt": "debt_lt", "dette lt": "debt_lt", "debt_lt": "debt_lt",
-  "dettes ct": "debt_st", "dette ct": "debt_st", "debt_st": "debt_st",
-  "dettes fournisseurs": "accounts_payable", "accounts_payable": "accounts_payable",
+  "resultat exercice": "net_income_bs", "résultat exercice": "net_income_bs", "net income bs": "net_income_bs",
+  "dettes lt": "debt_lt", "dette lt": "debt_lt", "debt lt": "debt_lt",
+  "dettes ct": "debt_st", "dette ct": "debt_st", "debt st": "debt_st",
+  "dettes fournisseurs": "accounts_payable", "accounts payable": "accounts_payable",
+  "other current liabilities": "other_current_liabilities", "autres passifs courants": "other_current_liabilities",
+  "contingent liabilities": "contingent_liabilities", "passifs eventuels": "contingent_liabilities",
   // Valorisation
   "ev/ebitda low": "multiple_ev_ebitda_low", "ev/ebitda mid": "multiple_ev_ebitda_mid", "ev/ebitda high": "multiple_ev_ebitda_high",
   "ev/ebit low": "multiple_ev_ebit_low", "ev/ebit mid": "multiple_ev_ebit_mid", "ev/ebit high": "multiple_ev_ebit_high",
@@ -87,16 +94,21 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
     const headers = Object.keys(raw[0]);
     const map: Record<string, string> = {};
     const ign: string[] = [];
+    const usedFields = new Set<string>();
     for (const h of headers) {
       const norm = normalizeHeader(h);
-      const mapped = COLUMN_MAP[norm];
-      if (mapped) {
+      const lower = h.toLowerCase().trim();
+      // Essayer : normalisé → lowercase brut → partial match
+      const mapped = COLUMN_MAP[norm] ?? COLUMN_MAP[lower];
+      if (mapped && !usedFields.has(mapped)) {
         map[h] = mapped;
-      } else {
-        // Try partial match
-        const partial = Object.entries(COLUMN_MAP).find(([k]) => norm.includes(k) || k.includes(norm));
-        if (partial) map[h] = partial[1];
+        usedFields.add(mapped);
+      } else if (!mapped) {
+        const partial = Object.entries(COLUMN_MAP).find(([k, v]) => !usedFields.has(v) && (norm.includes(k) || k.includes(norm)));
+        if (partial) { map[h] = partial[1]; usedFields.add(partial[1]); }
         else ign.push(h);
+      } else {
+        ign.push(h); // Doublon : même champ déjà mappé par une autre colonne
       }
     }
 
@@ -214,28 +226,38 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
           </div>
         </div>
 
-        {/* Preview table (first 5 rows) */}
+        {/* Preview table (first 5 rows) — dédupliqué par champ cible */}
         <div style={{ overflowX: "auto", marginBottom: 14 }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
-            <thead>
-              <tr style={{ background: "var(--surface-2)" }}>
-                {Object.values(mapping).filter(f => !f.startsWith("_")).map(f => (
-                  <th key={f} style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600, color: "var(--text-4)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{f}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 5).map((r, i) => (
-                <tr key={i}>
-                  {Object.values(mapping).filter(f => !f.startsWith("_")).map(f => (
-                    <td key={f} style={{ padding: "5px 10px", textAlign: "right", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
-                      {r[f] != null ? String(r[f]) : "—"}
-                    </td>
+          {(() => {
+            const seen = new Set<string>();
+            const uniqueEntries = Object.entries(mapping).filter(([, f]) => {
+              if (f.startsWith("_") || seen.has(f)) return false;
+              seen.add(f);
+              return true;
+            });
+            return (
+              <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
+                <thead>
+                  <tr style={{ background: "var(--surface-2)" }}>
+                    {uniqueEntries.map(([header, field]) => (
+                      <th key={header} style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600, color: "var(--text-4)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{field}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 5).map((r, i) => (
+                    <tr key={i}>
+                      {uniqueEntries.map(([header, field]) => (
+                        <td key={header} style={{ padding: "5px 10px", textAlign: "right", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
+                          {r[field] != null ? String(r[field]) : "—"}
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
