@@ -32,7 +32,7 @@ export function normalizeStageText(text: string | null): string | null {
   if (t.includes("growth")) return "Growth";
   if (t.includes("seed")) return "Seed";
   if (t.includes("toutes") || t.includes("généraliste") || t.includes("generaliste")) return "Généraliste";
-  return text;
+  return null;
 }
 
 /** Normalise un texte de secteur vers les valeurs SECTORS du référentiel */
@@ -56,7 +56,7 @@ export function normalizeSectorText(text: string | null): string | null {
   if (t.includes("hardware")) return "Hardware";
   if (t.includes("impact")) return "Impact";
   if (t.includes("juridique") || t.includes("legal")) return "Juridique";
-  return text;
+  return null;
 }
 
 /**
