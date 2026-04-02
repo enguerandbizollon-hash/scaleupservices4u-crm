@@ -21,7 +21,7 @@ const PIPELINE_LABELS: Record<InvestorMatch["pipelineStatus"], { label: string; 
   ko:           { label: "KO",           bg: "var(--rec-bg)",    tx: "var(--rec-tx)" },
 };
 
-function ScoreBadge({ score, geoMismatch }: { score: number | null; geoMismatch?: boolean }) {
+function ScoreBadge({ score, eliminated }: { score: number | null; eliminated?: boolean }) {
   if (score === null) {
     return (
       <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "3px 10px", borderRadius: 20, background: "var(--surface-3)", color: "var(--text-4)", fontWeight: 600, fontSize: 11.5 }}>
@@ -29,11 +29,18 @@ function ScoreBadge({ score, geoMismatch }: { score: number | null; geoMismatch?
       </span>
     );
   }
-  const bg = geoMismatch ? "#FEE2E2" : score >= 70 ? "#D1FAE5" : score >= 40 ? "#FEF3C7" : "#FEE2E2";
-  const tx = geoMismatch ? "#991B1B" : score >= 70 ? "#065F46" : score >= 40 ? "#92400E" : "#991B1B";
+  if (eliminated) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 44, padding: "3px 10px", borderRadius: 20, background: "#FEE2E2", color: "#991B1B", fontWeight: 700, fontSize: 13 }}>
+        Exclu
+      </span>
+    );
+  }
+  const bg = score >= 70 ? "#D1FAE5" : score >= 40 ? "#FEF3C7" : "#FEE2E2";
+  const tx = score >= 70 ? "#065F46" : score >= 40 ? "#92400E" : "#991B1B";
   return (
     <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 44, padding: "3px 10px", borderRadius: 20, background: bg, color: tx, fontWeight: 700, fontSize: 13 }}>
-      {score}{geoMismatch ? " !" : ""}
+      {score}
     </span>
   );
 }
@@ -114,7 +121,7 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
             Inactif
           </span>
         )}
-        <ScoreBadge score={score} geoMismatch={breakdown.geoMismatch} />
+        <ScoreBadge score={score} eliminated={breakdown.geoMismatch || breakdown.sectorMismatch} />
         <span style={{ fontSize: 11.5, padding: "3px 9px", borderRadius: 20, background: pl.bg, color: pl.tx, fontWeight: 600, flexShrink: 0 }}>
           {pl.label}
         </span>
@@ -140,38 +147,48 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
         </div>
       </div>
 
-      {/* Ligne 2 : critères en texte coloré — vert=match, orange=mismatch, gris=non renseigné */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <CriterionText
-          label="Ticket"
-          value={ticketLabel}
-          earned={breakdown.ticket.earned}
-          max={breakdown.ticket.max}
-          filled={breakdown.ticket.filled}
-        />
-        <CriterionText
-          label="Secteur"
-          value={org.investor_sectors.slice(0, 2).join(", ") || null}
-          earned={breakdown.sector.earned}
-          max={breakdown.sector.max}
-          filled={breakdown.sector.filled}
-        />
-        <CriterionText
-          label="Stade"
-          value={org.investor_stages.slice(0, 2).join(", ") || null}
-          earned={breakdown.stage.earned}
-          max={breakdown.stage.max}
-          filled={breakdown.stage.filled}
-        />
-        <CriterionText
-          label="Géo"
-          value={org.investor_geographies.slice(0, 2).map(g => GEO_LABELS[g] ?? g).join(", ") || null}
-          earned={breakdown.geography.earned}
-          max={breakdown.geography.max}
-          filled={breakdown.geography.filled}
-          forceRed={breakdown.geoMismatch}
-        />
-      </div>
+      {/* Éliminatoires si applicable */}
+      {(breakdown.geoMismatch || breakdown.sectorMismatch) && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {breakdown.geoMismatch && (
+            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#FEE2E2", color: "#991B1B", fontWeight: 600 }}>
+              Géo incompatible
+            </span>
+          )}
+          {breakdown.sectorMismatch && (
+            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "#FEE2E2", color: "#991B1B", fontWeight: 600 }}>
+              Secteur incompatible
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Ligne 2 : critères pondérés */}
+      {!breakdown.geoMismatch && !breakdown.sectorMismatch && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <CriterionText
+            label="Thèse"
+            value={org.investor_thesis ? org.investor_thesis.slice(0, 40) + (org.investor_thesis.length > 40 ? "…" : "") : null}
+            earned={breakdown.thesis.earned}
+            max={breakdown.thesis.max}
+            filled={breakdown.thesis.filled}
+          />
+          <CriterionText
+            label="Stade"
+            value={org.investor_stages.slice(0, 2).join(", ") || null}
+            earned={breakdown.stage.earned}
+            max={breakdown.stage.max}
+            filled={breakdown.stage.filled}
+          />
+          <CriterionText
+            label="Ticket"
+            value={ticketLabel}
+            earned={breakdown.ticket.earned}
+            max={breakdown.ticket.max}
+            filled={breakdown.ticket.filled}
+          />
+        </div>
+      )}
 
       {/* Ligne 3 : tags + action */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>

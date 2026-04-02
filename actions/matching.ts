@@ -16,12 +16,14 @@ import {
 // ── Types ────────────────────────────────────────────────────────────────
 
 export interface InvestorMatchBreakdown {
-  ticket:    { earned: number; max: number; filled: boolean };
-  sector:    { earned: number; max: number; filled: boolean };
+  thesis:    { earned: number; max: number; filled: boolean };
   stage:     { earned: number; max: number; filled: boolean };
-  geography: { earned: number; max: number; filled: boolean };
-  /** true si deal ET investisseur ont une géo renseignée mais aucune intersection */
+  ticket:    { earned: number; max: number; filled: boolean };
+  relation:  { earned: number; max: number; filled: boolean };
+  /** true si deal éliminé par géo (drop-dead) */
   geoMismatch: boolean;
+  /** true si deal éliminé par secteur (drop-dead) */
+  sectorMismatch: boolean;
 }
 
 export interface InvestorMatch {
@@ -92,46 +94,92 @@ function resolveInvestorFields(inv: {
 
 // ── Scoring ───────────────────────────────────────────────────────────
 
-function scoreTicket(targetAmount: number | null, min: number | null, max: number | null): number {
-  if (!targetAmount) return 0;
-  const lo = min ?? 0;
-  const hi = max ?? Infinity;
-  if (targetAmount >= lo && targetAmount <= hi) return 30;
-  if (targetAmount >= lo * 0.5 && targetAmount <= hi * 2) return 15;
-  return 0;
+// Index ordinal des stades pour scoring par distance
+const STAGE_INDEX: Record<string, number> = {
+  "Seed": 0, "Pré-Série A": 1, "Série A": 2, "Série B": 3, "Growth": 4, "Late Stage": 5,
+};
+
+/** Éliminatoire géo : aucune intersection entre deal et investisseur */
+function isGeoEliminated(dealGeo: string | null, investorGeos: string[]): boolean {
+  if (!dealGeo || investorGeos.length === 0) return false;
+  const compatible = GEO_COMPATIBILITY[dealGeo] ?? [];
+  return !investorGeos.some(g => compatible.includes(g));
 }
 
-function scoreSector(dealSector: string | null, investorSectors: string[]): number {
-  if (!dealSector || !investorSectors?.length) return 0;
-  // Généraliste : match automatique
-  if (investorSectors.some(s => s.toLowerCase() === "généraliste")) return 30;
-  // Normalise le secteur deal (anciens labels → référentiel court)
+/** Éliminatoire secteur : investisseur a des secteurs, pas Généraliste, et aucune intersection */
+function isSectorEliminated(dealSector: string | null, investorSectors: string[]): boolean {
+  if (!dealSector || investorSectors.length === 0) return false;
+  if (investorSectors.some(s => s.toLowerCase() === "généraliste")) return false;
   const normalized = normalizeDealSector(dealSector) ?? dealSector;
   const deal = normalized.toLowerCase();
-  return investorSectors.some(s =>
+  return !investorSectors.some(s =>
     s.toLowerCase() === deal ||
     deal.includes(s.toLowerCase()) ||
     s.toLowerCase().includes(deal)
-  ) ? 30 : 0;
+  );
 }
 
-function scoreStage(dealStage: string | null, investorStages: string[]): number {
-  if (!dealStage || !investorStages?.length) return 0;
-  // Généraliste (investisseur "toutes étapes") → match automatique
-  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 15;
-  // STAGE_MAP : clé = company_stage du deal, valeurs = labels investor_stages compatibles
+/** Thèse (40pts) : matching thesis texte vs secteur+description deal */
+function scoreThesis(investorThesis: string | null, dealSector: string | null, dealDescription: string | null): number {
+  if (!investorThesis) return 20; // Non renseigné → 20/40
+  const thesis = investorThesis.toLowerCase();
+  let score = 0;
+  // Secteur deal mentionné dans la thèse
+  if (dealSector) {
+    const normalized = (normalizeDealSector(dealSector) ?? dealSector).toLowerCase();
+    if (thesis.includes(normalized)) score += 20;
+  }
+  // Mots-clés de la description deal dans la thèse
+  if (dealDescription) {
+    const keywords = dealDescription.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+    const matched = keywords.filter(k => thesis.includes(k)).length;
+    score += Math.min(20, Math.round((matched / Math.max(keywords.length, 1)) * 20));
+  }
+  return Math.min(40, score || 10); // Au moins 10 si thèse renseignée mais pas de match
+}
+
+/** Stage (30pts) : distance entre stade deal et plage investisseur */
+function scoreStageRange(dealStage: string | null, investorStages: string[]): number {
+  if (!dealStage || investorStages.length === 0) return 15; // Non renseigné → 15/30
+  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 30;
+
+  // Trouver min/max index des stages investisseur
+  const indices = investorStages.map(s => STAGE_INDEX[s]).filter(i => i !== undefined);
+  if (indices.length === 0) return 15;
+  const invMin = Math.min(...indices);
+  const invMax = Math.max(...indices);
+
+  // Index du deal via STAGE_MAP compatible stages
   const compatible = STAGE_MAP[dealStage] ?? [];
-  return investorStages.some(s => compatible.includes(s)) ? 15 : 0;
+  const dealIndices = compatible.map(s => STAGE_INDEX[s]).filter(i => i !== undefined);
+  if (dealIndices.length === 0) return 15;
+  const dealIdx = Math.min(...dealIndices); // Plus petit index compatible
+
+  // Calcul écart
+  let ecart = 0;
+  if (dealIdx < invMin) ecart = invMin - dealIdx;
+  else if (dealIdx > invMax) ecart = dealIdx - invMax;
+
+  if (ecart === 0) return 30;
+  if (ecart === 1) return 15;
+  return 0;
 }
 
-/**
- * Vérifie si la géographie du deal et de l'investisseur sont compatibles.
- * Retourne true si match (ou si l'un des deux n'a pas de géo = pas de restriction).
- */
-function isGeographyMatch(dealGeo: string | null, investorGeos: string[]): boolean {
-  if (!dealGeo || investorGeos.length === 0) return true;
-  const compatible = GEO_COMPATIBILITY[dealGeo] ?? [];
-  return investorGeos.some(g => compatible.includes(g));
+/** Ticket (20pts) : deal amount dans fourchette investisseur */
+function scoreTicket(dealAmount: number | null, min: number | null, max: number | null): number {
+  if (!dealAmount) return 10; // Non renseigné → 10/20
+  if (min === null && max === null) return 10;
+  const lo = min ?? 0;
+  const hi = max ?? Infinity;
+  if (dealAmount >= lo && dealAmount <= hi) return 20;
+  // Calcul par distance
+  const ecart = dealAmount < lo ? lo - dealAmount : dealAmount - hi;
+  return Math.max(0, Math.round(20 * (1 - ecart / 2_200_000)));
+}
+
+/** Relation (10pts) : interaction existante sur ce dossier */
+function scoreRelation(hasInteraction: boolean): number {
+  return hasInteraction ? 10 : 5;
 }
 
 function computePipelineStatus(
@@ -153,52 +201,69 @@ function computeScore(
   dealSector: string | null,
   dealStage: string | null,
   dealGeo: string | null,
+  dealDescription: string | null,
+  hasInteraction: boolean,
   inv: {
     investor_ticket_min: number | null;
     investor_ticket_max: number | null;
     investor_sectors: string[];
     investor_stages: string[];
     investor_geographies: string[];
+    investor_thesis: string | null;
   }
 ): { score: number | null; breakdown: InvestorMatchBreakdown } {
-  // Pondération : Ticket 30 · Secteur 30 · Stage 15 · Géo 15 = 90pts → normalisé /90 × 100
-  const hasTicket  = inv.investor_ticket_min !== null || inv.investor_ticket_max !== null;
-  const hasSectors = inv.investor_sectors?.length > 0;
-  const hasStages  = inv.investor_stages?.length > 0;
-  const hasGeo     = inv.investor_geographies?.length > 0;
+  const hasAnyCriteria = inv.investor_ticket_min !== null || inv.investor_ticket_max !== null
+    || inv.investor_sectors.length > 0 || inv.investor_stages.length > 0
+    || inv.investor_geographies.length > 0 || !!inv.investor_thesis;
 
-  // Score par critère : si le deal n'a pas la donnée → points max (pas de pénalité deal incomplet)
-  const ticketEarned  = hasTicket  ? (dealAmount  !== null ? scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max) : 30) : 0;
-  const sectorEarned  = hasSectors ? (dealSector  !== null ? scoreSector(dealSector, inv.investor_sectors) : 30) : 0;
-  const stageEarned   = hasStages  ? (dealStage   !== null ? scoreStage(dealStage, inv.investor_stages) : 15) : 0;
-  const geoEarned     = hasGeo     ? (dealGeo     !== null ? scoreGeography(dealGeo, inv.investor_geographies) : 15) : 0;
+  // Éliminatoires
+  const geoMismatch    = isGeoEliminated(dealGeo, inv.investor_geographies);
+  const sectorMismatch = isSectorEliminated(dealSector, inv.investor_sectors);
 
-  // Geo mismatch = les deux côtés ont une géo ET aucune intersection → drop-dead
-  const geoMismatch = hasGeo && dealGeo !== null && !isGeographyMatch(dealGeo, inv.investor_geographies);
+  if (!hasAnyCriteria) {
+    return {
+      score: null,
+      breakdown: {
+        thesis:   { earned: 0, max: 40, filled: false },
+        stage:    { earned: 0, max: 30, filled: false },
+        ticket:   { earned: 0, max: 20, filled: false },
+        relation: { earned: 0, max: 10, filled: true },
+        geoMismatch, sectorMismatch,
+      },
+    };
+  }
 
-  const breakdown: InvestorMatchBreakdown = {
-    ticket:    { earned: ticketEarned,  max: 30, filled: hasTicket },
-    sector:    { earned: sectorEarned,  max: 30, filled: hasSectors },
-    stage:     { earned: stageEarned,   max: 15, filled: hasStages },
-    geography: { earned: geoEarned,     max: 15, filled: hasGeo },
-    geoMismatch,
+  if (geoMismatch || sectorMismatch) {
+    return {
+      score: 0,
+      breakdown: {
+        thesis:   { earned: 0, max: 40, filled: !!inv.investor_thesis },
+        stage:    { earned: 0, max: 30, filled: inv.investor_stages.length > 0 },
+        ticket:   { earned: 0, max: 20, filled: inv.investor_ticket_min !== null || inv.investor_ticket_max !== null },
+        relation: { earned: 0, max: 10, filled: true },
+        geoMismatch, sectorMismatch,
+      },
+    };
+  }
+
+  // Pondérés (100pts)
+  const thesisEarned  = scoreThesis(inv.investor_thesis, dealSector, dealDescription);
+  const stageEarned   = scoreStageRange(dealStage, inv.investor_stages);
+  const ticketEarned  = scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max);
+  const relationEarned = scoreRelation(hasInteraction);
+
+  const total = thesisEarned + stageEarned + ticketEarned + relationEarned;
+
+  return {
+    score: Math.min(100, total),
+    breakdown: {
+      thesis:   { earned: thesisEarned,   max: 40, filled: !!inv.investor_thesis },
+      stage:    { earned: stageEarned,    max: 30, filled: inv.investor_stages.length > 0 },
+      ticket:   { earned: ticketEarned,   max: 20, filled: inv.investor_ticket_min !== null || inv.investor_ticket_max !== null },
+      relation: { earned: relationEarned, max: 10, filled: true },
+      geoMismatch, sectorMismatch,
+    },
   };
-
-  const criteria = [breakdown.ticket, breakdown.sector, breakdown.stage, breakdown.geography].filter(c => c.filled);
-  // Aucun critère investisseur renseigné → profil vraiment incomplet
-  if (criteria.length === 0) return { score: null, breakdown };
-
-  const totalWeight = criteria.reduce((s, c) => s + c.max, 0);
-  const earned      = criteria.reduce((s, c) => s + c.earned, 0);
-  let rawScore = Math.round(earned / totalWeight * 100);
-
-  // Pénalité profil investisseur incomplet : moins de 3 critères renseignés → score × 0.6
-  if (criteria.length < 3) rawScore = Math.round(rawScore * 0.6);
-
-  // GEO DROP-DEAD : si géo incompatible, score cappé à 20 max
-  if (geoMismatch) rawScore = Math.min(rawScore, 20);
-
-  return { score: rawScore, breakdown };
 }
 
 // ── getInvestorMatches ────────────────────────────────────────────────
@@ -213,7 +278,7 @@ export async function getInvestorMatches(
 
   const { data: deal, error: dealErr } = await supabase
     .from("deals")
-    .select("id, target_amount, sector, location, company_stage, company_geography")
+    .select("id, target_amount, sector, location, company_stage, company_geography, description")
     .eq("id", dealId)
     .eq("user_id", user.id)
     .single();
@@ -253,17 +318,22 @@ export async function getInvestorMatches(
 
   const matches: InvestorMatch[] = (investors ?? []).map(inv => {
     const resolved = resolveInvestorFields(inv as any);
+    const hasInteraction = activityOrgIds.includes(inv.id)
+      || commitmentsList.some(c => c.organization_id === inv.id);
     const { score, breakdown } = computeScore(
       deal.target_amount ?? null,
       deal.sector ?? null,
       deal.company_stage ?? null,
       dealGeo,
+      deal.description ?? null,
+      hasInteraction,
       {
         investor_ticket_min:  resolved.ticketMin,
         investor_ticket_max:  resolved.ticketMax,
         investor_sectors:     resolved.sectors,
         investor_stages:      resolved.stages,
         investor_geographies: resolved.geographies,
+        investor_thesis:      inv.investor_thesis ?? null,
       }
     );
     return {
