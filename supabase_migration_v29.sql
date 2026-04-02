@@ -7,39 +7,37 @@ BEGIN;
 -- ═══════════════════════════════════════════════════════════════════════
 -- 3a. investor_ticket_min / investor_ticket_max depuis investment_ticket
 -- ═══════════════════════════════════════════════════════════════════════
+-- Approche sûre : CASE sur patterns connus, pas de cast dynamique
 
-UPDATE organizations SET
-  investor_ticket_min = CASE
-    WHEN lower(investment_ticket) ~ '^[<>]' AND lower(investment_ticket) ~ '>' THEN
-      (regexp_replace(lower(investment_ticket), '[^0-9.,kmKM]', '', 'g'))::numeric *
-      CASE WHEN lower(investment_ticket) ~ '[mM]' THEN 1000000
-           WHEN lower(investment_ticket) ~ '[kK]' THEN 1000
-           ELSE 1 END
-    WHEN investment_ticket ~ '[–\-]' THEN
-      (regexp_replace(split_part(regexp_replace(lower(investment_ticket), '[€$chf\s]', '', 'g'), '-', 1), '[^0-9.,]', '', 'g'))::numeric *
-      CASE WHEN split_part(lower(investment_ticket), '-', 1) ~ '[mM]' THEN 1000000
-           WHEN split_part(lower(investment_ticket), '-', 1) ~ '[kK]' THEN 1000
-           ELSE 1 END
-    ELSE NULL
-  END,
-  investor_ticket_max = CASE
-    WHEN lower(investment_ticket) ~ '^<' THEN
-      (regexp_replace(lower(investment_ticket), '[^0-9.,]', '', 'g'))::numeric *
-      CASE WHEN lower(investment_ticket) ~ '[mM]' THEN 1000000
-           WHEN lower(investment_ticket) ~ '[kK]' THEN 1000
-           ELSE 1 END
-    WHEN investment_ticket ~ '[–\-]' THEN
-      (regexp_replace(split_part(regexp_replace(lower(investment_ticket), '[€$chf\s]', '', 'g'), '-', 2), '[^0-9.,]', '', 'g'))::numeric *
-      CASE WHEN split_part(lower(investment_ticket), '-', 2) ~ '[mM]' THEN 1000000
-           WHEN split_part(lower(investment_ticket), '-', 2) ~ '[kK]' THEN 1000
-           ELSE 1 END
-    ELSE NULL
-  END
+UPDATE organizations SET investor_ticket_max = 500000
 WHERE organization_type IN ('investor','business_angel','family_office','corporate')
-  AND investor_ticket_min IS NULL
-  AND investor_ticket_max IS NULL
-  AND investment_ticket IS NOT NULL
-  AND investment_ticket != '';
+  AND investor_ticket_min IS NULL AND investor_ticket_max IS NULL
+  AND lower(investment_ticket) LIKE '%< 500k%';
+
+UPDATE organizations SET investor_ticket_min = 500000, investor_ticket_max = 1000000
+WHERE organization_type IN ('investor','business_angel','family_office','corporate')
+  AND investor_ticket_min IS NULL AND investor_ticket_max IS NULL
+  AND (lower(investment_ticket) LIKE '%500k%1m%' OR lower(investment_ticket) LIKE '%500k%–%1m%');
+
+UPDATE organizations SET investor_ticket_min = 1000000, investor_ticket_max = 3000000
+WHERE organization_type IN ('investor','business_angel','family_office','corporate')
+  AND investor_ticket_min IS NULL AND investor_ticket_max IS NULL
+  AND (lower(investment_ticket) LIKE '%1m%3m%' OR lower(investment_ticket) LIKE '%1m%–%3m%');
+
+UPDATE organizations SET investor_ticket_min = 3000000, investor_ticket_max = 10000000
+WHERE organization_type IN ('investor','business_angel','family_office','corporate')
+  AND investor_ticket_min IS NULL AND investor_ticket_max IS NULL
+  AND (lower(investment_ticket) LIKE '%3m%10m%' OR lower(investment_ticket) LIKE '%3m%–%10m%');
+
+UPDATE organizations SET investor_ticket_min = 10000000, investor_ticket_max = 25000000
+WHERE organization_type IN ('investor','business_angel','family_office','corporate')
+  AND investor_ticket_min IS NULL AND investor_ticket_max IS NULL
+  AND (lower(investment_ticket) LIKE '%10m%25m%' OR lower(investment_ticket) LIKE '%10m%–%25m%');
+
+UPDATE organizations SET investor_ticket_min = 25000000
+WHERE organization_type IN ('investor','business_angel','family_office','corporate')
+  AND investor_ticket_min IS NULL AND investor_ticket_max IS NULL
+  AND lower(investment_ticket) LIKE '%> 25m%';
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- 3b. investor_sectors[] depuis sector
