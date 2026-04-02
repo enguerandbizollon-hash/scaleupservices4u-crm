@@ -9,6 +9,7 @@ import { CompanyProfileFields, type CompanyProfileData } from "./CompanyProfileF
 import { MaSellerFields, type MaSellerData } from "./MaSellerFields";
 import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
 import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
+import { GeoSelect } from "@/components/ui/GeoSelect";
 
 // Types qui affichent le profil entreprise (hors investisseurs)
 const COMPANY_PROFILE_TYPES = [
@@ -260,7 +261,7 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
               </div>
               <div>
                 <label style={lbl}>Localisation</label>
-                <input style={inp} placeholder="ex: Paris (FR), Genève (CH)" value={location} onChange={e => setLocation(e.target.value)} />
+                <GeoSelect mode="single" value={location || null} onChange={v => setLocation(v ?? "")} placeholder="— Non renseignée —" />
               </div>
               <div>
                 <label style={lbl}>Site web</label>

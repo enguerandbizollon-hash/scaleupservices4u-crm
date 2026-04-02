@@ -82,7 +82,10 @@ export default function NouveauDossierPage() {
               </div>
               <div>
                 <label className="lbl">LOCALISATION</label>
-                <input name="location" className="inp" placeholder="Ex. Paris (FR), Lyon (FR)"/>
+                <select name="location" className="inp">
+                  <option value="">— Non renseignée —</option>
+                  {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                </select>
               </div>
             </div>
 

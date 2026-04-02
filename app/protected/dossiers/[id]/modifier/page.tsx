@@ -109,7 +109,12 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
               <div>
                 <label style={{ cssText: lbl } as any}>Localisation</label>
-                <input name="location" defaultValue={deal.location ?? ""} style={{ cssText: inp } as any} placeholder="ex: Paris (FR)"/>
+                <select name="location" defaultValue={deal.location ?? ""} style={{ cssText: sel } as any}>
+                  <option value="">— Non renseignée —</option>
+                  <optgroup label="Zones">
+                    {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                  </optgroup>
+                </select>
               </div>
 
               <div>
