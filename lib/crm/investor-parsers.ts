@@ -38,24 +38,51 @@ export function normalizeStageText(text: string | null): string | null {
 /** Normalise un texte de secteur vers les valeurs SECTORS du référentiel */
 export function normalizeSectorText(text: string | null): string | null {
   if (!text) return null;
-  const t = text.toLowerCase();
+  const t = text.toLowerCase().trim();
+  // Généraliste
   if (t.includes("généraliste") || t.includes("generaliste")) return "Généraliste";
+  // Tech
   if (t.includes("saas") || t.includes("logiciel") || t.includes("software")) return "SaaS";
-  if (t.includes("fintech") || t.includes("insurtech")) return "Fintech";
-  if (t.includes("santé") || t.includes("medtech") || t.includes("health")) return "Healthtech";
-  if (t.includes("ia") || t.includes("intelligence artificielle") || t.includes("ai") || t.includes("deeptech")) return "Deeptech";
+  if (t.includes("fintech")) return "Fintech";
+  if (t.includes("insurtech")) return "InsurTech";
+  if (t.includes("regtech")) return "RegTech";
+  if (t.includes("proptech")) return "PropTech";
+  if (t.includes("hrtech") || t.includes("ressources humaines")) return "HRtech";
+  if (t.includes("cleantech")) return "CleanTech";
+  if (t.includes("biotech")) return "BioTech";
+  if (t.includes("medtech") || t.includes("santé") || t.includes("health")) return "MedTech";
+  if (t.includes("healthtech")) return "Healthtech";
+  if (t.includes("pharma")) return "Pharma";
+  if (t.includes("ia") || t.includes("intelligence artificielle") || t.includes("deeptech")) return "Deeptech";
   if (t.includes("cyber")) return "Cybersécurité";
-  if (t.includes("industrie") || t.includes("industrial") || t.includes("manufacturing")) return "Industrie";
+  // Industrie
+  if (t.includes("industrie") || t.includes("industrial") || t.includes("manufacturing") || t.includes("btp") || t.includes("construction") || t.includes("chimie") || t.includes("matériaux")) return "Industrie";
+  if (t.includes("infrastructure")) return "Infrastructure";
+  if (t.includes("aéro") || t.includes("aérospatial") || t.includes("aerospace")) return "Aéronautique";
+  if (t.includes("défense") || t.includes("defense") || t.includes("sécurité")) return "Défense";
+  // Commerce & services
   if (t.includes("retail") || t.includes("e-commerce") || t.includes("commerce") || t.includes("distribution")) return "Retail";
-  if (t.includes("energie") || t.includes("énergie") || t.includes("cleantech")) return "Energie";
+  if (t.includes("marketplace")) return "Marketplace";
+  if (t.includes("luxe") || t.includes("premium") || t.includes("beauté")) return "Luxe";
+  if (t.includes("services b2b")) return "Services B2B";
+  if (t.includes("conseil") || t.includes("advisory") || t.includes("consulting")) return "Conseil";
+  // Énergie & environnement
+  if (t.includes("energie") || t.includes("énergie") || t.includes("environnement")) return "Energie";
   if (t.includes("immobilier") || t.includes("real estate")) return "Immobilier";
   if (t.includes("transport") || t.includes("mobility") || t.includes("logistique")) return "Transport";
+  // Food & agri
   if (t.includes("food") || t.includes("agri") || t.includes("agroalimentaire")) return "Food";
+  // Education & social
   if (t.includes("edtech") || t.includes("éducation") || t.includes("education")) return "Edtech";
-  if (t.includes("marketplace")) return "Marketplace";
+  if (t.includes("impact") || t.includes("social")) return "Impact";
+  // Média & sport
+  if (t.includes("média") || t.includes("media") || t.includes("entertainment") || t.includes("télécom")) return "Média";
+  if (t.includes("sport") || t.includes("loisir")) return "Sport";
+  // Hardware
   if (t.includes("hardware")) return "Hardware";
-  if (t.includes("impact")) return "Impact";
-  if (t.includes("juridique") || t.includes("legal")) return "Juridique";
+  // Juridique / Finance
+  if (t.includes("juridique") || t.includes("legal")) return "Conseil";
+  if (t.includes("finance") || t.includes("investissement")) return "Fintech";
   return null;
 }
 

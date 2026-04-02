@@ -1,22 +1,14 @@
 "use client";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-
-const SECTORS = ["Généraliste","Technologie / SaaS","Intelligence Artificielle",
-  "Fintech / Insurtech","Santé / Medtech","Industrie / Manufacturing","Énergie / CleanTech",
-  "Immobilier","Distribution / Retail","Médias / Entertainment","Transport / Logistique",
-  "Agroalimentaire","Éducation / EdTech","Défense / Sécurité","Tourisme / Hospitality",
-  "Services B2B","Conseil / Advisory","Juridique","Finance / Investissement",
-  "Ressources Humaines","Luxe / Premium","Construction / BTP","Télécommunications",
-  "Agriculture / AgriTech","Chimie / Matériaux","Aérospatial","Environnement",
-  "Sport / Loisirs","Bien-être / Beauté","Cybersécurité","Autre"];
+import { SECTORS } from "@/lib/crm/matching-maps";
 
 const TICKETS = ["< 50k€","50k – 200k€","200k – 500k€","500k – 1M€","1M – 3M€","3M – 10M€","> 10M€"];
 const STAGES  = ["Pre-seed","Seed","Série A","Série B","Growth","PE / LBO","Restructuring"];
 
 type FieldKey = "sector" | "investment_ticket" | "investment_stage";
 
-const OPTIONS: Record<FieldKey, string[]> = {
+const OPTIONS: Record<FieldKey, readonly string[]> = {
   sector: SECTORS,
   investment_ticket: TICKETS,
   investment_stage: STAGES,
