@@ -57,7 +57,8 @@ export async function updateDealAction(formData: FormData) {
 
   const targetAmount = formData.get("target_amount");
 
-  const { error } = await supabase.from("deals").update({
+  // Champs de base (toujours présents dans le form)
+  const updateData: Record<string, unknown> = {
     name:           ns(formData.get("name")),
     deal_type:      ns(formData.get("deal_type")),
     deal_status:    ns(formData.get("deal_status")),
@@ -68,18 +69,24 @@ export async function updateDealAction(formData: FormData) {
     description:    ns(formData.get("description")),
     start_date:     ns(formData.get("start_date")),
     target_date:    ns(formData.get("target_date")),
-    target_amount:     targetAmount ? Number(targetAmount) : null,
-    currency:          ns(formData.get("currency")) ?? "EUR",
-    company_stage:     ns(formData.get("company_stage")),
-    company_geography: ns(formData.get("company_geography")),
-    // Recrutement
-    job_title:          ns(formData.get("job_title")),
-    required_seniority: ns(formData.get("required_seniority")),
-    required_location:  ns(formData.get("required_location")),
-    required_remote:    ns(formData.get("required_remote")),
-    salary_min: formData.get("salary_min") ? Number(formData.get("salary_min")) : null,
-    salary_max: formData.get("salary_max") ? Number(formData.get("salary_max")) : null,
-  }).eq("id", dealId);
+    target_amount:  targetAmount ? Number(targetAmount) : null,
+    currency:       ns(formData.get("currency")) ?? "EUR",
+    mandate_id:     ns(formData.get("mandate_id")),
+  };
+
+  // Matching investisseur (fundraising / M&A) — seulement si champs présents dans le form
+  if (formData.has("company_stage")) updateData.company_stage = ns(formData.get("company_stage"));
+  if (formData.has("company_geography")) updateData.company_geography = ns(formData.get("company_geography"));
+
+  // Recrutement — seulement si champs présents dans le form
+  if (formData.has("job_title")) updateData.job_title = ns(formData.get("job_title"));
+  if (formData.has("required_seniority")) updateData.required_seniority = ns(formData.get("required_seniority"));
+  if (formData.has("required_location")) updateData.required_location = ns(formData.get("required_location"));
+  if (formData.has("required_remote")) updateData.required_remote = ns(formData.get("required_remote"));
+  if (formData.has("salary_min")) updateData.salary_min = formData.get("salary_min") ? Number(formData.get("salary_min")) : null;
+  if (formData.has("salary_max")) updateData.salary_max = formData.get("salary_max") ? Number(formData.get("salary_max")) : null;
+
+  const { error } = await supabase.from("deals").update(updateData).eq("id", dealId);
 
   if (error) throw new Error(error.message);
 

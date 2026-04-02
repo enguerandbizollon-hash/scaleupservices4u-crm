@@ -9,9 +9,8 @@ import {
   removeCandidateFromDealAction,
   clearNeedsReviewAction,
   setPlacementFeeAction,
-  type KanbanData,
-  type KanbanCandidate,
 } from "@/actions/recruitment-kanban";
+import type { KanbanData, KanbanCandidate } from "@/lib/crm/recruitment-types";
 import { CANDIDATE_STATUSES } from "@/lib/crm/matching-maps";
 import { UserSearch, ChevronLeft, ChevronRight, X, Plus, Search } from "lucide-react";
 

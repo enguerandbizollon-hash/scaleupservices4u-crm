@@ -6,9 +6,19 @@ import { LossReasonModal } from "../../components/loss-reason-modal";
 import { MailTaskModal } from "../../components/mail-task-modal";
 import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
 import { MatchingTab } from "./matching-tab";
+import { MaMatchingTab } from "./ma-matching-tab";
 import { RecruitmentKanban } from "./recruitment-kanban";
 import { RecruitmentMatching } from "./recruitment-matching";
+import { FinancialTab, type FinancialRow } from "./financial-tab";
 import { updateDealMatchingProfile } from "@/actions/matching";
+import {
+  createCommitment, updateCommitment, deleteCommitment,
+  createDealDocument, deleteDealDocument,
+  linkOrganisationToDeal, unlinkOrganisationFromDeal,
+} from "@/actions/deals";
+import { TagInput } from "@/components/tags/TagInput";
+import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
+import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
 import {
@@ -119,7 +129,7 @@ function SectionHeader({ icon:Icon, title, count, expanded, onToggle, onAdd, add
 }
 
 // ════════════════════════════════════════════════════════════
-export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialTasks, initialActivities, initialDocs }: {
+export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialTasks, initialActivities, initialDocs, initialFinancialData }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
@@ -127,17 +137,18 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   initialTasks: Task[];
   initialActivities: Act[];
   initialDocs: Doc[];
+  initialFinancialData: FinancialRow[];
 }) {
   // State sections
-  const [orgs] = useState<Org[]>(initialOrgs);
+  const [orgs, setOrgs] = useState<Org[]>(initialOrgs);
   const [allOrgs, setAllOrgs] = useState<{id:string;name:string}[]>([]);
+  const [orgSearchOpen, setOrgSearchOpen] = useState(false);
+  const [orgSearchQuery, setOrgSearchQuery] = useState("");
+  const [orgLinking, setOrgLinking] = useState(false);
 
   // Charger toutes les orgs CRM (pour le sélecteur dans Engagement)
   useEffect(() => {
-    fetch("/api/organisations")
-      .then(r => r.json())
-      .then(d => setAllOrgs(d.organisations ?? []))
-      .catch(() => {});
+    getAllOrganisationsSimple().then(orgs => setAllOrgs(orgs)).catch(() => {});
   }, []);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
@@ -164,7 +175,8 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "matching" | "pipeline" | "matching_rh">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "matching" | "matching_ma" | "pipeline" | "matching_rh" | "financier">("dossier");
+  const [matchingRefreshKey, setMatchingRefreshKey] = useState(0);
 
   // Matching profile inline edit
   const [matchingEditOpen, setMatchingEditOpen] = useState(false);
@@ -175,6 +187,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const dt = DT[deal.deal_type] ?? DT.fundraising;
   const isFundraising  = deal.deal_type === "fundraising";
   const isRecruitment  = deal.deal_type === "recruitment";
+  const isMa           = deal.deal_type === "ma_sell" || deal.deal_type === "ma_buy";
   const target = deal.target_amount ?? 0;
   const hard = commitments.filter(c=>["hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
   const soft = commitments.filter(c=>["soft","hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
@@ -185,33 +198,36 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const openModal = (name:string, data?:any) => { setModal(name); setEditing(data??null); setForm(data ? {...data, amount:data.amount??"", committed_at:toDateStr(data.committed_at), due_date:toDateStr(data.due_date), activity_date:toDateStr(data.activity_date), organization_id:data.organization_id??""} : {}); };
   const closeModal = () => { setModal(null); setEditing(null); setForm({}); };
 
-  async function api(path:string, method:string, body:any) {
-    const res = await fetch(`/api/deals/${deal.id}/${path}`, { method, headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || "Erreur");
-    return d;
-  }
-
   // ── PIPELINE CRUD ──────────────────────────────────────────
   async function saveCommitment() {
     setLoading(true);
     try {
-      const payload = { ...form };
+      const payload = {
+        organization_id: form.organization_id || null,
+        amount:          form.amount ? Number(form.amount) : null,
+        currency:        form.currency || "EUR",
+        status:          form.status || "indication",
+        committed_at:    form.committed_at || null,
+        notes:           form.notes || null,
+      };
       if (editing) {
-        const d = await api("pipeline","PATCH",{commitment_id:editing.id,...payload});
-        const orgName = Array.isArray(d.organizations)?d.organizations[0]?.name:d.organizations?.name;
-        setCommitments(p=>p.map(c=>c.id===editing.id?{...d,org_name:orgName}:c));
+        const r = await updateCommitment(deal.id, editing.id, payload);
+        if (!r.success) throw new Error(r.error);
+        const orgName = Array.isArray(r.data?.organizations)?r.data.organizations[0]?.name:(r.data?.organizations as any)?.name;
+        setCommitments(p=>p.map(c=>c.id===editing.id?{...r.data!,org_name:orgName}:c));
       } else {
-        const d = await api("pipeline","POST",payload);
-        const orgName = Array.isArray(d.organizations)?d.organizations[0]?.name:d.organizations?.name;
-        setCommitments(p=>[...p,{...d,org_name:orgName}]);
+        const r = await createCommitment(deal.id, payload);
+        if (!r.success) throw new Error(r.error);
+        const orgName = Array.isArray(r.data?.organizations)?r.data.organizations[0]?.name:(r.data?.organizations as any)?.name;
+        setCommitments(p=>[...p,{...r.data!,org_name:orgName}]);
       }
       closeModal();
     } catch(e:any){ alert(e.message); } finally { setLoading(false); }
   }
-  async function deleteCommitment(id:string) {
+  async function handleDeleteCommitment(id:string) {
     if (!confirm("Supprimer cet engagement ?")) return;
-    await api("pipeline","DELETE",{commitment_id:id});
+    const r = await deleteCommitment(deal.id, id);
+    if (!r.success) { alert(r.error); return; }
     setCommitments(p=>p.filter(c=>c.id!==id));
   }
 
@@ -291,29 +307,21 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     if (!form.doc_name) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/deals/${deal.id}/documents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.doc_name,
-          document_url: form.doc_url || null,
-          version_label: form.doc_version || null,
-        }),
+      const r = await createDealDocument(deal.id, {
+        name:          form.doc_name,
+        document_url:  form.doc_url  || null,
+        version_label: form.doc_version || null,
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Erreur");
-      setDocs(p => [...p, d]);
+      if (!r.success) throw new Error(r.error);
+      setDocs(p => [...p, r.data!]);
       closeModal();
     } catch(e:any) { alert(e.message); } finally { setLoading(false); }
   }
 
   async function deleteDoc(id:string) {
     if (!confirm("Supprimer ce document ?")) return;
-    await fetch(`/api/deals/${deal.id}/documents`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ document_id: id }),
-    });
+    const r = await deleteDealDocument(deal.id, id);
+    if (!r.success) { alert(r.error); return; }
     setDocs(p => p.filter(d => d.id !== id));
   }
 
@@ -339,45 +347,72 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               </div>
               <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>{deal.name}</h1>
               {deal.description && <p style={{ margin:"6px 0 0", fontSize:13, color:"var(--text-4)", lineHeight:1.5, maxWidth:600 }}>{deal.description}</p>}
+              <div style={{ marginTop:10 }}><TagInput objectType="deal" objectId={deal.id} /></div>
             </div>
             <Link href={`/protected/dossiers/${deal.id}/modifier`} style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}>Modifier</Link>
           </div>
         </div>
 
-        {/* Tabs */}
-        {(isFundraising || isRecruitment) && (
-          <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
-            {(isFundraising
-              ? (["dossier","matching"] as const)
-              : (["dossier","pipeline","matching_rh"] as const)
-            ).map(tab => {
-              const labels: Record<string, string> = { dossier:"Dossier", matching:"Matching investisseurs", pipeline:"Pipeline", matching_rh:"Matching vivier" };
-              const accentColor = isFundraising ? "var(--fund-tx)" : "var(--rec-tx)";
-              const isActive = activeTab === tab;
-              return (
-                <button key={tab} onClick={()=>setActiveTab(tab as typeof activeTab)} style={{
-                  padding:"8px 16px", border:"none", background:"none", cursor:"pointer",
-                  fontSize:13, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? "var(--text-1)" : "var(--text-4)",
-                  borderBottom: isActive ? `2px solid ${accentColor}` : "2px solid transparent",
-                  marginBottom:-1, fontFamily:"inherit",
-                }}>
-                  {labels[tab]}
-                </button>
-              );
-            })}
-          </div>
+        {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
+        <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
+          {(isFundraising
+            ? (["dossier","matching","financier"] as const)
+            : isRecruitment
+            ? (["dossier","pipeline","matching_rh"] as const)
+            : isMa
+            ? (["dossier","matching_ma","financier"] as const)
+            : (["dossier","financier"] as const)
+          ).map(tab => {
+            const labels: Record<string, string> = {
+              dossier:"Dossier", matching:"Matching", matching_ma:"Matching M&A",
+              pipeline:"Pipeline", matching_rh:"Matching vivier", financier:"Financier",
+            };
+            const accentColor = isFundraising ? "var(--fund-tx)" : isRecruitment ? "var(--rec-tx)" : isMa ? "var(--sell-tx)" : "var(--sell-tx)";
+            const isActive = activeTab === tab;
+            return (
+              <button key={tab} onClick={()=>{
+                setActiveTab(tab as typeof activeTab);
+                if (tab === "matching") setMatchingRefreshKey(k => k + 1);
+              }} style={{
+                padding:"8px 16px", border:"none", background:"none", cursor:"pointer",
+                fontSize:13, fontWeight: isActive ? 700 : 500,
+                color: isActive ? "var(--text-1)" : "var(--text-4)",
+                borderBottom: isActive ? `2px solid ${accentColor}` : "2px solid transparent",
+                marginBottom:-1, fontFamily:"inherit",
+              }}>
+                {labels[tab]}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Onglet Financier */}
+        {activeTab === "financier" && (
+          <FinancialTab
+            dealId={deal.id}
+            dealType={deal.deal_type}
+            initialData={initialFinancialData}
+          />
         )}
 
         {/* Onglet Matching (fundraising) */}
         {isFundraising && activeTab === "matching" && (
           <MatchingTab
             dealId={deal.id}
+            refreshKey={matchingRefreshKey}
             onCreateActivity={() => {
               setActivityContextType("activity");
               setEditingActivity(null);
               setUnifiedActivityModalOpen(true);
             }}
+          />
+        )}
+
+        {/* Onglet Matching M&A */}
+        {isMa && activeTab === "matching_ma" && (
+          <MaMatchingTab
+            dealId={deal.id}
+            dealType={deal.deal_type as "ma_sell" | "ma_buy"}
           />
         )}
 
@@ -401,6 +436,55 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             {/* ORGANISATIONS + CONTACTS */}
             <div style={cardStyle}>
               <SectionHeader icon={Building2} title="Organisations & Contacts" count={orgs.length} expanded={expOrgs} onToggle={()=>setExpOrgs(p=>!p)} onAdd={()=>openModal("add_contact")} addLabel="Contact"/>
+
+              {/* Ajouter une organisation */}
+              {expOrgs && (
+                <div style={{ padding:"8px 16px", borderTop:"1px solid var(--border)" }}>
+                  {!orgSearchOpen ? (
+                    <button onClick={()=>{setOrgSearchOpen(true);setOrgSearchQuery("")}} style={{ fontSize:12.5, color:"var(--text-3)", background:"none", border:"1px dashed var(--border)", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontFamily:"inherit", fontWeight:500, width:"100%" }}>
+                      + Lier une organisation
+                    </button>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      <div style={{ display:"flex", gap:6 }}>
+                        <input
+                          autoFocus
+                          placeholder="Rechercher une organisation…"
+                          value={orgSearchQuery}
+                          onChange={e=>setOrgSearchQuery(e.target.value)}
+                          style={{ flex:1, padding:"7px 12px", border:"1px solid var(--border)", borderRadius:8, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface-2)", color:"var(--text-1)" }}
+                        />
+                        <button onClick={()=>setOrgSearchOpen(false)} style={{ padding:"6px 10px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface-2)", cursor:"pointer", color:"var(--text-4)", fontFamily:"inherit", fontSize:12 }}>✕</button>
+                      </div>
+                      {orgSearchQuery.trim().length >= 2 && (
+                        <div style={{ maxHeight:200, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface)" }}>
+                          {allOrgs
+                            .filter(o => o.name.toLowerCase().includes(orgSearchQuery.toLowerCase()) && !orgs.some(existing => existing.id === o.id))
+                            .slice(0, 8)
+                            .map(o => (
+                              <button key={o.id} disabled={orgLinking} onClick={async ()=>{
+                                setOrgLinking(true);
+                                const res = await linkOrganisationToDeal(deal.id, o.id);
+                                if (res.success) {
+                                  setOrgs(prev => [...prev, { id:o.id, name:o.name, organization_type:"other", base_status:"active", contacts:[] }]);
+                                  setOrgSearchOpen(false);
+                                  setOrgSearchQuery("");
+                                }
+                                setOrgLinking(false);
+                              }} style={{ display:"block", width:"100%", padding:"8px 12px", textAlign:"left", border:"none", borderBottom:"1px solid var(--border)", background:"none", cursor:"pointer", fontSize:13, color:"var(--text-1)", fontFamily:"inherit" }}>
+                                {o.name}
+                              </button>
+                            ))}
+                          {allOrgs.filter(o => o.name.toLowerCase().includes(orgSearchQuery.toLowerCase()) && !orgs.some(existing => existing.id === o.id)).length === 0 && (
+                            <div style={{ padding:"12px", fontSize:12.5, color:"var(--text-5)", textAlign:"center" }}>Aucune organisation trouvée</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {expOrgs && orgs.map(org => {
                 const orgContacts = contacts.filter(c=>c.org_id===org.id);
                 const isExp = expOrg[org.id] !== false;
@@ -421,6 +505,14 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       </div>
                       <div style={{ display:"flex", gap:5, alignItems:"center" }}>
                         <StatusDropdown id={org.id} status={org.base_status} entity="organisations" size="sm"/>
+                        <button onClick={async (e)=>{
+                          e.stopPropagation();
+                          if (!confirm(`Délier ${org.name} de ce dossier ?`)) return;
+                          const res = await unlinkOrganisationFromDeal(deal.id, org.id);
+                          if (res.success) setOrgs(prev => prev.filter(o => o.id !== org.id));
+                        }} style={{ width:22, height:22, borderRadius:6, border:"1px solid var(--border)", background:"var(--surface-2)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-5)", fontSize:11 }} title="Délier cette organisation">
+                          <X size={10}/>
+                        </button>
                         {isExp ? <ChevronUp size={12} color="var(--text-5)"/> : <ChevronDown size={12} color="var(--text-5)"/>}
                       </div>
                     </div>
@@ -492,7 +584,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                           <span style={{ fontSize:13.5, fontWeight:700, color:"var(--text-1)", flexShrink:0, minWidth:70, textAlign:"right" }}>{fmtA(c.amount, c.currency)}</span>
                           <div style={{ display:"flex", gap:4, flexShrink:0 }}>
                             <button onClick={()=>openModal("commitment",{...c,org_name:c.org_name})} style={{...actionBtn}}><Pencil size={11}/></button>
-                            <button onClick={()=>deleteCommitment(c.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
+                            <button onClick={()=>handleDeleteCommitment(c.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
                           </div>
                         </div>
                       );
@@ -568,6 +660,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                           deal.company_stage     = matchingStage     || null;
                           deal.company_geography = matchingGeo       || null;
                           setMatchingEditOpen(false);
+                          setMatchingRefreshKey(k => k + 1);
                         }
                       }}>Enregistrer</BtnPrimary>
                     </div>
@@ -739,11 +832,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                 const orgId = form.org_name;
                 if (!orgId) { alert("Choisir une organisation"); return; }
                 // Créer ou trouver le contact puis lier
-                const res = await fetch("/api/contacts/upsert", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ first_name:form.first_name, last_name:form.last_name, email:form.email }) });
-                const c = await res.json();
-                await api("contacts-link","POST",{ contact_id:c.id, organization_id:orgId, role_label:form.role_label });
+                const cu = await upsertContact({ first_name:form.first_name||"", last_name:form.last_name||"", email:form.email||null });
+                if (!cu.success) throw new Error(cu.error);
+                await linkContactToOrganisation(cu.id, orgId, form.role_label||undefined);
                 const org = orgs.find(o=>o.id===orgId);
-                setContacts(p=>[...p,{ id:c.id, first_name:c.first_name||form.first_name, last_name:c.last_name||form.last_name, email:c.email||form.email, base_status:"to_qualify", org_id:orgId, org_name:org?.name }]);
+                setContacts(p=>[...p,{ id:cu.id, first_name:form.first_name, last_name:form.last_name, email:form.email, base_status:"to_qualify", org_id:orgId, org_name:org?.name }]);
                 closeModal();
               } catch(e:any){ alert(e.message); } finally { setLoading(false); }
             }} loading={loading}>Ajouter</BtnPrimary>

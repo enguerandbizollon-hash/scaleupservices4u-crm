@@ -14,9 +14,11 @@ const MIN_SCORE_OPTIONS = [
 interface MatchingTabProps {
   dealId: string;
   onCreateActivity: (orgId: string, orgName: string) => void;
+  /** Incrémenter pour forcer un refresh (ex: après modification du profil matching) */
+  refreshKey?: number;
 }
 
-export function MatchingTab({ dealId, onCreateActivity }: MatchingTabProps) {
+export function MatchingTab({ dealId, onCreateActivity, refreshKey = 0 }: MatchingTabProps) {
   const [matches, setMatches] = useState<InvestorMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,8 @@ export function MatchingTab({ dealId, onCreateActivity }: MatchingTabProps) {
     setLoading(false);
   }, [dealId, showInactive]);
 
-  useEffect(() => { load(); }, [load]);
+  // Reload quand showInactive change, au mount, ou quand refreshKey change
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   // Quand un investisseur est désactivé depuis la card, on met à jour localement
   function handleStatusChange(orgId: string, newStatus: "active" | "inactive") {

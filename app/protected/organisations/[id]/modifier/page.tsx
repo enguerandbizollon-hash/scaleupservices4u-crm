@@ -13,12 +13,18 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       id, name, organization_type, base_status, sector, location, website,
       linkedin_url, description, notes,
       investor_ticket_min, investor_ticket_max, investor_sectors,
-      investor_stages, investor_geographies, investor_thesis
+      investor_stages, investor_geographies, investor_thesis,
+      founded_year, employee_count, company_stage, revenue_range,
+      sale_readiness, partial_sale_ok,
+      acquisition_rationale, target_sectors, excluded_sectors,
+      target_geographies, target_revenue_min, target_revenue_max
     `)
     .eq("id", id)
     .maybeSingle();
 
   if (!org) notFound();
+
+  const o = org as Record<string, unknown>;
 
   return (
     <OrganisationForm
@@ -28,17 +34,30 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
         name:                 org.name,
         organization_type:    org.organization_type,
         base_status:          org.base_status,
-        location:             (org as any).location ?? undefined,
-        website:              org.website ?? undefined,
-        linkedin_url:         (org as any).linkedin_url ?? undefined,
-        description:          (org as any).description ?? undefined,
-        notes:                (org as any).notes ?? undefined,
-        investor_ticket_min:  (org as any).investor_ticket_min ?? null,
-        investor_ticket_max:  (org as any).investor_ticket_max ?? null,
-        investor_sectors:     ((org as any).investor_sectors as string[]) ?? [],
-        investor_stages:      ((org as any).investor_stages as string[]) ?? [],
-        investor_geographies: ((org as any).investor_geographies as string[]) ?? [],
-        investor_thesis:      (org as any).investor_thesis ?? null,
+        location:             (o.location as string) ?? undefined,
+        website:              (o.website as string) ?? undefined,
+        linkedin_url:         (o.linkedin_url as string) ?? undefined,
+        description:          (o.description as string) ?? undefined,
+        notes:                (o.notes as string) ?? undefined,
+        investor_ticket_min:  (o.investor_ticket_min as number) ?? null,
+        investor_ticket_max:  (o.investor_ticket_max as number) ?? null,
+        investor_sectors:     (o.investor_sectors as string[]) ?? [],
+        investor_stages:      (o.investor_stages as string[]) ?? [],
+        investor_geographies: (o.investor_geographies as string[]) ?? [],
+        investor_thesis:      (o.investor_thesis as string) ?? null,
+        sector:               (o.sector as string) ?? null,
+        founded_year:         (o.founded_year as number) ?? null,
+        employee_count:       (o.employee_count as number) ?? null,
+        company_stage:        (o.company_stage as string) ?? null,
+        revenue_range:        (o.revenue_range as string) ?? null,
+        sale_readiness:       (o.sale_readiness as string) ?? null,
+        partial_sale_ok:      (o.partial_sale_ok as boolean) ?? true,
+        acquisition_rationale:(o.acquisition_rationale as string) ?? null,
+        target_sectors:       (o.target_sectors as string[]) ?? [],
+        excluded_sectors:     (o.excluded_sectors as string[]) ?? [],
+        target_geographies:   (o.target_geographies as string[]) ?? [],
+        target_revenue_min:   (o.target_revenue_min as number) ?? null,
+        target_revenue_max:   (o.target_revenue_max as number) ?? null,
       }}
     />
   );

@@ -15,6 +15,8 @@ export interface InvestorMatchBreakdown {
   sector:    { earned: number; max: number; filled: boolean };
   stage:     { earned: number; max: number; filled: boolean };
   geography: { earned: number; max: number; filled: boolean };
+  /** true si deal ET investisseur ont une géo renseignée mais aucune intersection */
+  geoMismatch: boolean;
 }
 
 export interface InvestorMatch {
@@ -169,10 +171,20 @@ function scoreSector(dealSector: string | null, investorSectors: string[]): numb
 function scoreStage(dealStage: string | null, investorStages: string[]): number {
   if (!dealStage || !investorStages?.length) return 0;
   // Généraliste (investisseur "toutes étapes") → match automatique
-  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 25;
+  if (investorStages.some(s => s.toLowerCase() === "généraliste")) return 15;
   // STAGE_MAP : clé = company_stage du deal, valeurs = labels investor_stages compatibles
   const compatible = STAGE_MAP[dealStage] ?? [];
-  return investorStages.some(s => compatible.includes(s)) ? 25 : 0;
+  return investorStages.some(s => compatible.includes(s)) ? 15 : 0;
+}
+
+/**
+ * Vérifie si la géographie du deal et de l'investisseur sont compatibles.
+ * Retourne true si match (ou si l'un des deux n'a pas de géo = pas de restriction).
+ */
+function isGeographyMatch(dealGeo: string | null, investorGeos: string[]): boolean {
+  if (!dealGeo || investorGeos.length === 0) return true;
+  const compatible = GEO_COMPATIBILITY[dealGeo] ?? [];
+  return investorGeos.some(g => compatible.includes(g));
 }
 
 function computePipelineStatus(
@@ -202,28 +214,44 @@ function computeScore(
     investor_geographies: string[];
   }
 ): { score: number | null; breakdown: InvestorMatchBreakdown } {
-  // Un critère est "filled" (scoré) seulement si LES DEUX CÔTÉS ont la donnée.
-  // Si le dossier n'a pas de stade/géo/montant, on ne pénalise pas l'investisseur.
-  const ticketFilled  = (inv.investor_ticket_min !== null || inv.investor_ticket_max !== null) && dealAmount !== null;
-  const sectorsFilled = inv.investor_sectors?.length > 0 && dealSector !== null;
-  const stagesFilled  = inv.investor_stages?.length > 0 && dealStage !== null;
-  const geoFilled     = inv.investor_geographies?.length > 0 && dealGeo !== null;
+  // Pondération : Ticket 30 · Secteur 30 · Stage 15 · Géo 15 = 90pts → normalisé /90 × 100
+  const hasTicket  = inv.investor_ticket_min !== null || inv.investor_ticket_max !== null;
+  const hasSectors = inv.investor_sectors?.length > 0;
+  const hasStages  = inv.investor_stages?.length > 0;
+  const hasGeo     = inv.investor_geographies?.length > 0;
 
-  const geoEarned = geoFilled ? scoreGeography(dealGeo, inv.investor_geographies) : 0;
+  // Score par critère : si le deal n'a pas la donnée → points max (pas de pénalité deal incomplet)
+  const ticketEarned  = hasTicket  ? (dealAmount  !== null ? scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max) : 30) : 0;
+  const sectorEarned  = hasSectors ? (dealSector  !== null ? scoreSector(dealSector, inv.investor_sectors) : 30) : 0;
+  const stageEarned   = hasStages  ? (dealStage   !== null ? scoreStage(dealStage, inv.investor_stages) : 15) : 0;
+  const geoEarned     = hasGeo     ? (dealGeo     !== null ? scoreGeography(dealGeo, inv.investor_geographies) : 15) : 0;
+
+  // Geo mismatch = les deux côtés ont une géo ET aucune intersection → drop-dead
+  const geoMismatch = hasGeo && dealGeo !== null && !isGeographyMatch(dealGeo, inv.investor_geographies);
 
   const breakdown: InvestorMatchBreakdown = {
-    ticket:    { earned: ticketFilled  ? scoreTicket(dealAmount, inv.investor_ticket_min, inv.investor_ticket_max) : 0, max: 30, filled: ticketFilled },
-    sector:    { earned: sectorsFilled ? scoreSector(dealSector, inv.investor_sectors) : 0,   max: 30, filled: sectorsFilled },
-    stage:     { earned: stagesFilled  ? scoreStage(dealStage, inv.investor_stages) : 0,       max: 25, filled: stagesFilled },
-    geography: { earned: geoEarned,   max: 15, filled: geoFilled },
+    ticket:    { earned: ticketEarned,  max: 30, filled: hasTicket },
+    sector:    { earned: sectorEarned,  max: 30, filled: hasSectors },
+    stage:     { earned: stageEarned,   max: 15, filled: hasStages },
+    geography: { earned: geoEarned,     max: 15, filled: hasGeo },
+    geoMismatch,
   };
 
   const criteria = [breakdown.ticket, breakdown.sector, breakdown.stage, breakdown.geography].filter(c => c.filled);
+  // Aucun critère investisseur renseigné → profil vraiment incomplet
   if (criteria.length === 0) return { score: null, breakdown };
 
   const totalWeight = criteria.reduce((s, c) => s + c.max, 0);
   const earned      = criteria.reduce((s, c) => s + c.earned, 0);
-  return { score: Math.round(earned / totalWeight * 100), breakdown };
+  let rawScore = Math.round(earned / totalWeight * 100);
+
+  // Pénalité profil investisseur incomplet : moins de 3 critères renseignés → score × 0.6
+  if (criteria.length < 3) rawScore = Math.round(rawScore * 0.6);
+
+  // GEO DROP-DEAD : si géo incompatible, score cappé à 20 max
+  if (geoMismatch) rawScore = Math.min(rawScore, 20);
+
+  return { score: rawScore, breakdown };
 }
 
 // ── getInvestorMatches ────────────────────────────────────────────────
@@ -238,7 +266,7 @@ export async function getInvestorMatches(
 
   const { data: deal, error: dealErr } = await supabase
     .from("deals")
-    .select("id, target_amount, sector, location, company_stage")
+    .select("id, target_amount, sector, location, company_stage, company_geography")
     .eq("id", dealId)
     .eq("user_id", user.id)
     .single();
@@ -251,8 +279,8 @@ export async function getInvestorMatches(
     .in("organization_type", INVESTOR_ORG_TYPES);
 
   if (!includeInactive) {
-    // Inclure active, qualified (ancien), priority (ancien)
-    query = query.in("base_status", ["active", "qualified", "priority"]);
+    // Inclure active + to_qualify (non qualifié) + anciens labels backward-compat
+    query = query.in("base_status", ["active", "to_qualify", "qualified", "priority"]);
   }
 
   const { data: investors, error: invErr } = await query;
@@ -274,15 +302,14 @@ export async function getInvestorMatches(
   const activityOrgIds = (activities ?? []).map((a: any) => a.organization_id).filter(Boolean) as string[];
   const commitmentsList = (commitments ?? []) as { organization_id: string | null; status: string }[];
 
-  // Géo effective : company_geography si la colonne existe (migration V15b), sinon null
-  const dealGeo = (deal as any).company_geography ?? null;
+  const dealGeo = deal.company_geography ?? null;
 
   const matches: InvestorMatch[] = (investors ?? []).map(inv => {
     const resolved = resolveInvestorFields(inv as any);
     const { score, breakdown } = computeScore(
       deal.target_amount ?? null,
       deal.sector ?? null,
-      (deal as any).company_stage ?? null,
+      deal.company_stage ?? null,
       dealGeo,
       {
         investor_ticket_min:  resolved.ticketMin,

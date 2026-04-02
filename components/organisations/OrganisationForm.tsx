@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import { Building2, ArrowLeft } from "lucide-react";
 import { OrganisationTypeGrid, INVESTOR_TYPES } from "./OrganisationTypeGrid";
 import { InvestorProfileFields, TICKET_OPTIONS, ticketKeyFromMinMax, type InvestorProfileData } from "./InvestorProfileFields";
+import { CompanyProfileFields, type CompanyProfileData } from "./CompanyProfileFields";
+import { MaSellerFields, type MaSellerData } from "./MaSellerFields";
+import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
 import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
+
+// Types qui affichent le profil entreprise (hors investisseurs)
+const COMPANY_PROFILE_TYPES = [
+  "client", "prospect_client", "target", "buyer",
+  "bank", "advisor", "law_firm", "accounting_firm", "consulting_firm", "other",
+];
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -26,6 +35,22 @@ export interface OrgFormInitialData {
   investor_stages?: string[];
   investor_geographies?: string[];
   investor_thesis?: string | null;
+  // Company profile fields
+  sector?: string | null;
+  founded_year?: number | null;
+  employee_count?: number | null;
+  company_stage?: string | null;
+  revenue_range?: string | null;
+  // M&A seller
+  sale_readiness?: string | null;
+  partial_sale_ok?: boolean;
+  // M&A buyer
+  acquisition_rationale?: string | null;
+  target_sectors?: string[];
+  excluded_sectors?: string[];
+  target_geographies?: string[];
+  target_revenue_min?: number | null;
+  target_revenue_max?: number | null;
 }
 
 interface OrganisationFormProps {
@@ -72,13 +97,41 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
   // Investor profile
   const [investorData, setInvestorData] = useState<InvestorProfileData>({
     ticketKey:   ticketKeyFromMinMax(initialData.investor_ticket_min ?? null, initialData.investor_ticket_max ?? null),
-    stage:       (initialData.investor_stages ?? [])[0] ?? "",
+    stages:      initialData.investor_stages ?? [],
     sectors:     initialData.investor_sectors ?? [],
     geographies: initialData.investor_geographies ?? [],
     thesis:      initialData.investor_thesis ?? "",
   });
 
-  const isInvestorType = INVESTOR_TYPES.includes(orgType);
+  // Company profile
+  const [companyData, setCompanyData] = useState<CompanyProfileData>({
+    sector:         initialData.sector ?? "",
+    founded_year:   initialData.founded_year ?? null,
+    employee_count: initialData.employee_count ?? null,
+    company_stage:  initialData.company_stage ?? "",
+    revenue_range:  initialData.revenue_range ?? "",
+  });
+
+  // M&A seller (type = target)
+  const [maSellerData, setMaSellerData] = useState<MaSellerData>({
+    sale_readiness:  initialData.sale_readiness ?? "not_for_sale",
+    partial_sale_ok: initialData.partial_sale_ok ?? true,
+  });
+
+  // M&A buyer (type = buyer)
+  const [maBuyerData, setMaBuyerData] = useState<MaBuyerData>({
+    acquisition_rationale: initialData.acquisition_rationale ?? "",
+    target_sectors:        initialData.target_sectors ?? [],
+    excluded_sectors:      initialData.excluded_sectors ?? [],
+    target_geographies:    initialData.target_geographies ?? [],
+    target_revenue_min:    initialData.target_revenue_min ?? null,
+    target_revenue_max:    initialData.target_revenue_max ?? null,
+  });
+
+  const isInvestorType     = INVESTOR_TYPES.includes(orgType);
+  const isCompanyType      = COMPANY_PROFILE_TYPES.includes(orgType);
+  const isMaTarget         = orgType === "target";
+  const isMaBuyer          = orgType === "buyer";
 
   // Validate sectors max 3
   function validateSectors(sectors: string[]): string | null {
@@ -112,12 +165,29 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       linkedin_url: linkedin.trim() || null,
       description:  description.trim() || null,
       notes:        notes.trim() || null,
+      // Investor
       investor_ticket_min:  isInvestorType ? (ticketOpt?.min ?? null) : null,
       investor_ticket_max:  isInvestorType ? (ticketOpt?.max ?? null) : null,
-      investor_stages:      isInvestorType && investorData.stage ? [investorData.stage] : [],
+      investor_stages:      isInvestorType ? investorData.stages.filter(Boolean) : [],
       investor_sectors:     isInvestorType ? investorData.sectors : [],
       investor_geographies: isInvestorType ? investorData.geographies : [],
       investor_thesis:      isInvestorType ? (investorData.thesis.trim() || null) : null,
+      // Company profile
+      sector:         isCompanyType ? (companyData.sector || null) : null,
+      founded_year:   isCompanyType ? companyData.founded_year : null,
+      employee_count: isCompanyType ? companyData.employee_count : null,
+      company_stage:  isCompanyType ? (companyData.company_stage || null) : null,
+      revenue_range:  isCompanyType ? (companyData.revenue_range || null) : null,
+      // M&A seller
+      sale_readiness:  isMaTarget ? maSellerData.sale_readiness : null,
+      partial_sale_ok: isMaTarget ? maSellerData.partial_sale_ok : true,
+      // M&A buyer
+      acquisition_rationale: isMaBuyer ? (maBuyerData.acquisition_rationale.trim() || null) : null,
+      target_sectors:        isMaBuyer ? maBuyerData.target_sectors : [],
+      excluded_sectors:      isMaBuyer ? maBuyerData.excluded_sectors : [],
+      target_geographies:    isMaBuyer ? maBuyerData.target_geographies : [],
+      target_revenue_min:    isMaBuyer ? maBuyerData.target_revenue_min : null,
+      target_revenue_max:    isMaBuyer ? maBuyerData.target_revenue_max : null,
     };
 
     try {
@@ -210,6 +280,27 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
                 data={investorData}
                 onChange={setInvestorData}
               />
+            </div>
+          )}
+
+          {/* Bloc 3b — Profil Entreprise (client, prospect, cible, repreneur…) */}
+          {isCompanyType && (
+            <div style={section}>
+              <CompanyProfileFields data={companyData} onChange={setCompanyData} />
+            </div>
+          )}
+
+          {/* Bloc 3c — Profil cédant M&A (type = target) */}
+          {isMaTarget && (
+            <div style={section}>
+              <MaSellerFields data={maSellerData} onChange={setMaSellerData} />
+            </div>
+          )}
+
+          {/* Bloc 3d — Critères acquéreur M&A (type = buyer) */}
+          {isMaBuyer && (
+            <div style={section}>
+              <MaBuyerFields data={maBuyerData} onChange={setMaBuyerData} />
             </div>
           )}
 

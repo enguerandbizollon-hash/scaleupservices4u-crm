@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
-import { SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES, SECTORS, COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,11 +11,16 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,job_title,required_seniority,required_location,required_remote,salary_min,salary_max")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,job_title,required_seniority,required_location,required_remote,salary_min,salary_max,mandate_id,company_stage")
     .eq("id", id)
     .maybeSingle();
 
   if (!deal) notFound();
+
+  const { data: mandates } = await supabase
+    .from("mandates")
+    .select("id,name,type")
+    .order("created_at", { ascending: false });
 
   const inp = "width:100%;padding:9px 13px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:#111";
   const sel = inp;
@@ -96,7 +101,10 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
               <div>
                 <label style={{ cssText: lbl } as any}>Secteur</label>
-                <input name="sector" defaultValue={deal.sector ?? ""} style={{ cssText: inp } as any} placeholder="ex: Technologie / SaaS"/>
+                <select name="sector" defaultValue={deal.sector ?? ""} style={{ cssText: sel } as any}>
+                  <option value="">— Non renseigné —</option>
+                  {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
 
               <div>
@@ -127,6 +135,37 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                   <option value="USD">USD</option>
                 </select>
               </div>
+
+              <div style={{ gridColumn:"1 / -1" }}>
+                <label style={{ cssText: lbl } as any}>Mandat associé</label>
+                <select name="mandate_id" defaultValue={(deal as any).mandate_id ?? ""} style={{ cssText: sel } as any}>
+                  <option value="">— Aucun mandat —</option>
+                  {(mandates ?? []).map((m: any) => {
+                    const typeLabel: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisory", recruitment:"Recrutement" };
+                    return <option key={m.id} value={m.id}>[{typeLabel[m.type] ?? m.type}] {m.name}</option>;
+                  })}
+                </select>
+              </div>
+
+              {/* Profil matching — fundraising et M&A */}
+              {["fundraising","ma_sell","ma_buy"].includes(deal.deal_type) && (
+                <>
+                  <div>
+                    <label style={{ cssText: lbl } as any}>Stade de l&apos;entreprise</label>
+                    <select name="company_stage" defaultValue={(deal as any).company_stage ?? ""} style={{ cssText: sel } as any}>
+                      <option value="">— Non renseigné —</option>
+                      {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ cssText: lbl } as any}>Géographie de l&apos;entreprise</label>
+                    <select name="company_geography" defaultValue={(deal as any).company_geography ?? ""} style={{ cssText: sel } as any}>
+                      <option value="">— Non renseignée —</option>
+                      {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div style={{ gridColumn:"1 / -1" }}>
                 <label style={{ cssText: lbl } as any}>Description</label>

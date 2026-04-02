@@ -14,6 +14,7 @@ import {
 } from "@/actions/candidates";
 import { DriveDocumentPicker } from "@/components/candidates/DriveDocumentPicker";
 import { ReportGenerator } from "@/components/candidates/ReportGenerator";
+import { TagInput } from "@/components/tags/TagInput";
 import { dealTypeLabels, dealStatusLabels } from "@/lib/crm/labels";
 import { getMatchingDeals } from "@/actions/recruitment-matching";
 import { scoreColor } from "@/lib/crm/recruitment-scoring";
@@ -113,6 +114,12 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               Modifier
             </Link>
           </div>
+        </div>
+
+        {/* Tags */}
+        <div style={{ cssText: section } as React.CSSProperties}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>Tags</div>
+          <TagInput objectType="candidate" objectId={id} />
         </div>
 
         {/* Coordonnées */}

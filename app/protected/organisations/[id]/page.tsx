@@ -9,12 +9,19 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: org } = await supabase
     .from("organizations")
-    .select("id,name,organization_type,base_status,sector,location,website,description,notes,investment_ticket,investment_stage,deal_name_hint")
+    .select(`
+      id,name,organization_type,base_status,sector,location,website,description,notes,
+      investment_ticket,investment_stage,deal_name_hint,
+      investor_ticket_min,investor_ticket_max,investor_sectors,investor_stages,investor_geographies,investor_thesis,
+      founded_year,employee_count,company_stage,revenue_range,
+      sale_readiness,partial_sale_ok,
+      acquisition_rationale,target_sectors,excluded_sectors,target_geographies,target_revenue_min,target_revenue_max
+    `)
     .eq("id", id).maybeSingle();
 
   if (!org) notFound();
 
-  const [{ data: orgContacts }, { data: dealOrgs }, { data: activities }] = await Promise.all([
+  const [{ data: orgContacts }, { data: dealOrgs }, { data: activities }, { data: mandates }, { data: financialData }] = await Promise.all([
     supabase.from("organization_contacts")
       .select("contact_id,role_label,is_primary,contacts(id,first_name,last_name,title,email,phone,linkedin_url,base_status,last_contact_date)")
       .eq("organization_id", id),
@@ -25,6 +32,14 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       .select("id,activity_type,title,summary,activity_date")
       .eq("organization_id", id)
       .order("activity_date", { ascending: false }).limit(15),
+    supabase.from("mandates")
+      .select("id,name,type,status,estimated_fee_amount,confirmed_fee_amount,currency,start_date,target_close_date")
+      .eq("client_organization_id", id)
+      .order("created_at", { ascending: false }),
+    supabase.from("financial_data")
+      .select("*")
+      .eq("organization_id", id)
+      .order("fiscal_year", { ascending: false }),
   ]);
 
   const contacts = (orgContacts ?? []).map(oc => {
@@ -37,7 +52,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     return d;
   }).filter(Boolean);
 
-  return <OrgDetail org={org} contacts={contacts} deals={deals} activities={activities ?? []} />;
+  return <OrgDetail org={org} contacts={contacts} deals={deals} activities={activities ?? []} mandates={mandates ?? []} financialData={financialData ?? []} />;
 }
 
 export default function OrgPage({ params }: { params: Promise<{ id: string }> }) {

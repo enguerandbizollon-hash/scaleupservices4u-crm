@@ -1,6 +1,8 @@
 export type DealView = {
   id: string;
   name: string;
+  deal_status: string;
+  deal_type: string;
   typeLabel: string;
   statusLabel: string;
   stageLabel: string;

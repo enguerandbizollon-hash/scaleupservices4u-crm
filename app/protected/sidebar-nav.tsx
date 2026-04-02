@@ -2,14 +2,16 @@
 import { GlobalSearch } from "./components/global-search";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, UserSearch } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, UserSearch, FileCheck, BarChart2 } from "lucide-react";
 
 const NAV = [
   { href:"/protected",               label:"Dashboard",     dot:"#3468B0", bg:"rgba(52,104,176,.18)",  icon:LayoutDashboard },
   { href:"/protected/dossiers",      label:"Dossiers",      dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
+  { href:"/protected/mandats",       label:"Mandats",       dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:FileCheck },
   { href:"/protected/contacts",      label:"Contacts",      dot:"#A8306A", bg:"rgba(168,48,106,.18)",  icon:Users },
   { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
   { href:"/protected/candidats",     label:"Candidats",     dot:"#0891B2", bg:"rgba(8,145,178,.18)",   icon:UserSearch },
+  { href:"/protected/statistiques",  label:"Statistiques",  dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:BarChart2 },
   { href:"/protected/import",        label:"Import",        dot:"#1E7A4A", bg:"rgba(30,122,74,.18)",   icon:Upload },
   { href:"/protected/connecteurs",    label:"Connecteurs",   dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
 ];

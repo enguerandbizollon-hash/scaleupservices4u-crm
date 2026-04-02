@@ -4,6 +4,7 @@ import { ArrowLeft, Mail, Phone, Linkedin, MapPin, ChevronRight, Building2 } fro
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
 import { ContactOrgAssignmentWarning } from "../../components/contact-org-assignment-warning";
+import { TagInput } from "@/components/tags/TagInput";
 
 const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
   active:     {bg:"var(--fund-bg)", tx:"var(--fund-tx)"},
@@ -110,6 +111,12 @@ export function ContactDetail({ contact, orgs, activities }: { contact: any; org
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Tags */}
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"14px 20px", marginBottom:14 }}>
+        <div style={{ fontSize:11, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>Tags</div>
+        <TagInput objectType="contact" objectId={contact.id} />
       </div>
 
       {/* Alerte assignation organisation primaire */}

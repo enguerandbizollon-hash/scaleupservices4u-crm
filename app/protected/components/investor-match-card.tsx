@@ -21,7 +21,7 @@ const PIPELINE_LABELS: Record<InvestorMatch["pipelineStatus"], { label: string; 
   ko:           { label: "KO",           bg: "var(--rec-bg)",    tx: "var(--rec-tx)" },
 };
 
-function ScoreBadge({ score }: { score: number | null }) {
+function ScoreBadge({ score, geoMismatch }: { score: number | null; geoMismatch?: boolean }) {
   if (score === null) {
     return (
       <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "3px 10px", borderRadius: 20, background: "var(--surface-3)", color: "var(--text-4)", fontWeight: 600, fontSize: 11.5 }}>
@@ -29,28 +29,33 @@ function ScoreBadge({ score }: { score: number | null }) {
       </span>
     );
   }
-  const bg = score >= 70 ? "#D1FAE5" : score >= 40 ? "#FEF3C7" : "#FEE2E2";
-  const tx = score >= 70 ? "#065F46" : score >= 40 ? "#92400E" : "#991B1B";
+  const bg = geoMismatch ? "#FEE2E2" : score >= 70 ? "#D1FAE5" : score >= 40 ? "#FEF3C7" : "#FEE2E2";
+  const tx = geoMismatch ? "#991B1B" : score >= 70 ? "#065F46" : score >= 40 ? "#92400E" : "#991B1B";
   return (
     <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 44, padding: "3px 10px", borderRadius: 20, background: bg, color: tx, fontWeight: 700, fontSize: 13 }}>
-      {score}
+      {score}{geoMismatch ? " !" : ""}
     </span>
   );
 }
 
-function CriterionText({ label, value, earned, filled }: {
-  label: string; value: string | null; earned: number; filled: boolean;
+function CriterionText({ label, value, earned, max, filled, forceRed }: {
+  label: string; value: string | null; earned: number; max: number; filled: boolean; forceRed?: boolean;
 }) {
-  const style = !filled
+  // 5 états : forceRed=drop-dead, gris=non renseigné, vert=match complet, orange=partiel, rouge=aucun match
+  const style = forceRed
+    ? { bg: "#FEE2E2", tx: "#991B1B" }
+    : !filled
     ? { bg: "var(--surface-3)", tx: "var(--text-5)" }
-    : earned > 0
+    : earned >= max
     ? { bg: "#D1FAE5", tx: "#065F46" }
-    : { bg: "#FEF3C7", tx: "#92400E" };
+    : earned > 0
+    ? { bg: "#FEF3C7", tx: "#92400E" }
+    : { bg: "#FEE2E2", tx: "#991B1B" };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span style={{ fontSize: 10.5, color: "var(--text-5)", minWidth: 46, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 10.5, color: forceRed ? "#991B1B" : "var(--text-5)", minWidth: 46, flexShrink: 0, fontWeight: forceRed ? 700 : 400 }}>{label}</span>
       <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 20, background: style.bg, color: style.tx, fontWeight: 600 }}>
-        {filled ? (value || "—") : "Non renseigné"}
+        {forceRed ? `${value || "—"} ✗` : filled ? (value || "—") : "Non renseigné"}
       </span>
     </div>
   );
@@ -109,7 +114,7 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
             Inactif
           </span>
         )}
-        <ScoreBadge score={score} />
+        <ScoreBadge score={score} geoMismatch={breakdown.geoMismatch} />
         <span style={{ fontSize: 11.5, padding: "3px 9px", borderRadius: 20, background: pl.bg, color: pl.tx, fontWeight: 600, flexShrink: 0 }}>
           {pl.label}
         </span>
@@ -141,25 +146,30 @@ export function InvestorMatchCard({ match, onCreateActivity, onStatusChange }: I
           label="Ticket"
           value={ticketLabel}
           earned={breakdown.ticket.earned}
+          max={breakdown.ticket.max}
           filled={breakdown.ticket.filled}
         />
         <CriterionText
           label="Secteur"
           value={org.investor_sectors.slice(0, 2).join(", ") || null}
           earned={breakdown.sector.earned}
+          max={breakdown.sector.max}
           filled={breakdown.sector.filled}
         />
         <CriterionText
           label="Stade"
           value={org.investor_stages.slice(0, 2).join(", ") || null}
           earned={breakdown.stage.earned}
+          max={breakdown.stage.max}
           filled={breakdown.stage.filled}
         />
         <CriterionText
           label="Géo"
           value={org.investor_geographies.slice(0, 2).map(g => GEO_LABELS[g] ?? g).join(", ") || null}
           earned={breakdown.geography.earned}
+          max={breakdown.geography.max}
           filled={breakdown.geography.filled}
+          forceRed={breakdown.geoMismatch}
         />
       </div>
 

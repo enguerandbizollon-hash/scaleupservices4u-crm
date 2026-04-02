@@ -1,7 +1,40 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Source de vérité unique pour le matching investisseurs
+// Source de vérité unique — matching investisseurs, RH, M&A, référentiels orgs
 // Utilisé dans : formulaires deals, formulaires organisations, algorithme scoring
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Stades entreprise (M&A / profil organisation) ────────────────────────────
+
+export const ORG_COMPANY_STAGES = [
+  { value: "startup",      label: "Startup" },
+  { value: "pme",          label: "PME" },
+  { value: "eti",          label: "ETI" },
+  { value: "grand_groupe", label: "Grand groupe" },
+] as const;
+
+export type OrgCompanyStage = (typeof ORG_COMPANY_STAGES)[number]["value"];
+
+// ── Tranches de CA (profil organisation) ────────────────────────────────────
+
+export const REVENUE_RANGES = [
+  { value: "<1M",       label: "< 1 M€" },
+  { value: "1M-5M",     label: "1 – 5 M€" },
+  { value: "5M-20M",    label: "5 – 20 M€" },
+  { value: "20M-100M",  label: "20 – 100 M€" },
+  { value: ">100M",     label: "> 100 M€" },
+] as const;
+
+export type RevenueRange = (typeof REVENUE_RANGES)[number]["value"];
+
+// ── Maturité cession M&A (organizations type = target) ───────────────────────
+
+export const SALE_READINESS_OPTIONS = [
+  { value: "not_for_sale",     label: "Pas en vente",       bg: "#F3F4F6", tx: "#6B7280" },
+  { value: "open",             label: "Ouvert aux offres",  bg: "#FEF3C7", tx: "#92400E" },
+  { value: "actively_selling", label: "En cession active",  bg: "#D1FAE5", tx: "#065F46" },
+] as const;
+
+export type SaleReadiness = (typeof SALE_READINESS_OPTIONS)[number]["value"];
 
 // ── Secteurs ─────────────────────────────────────────────────────────────────
 

@@ -143,456 +143,767 @@ lib/crm/[module].ts             → fonctions de lecture
 lib/crm/matching-maps.ts        → référentiels partagés (source de vérité)
 lib/crm/ma-scoring.ts           → algorithme matching M&A
 lib/crm/recruitment-scoring.ts  → algorithme matching RH
+lib/crm/fee-calculator.ts       → calcul honoraires et jalons
 lib/ai/financial-scoring.ts     → notation IA financière
 lib/ai/document-extraction.ts   → extraction données documents
+lib/ai/presentation-analysis.ts → analyse IA présentations et decks
 lib/connectors/[source].ts      → interface par connecteur
+lib/import/csv-parser.ts        → parsing import CSV/Excel
+lib/import/gdrive-sync.ts       → synchronisation Google Drive
+lib/dedup/organisations.ts      → déduplication organisations
 actions/[module].ts             → Server Actions CRUD
 actions/ai/[module].ts          → Server Actions IA
+actions/import/[source].ts      → Server Actions import par canal
 actions/matching.ts             → matching investisseurs
 actions/ma-matching.ts          → matching M&A
 actions/recruitment-matching.ts → matching RH
+actions/fees.ts                 → gestion honoraires et jalons
 components/[module]/            → composants UI par module
 
 ---
 
-## Données financières — modèle central
+## Mandats — modèle formalisé
 
-Les données financières sont au cœur des modules M&A et Fundraising.
-Elles alimentent les dashboards, le matching et la notation IA.
-Elles peuvent provenir de plusieurs canaux en parallèle.
+Les mandats sont le cadre commercial de chaque mission du cabinet.
+Un mandat = une relation contractuelle avec un client.
+Un mandat contient un ou plusieurs dossiers opérationnels (deals).
 
-### Canaux d'import (tous actifs simultanément)
-
-**Manuel** : saisie directe dans la fiche dossier ou organisation
-**Import CSV/Excel** : upload fichier → parsing → mapping champs → upsert
-**Connecteurs** : Harmonic, Crunchbase, PitchBook → enrichissement auto
-**Portail client** : upload documents (bilan, P&L, BP) → extraction IA
-**API externe** : endpoint dédié pour intégrations futures
-
-### Table : financial_data (données financières historiques)
+### Table : mandates
 - id (uuid PK)
 - user_id (uuid)
-- deal_id (uuid FK deals, nullable)
-- organization_id (uuid FK organisations, nullable)
-- fiscal_year (integer NOT NULL) — exercice : 2022, 2023, 2024
-- revenue (numeric) — chiffre d'affaires
-- ebitda (numeric) — EBITDA
-- ebit (numeric) — résultat opérationnel
-- net_income (numeric) — résultat net
-- gross_margin (numeric) — marge brute %
-- ebitda_margin (numeric) — marge EBITDA %
-- total_assets (numeric) — total bilan
-- net_debt (numeric) — dette nette
-- equity (numeric) — capitaux propres
-- headcount (integer) — effectif
-- arr (numeric) — ARR (SaaS / fundraising)
-- mrr (numeric) — MRR
-- nrr (numeric) — Net Revenue Retention %
-- cagr (numeric) — croissance annuelle %
-- churn_rate (numeric) — taux de churn %
-- ev_estimate (numeric) — valorisation estimée
-- ev_multiple (numeric) — multiple EV/EBITDA ou EV/ARR
-- source (text) — manual | csv | harmonic | crunchbase | pitchbook |
-                   client_upload | api
-- raw_data (jsonb) — données brutes source
-- ai_extracted (boolean default false)
-- ai_confidence_score (numeric) — fiabilité extraction IA
+- name (text NOT NULL) — intitulé du mandat
+- type (text NOT NULL) — fundraising | ma_sell | ma_buy |
+                          cfo_advisor | recruitment
+- client_organization_id (uuid FK organisations NOT NULL)
+- description (text)
+- status (text) — draft | active | on_hold | won | lost | closed
+- priority (text) — low | medium | high
+- owner_id (uuid FK users) — responsable du mandat
+- start_date (date)
+- target_close_date (date)
+- end_date (date)
+- currency (text default 'EUR')
+- estimated_fee_amount (numeric) — honoraires estimés total
+- confirmed_fee_amount (numeric) — honoraires confirmés / facturés
+- retainer_monthly (numeric) — retainer mensuel si applicable
+- success_fee_percent (numeric) — % success fee si applicable
+- success_fee_base (text) — ev | revenue | raise_amount | salary
+- notes (text)
 - created_at (timestamptz)
 - updated_at (timestamptz)
 
 RLS : auth.uid() = user_id.
-Index sur (deal_id, fiscal_year), (organization_id, fiscal_year).
+
+### Relations mandats
+1 mandat → N deals (dossiers opérationnels)
+1 mandat → N fee_milestones (jalons de facturation)
+1 mandat → N documents
+1 mandat → 1 organisation cliente
+
+### Règles mandats
+- owner_id obligatoire pour tout mandat actif
+- type obligatoire pour tout mandat actif
+- Un deal doit idéalement être rattaché à un mandat
+- Quand un deal passe en won → mandat.status = won si dernier deal actif
+- Quand un mandat passe en won/closed → deal.status doit être cohérent
+
+---
+
+## Honoraires et fees — modèle complet
+
+Le cabinet génère trois types de revenus :
+retainers (récurrents) · success fees (à la performance) · forfaits ponctuels.
+
+### Table : fee_milestones (jalons de facturation)
+- id (uuid PK)
+- user_id (uuid)
+- mandate_id (uuid FK mandates NOT NULL)
+- deal_id (uuid FK deals, nullable)
+- name (text) — ex: "Signing mandat", "Closing deal", "Livraison BP"
+- milestone_type (text) — retainer | success_fee | fixed | expense
+- amount (numeric NOT NULL)
+- currency (text default 'EUR')
+- due_date (date) — date prévue
+- invoiced_date (date) — date facturée
+- paid_date (date) — date encaissée
+- status (text) — pending | invoiced | paid | cancelled
+- invoice_reference (text)
+- notes (text)
+- created_at (timestamptz)
+
+RLS : auth.uid() = user_id.
+
+### Calcul success fee par deal_type
+
+Fundraising :
+success_fee = raise_amount × success_fee_percent
+Ex : levée 3M CHF × 3% = 90K CHF
+
+M&A Sell-side :
+success_fee = ev_deal × success_fee_percent
+Avec possible minimum garanti (min_fee)
+
+M&A Buy-side :
+success_fee = acquisition_price × success_fee_percent
+Ou forfait si défini dans le mandat
+
+Recrutement :
+success_fee = annual_salary_placed × success_fee_percent
+Placement standard : 15-25% du salaire annuel brut
+
+CFO Advisory :
+retainer_monthly × duration_months + forfaits livrables
+
+### Règles fees
+- Devise du jalon = devise du mandat par défaut
+- Conversion automatique pour affichage dashboard (voir multi-devise)
+- Alerte si jalon pending dépassant due_date de 30+ jours
+- fee_milestones.status = 'paid' déclenche mise à jour
+  mandate.confirmed_fee_amount
+
+### Affichage dashboard fees
+Par mandat : jalons à venir · en retard · encaissés
+Global cabinet : pipeline fees (pending) · encaissé YTD · projeté année
+Par collaborateur : CA généré par owner_id
+
+---
+
+## Multi-devise
+
+Le cabinet opère en EUR, CHF et USD principalement.
+
+### Règles de stockage
+- Toutes les valeurs sont stockées dans la devise native du deal/mandat
+- Le champ currency est obligatoire sur deals, mandates, fee_milestones,
+  financial_data
+- Ne jamais convertir à la volée en base — stocker la valeur native
+
+### Table : exchange_rates (taux de change)
+- id (uuid PK)
+- from_currency (text) — EUR | CHF | USD | GBP
+- to_currency (text)
+- rate (numeric) — taux de conversion
+- effective_date (date)
+- source (text) — manual | api
+- created_at (timestamptz)
+
+Mise à jour : manuelle ou via Make (automatisation périodique).
+
+### Devise de référence pour les dashboards
+Devise de référence cabinet : EUR (paramétrable dans les settings)
+Conversion affichage uniquement — jamais persistée
+Formule : displayed_value = native_value × exchange_rate
+
+### Affichage multi-devise
+Toujours afficher la valeur native + la devise
+En dashboard global : afficher la conversion en devise de référence
+avec mention "(converti au taux du JJ/MM/AAAA)"
+Champs concernés : valorisations, fees, montants levés, budgets M&A
+
+---
+
+## Tags transversaux
+
+Les tags permettent des filtres libres sur tous les objets du CRM.
+Ils sont essentiels pour le travail quotidien du cabinet.
+
+### Tables tags
+tags :
+- id (uuid PK)
+- user_id (uuid)
+- name (text NOT NULL) — ex: "ex-Rothschild", "réseau PE", "deal 2023"
+- category (text) — réseau | secteur | statut | source | autre
+- color (text) — couleur hex pour affichage
+- created_at (timestamptz)
+
+object_tags (table de liaison générique) :
+- id (uuid PK)
+- user_id (uuid)
+- tag_id (uuid FK tags)
+- object_type (text) — organisation | contact | deal | candidate | mandate
+- object_id (uuid) — FK vers l'objet concerné
+- created_at (timestamptz)
+
+Index sur (object_type, object_id) pour filtrage rapide.
+
+### Utilisation des tags
+- Sur les organisations : "réseau PE", "fonds top tier", "ex-client"
+- Sur les contacts : "décideur", "ex-Lazard", "board member"
+- Sur les candidats : "ex-Rothschild", "bilingue anglais", "DAF expérimenté"
+- Sur les deals : "deal phare", "référence secteur", "closing Q1 2024"
+- Sur les mandats : "mandat récurrent", "client stratégique"
+
+### Règles tags
+- Tags libres — pas de liste fermée imposée
+- Suggestions basées sur les tags existants à la saisie
+- Un tag supprimé retire les object_tags associés (CASCADE)
+- Filtres tags disponibles sur toutes les vues liste
+- Combinaison de tags possible (ET / OU)
+
+---
+
+## Déduplication organisations
+
+Avec des imports multi-canaux, les doublons sont inévitables sans règles.
+
+### Règle de détection
+Deux organisations sont potentiellement doublons si :
+- normalized_name identique (lowercase, sans accents, sans ponctuation)
+- OU website identique (domaine exact)
+- OU linkedin_url identique
+
+normalized_name = toLowerCase(removePunctuation(removeAccents(name)))
+
+### Processus déduplication
+lib/dedup/organisations.ts :
+1. À la création d'une organisation → vérifier doublons potentiels
+2. Si doublon détecté → alerte UI (non bloquant) avec les candidats
+3. L'utilisateur choisit : ignorer / fusionner / garder les deux
+4. Fusion : toutes les FK (deals, contacts, tags) pointent vers l'org maître
+   L'org secondaire passe en status = 'merged', is_merged = true,
+   merged_into_id = org_maître.id
+
+Colonnes à ajouter sur organisations :
+- normalized_name (text) — généré automatiquement au save
+- is_merged (boolean default false)
+- merged_into_id (uuid FK organisations, nullable)
+- external_ids (jsonb) — { harmonic: "...", crunchbase: "..." }
+
+### Import multi-canaux et déduplication
+Avant tout upsert depuis un connecteur :
+1. Chercher par external_id (source + external_id) en priorité
+2. Si absent → chercher par normalized_name ou website
+3. Si match → enrichir l'existant (upsert champs)
+4. Si aucun match → créer une nouvelle entrée
+5. Si doublon détecté → logger pour revue manuelle
+
+---
+
+## Versioning des documents
+
+Quand un document est remplacé, l'historique est conservé.
+
+### Table : document_versions
+- id (uuid PK)
+- user_id (uuid)
+- document_id (uuid FK ma_documents) — document parent
+- version_number (integer) — 1, 2, 3...
+- file_url (text) — Supabase Storage (chemin unique par version)
+- file_name (text)
+- file_size (integer)
+- uploaded_by (uuid FK users)
+- upload_notes (text) — motif de la mise à jour
+- ai_extracted_data (jsonb)
+- ai_processed_at (timestamptz)
+- is_current (boolean default false) — une seule version courante
+- created_at (timestamptz)
+
+### Règles versioning
+- À l'upload d'un nouveau fichier sur un document existant :
+  → version actuelle : is_current = false
+  → nouvelle version : is_current = true, version_number++
+- Jamais de suppression de version — archivage uniquement
+- L'analyse IA se relance automatiquement sur la nouvelle version
+- Affichage : version courante visible par défaut, historique accessible
+- Accès versions antérieures via URL signée temporaire (Supabase Storage)
+
+---
+
+## RGPD et data retention
+
+Le cabinet traite des données personnelles sensibles (candidats RH,
+contacts clients). Des règles de conservation et suppression s'appliquent.
+
+### Durées de conservation par objet
+Candidats (candidates) :
+- Actifs (searching / in_process) : durée illimitée
+- Placés (placed / employed) : 5 ans après le placement
+- Inactifs sans interaction : 2 ans après dernière interaction
+- Blacklistés : 3 ans (pour justifier l'exclusion si contesté)
+
+Contacts (contacts) :
+- Durée illimitée si liés à un deal ou mandat actif
+- 3 ans après dernière interaction si aucun deal lié
+
+Documents clients :
+- Documents contractuels (NDA, mandats) : 10 ans
+- Documents financiers clients : 5 ans après clôture du dossier
+- CV candidats : durée de vie du candidat dans le vivier
+
+### Colonnes RGPD à ajouter
+Sur candidates :
+- rgpd_consent (boolean default false) — consentement recueilli
+- rgpd_consent_date (timestamptz)
+- rgpd_expiry_date (date) — date de suppression prévue
+- anonymized_at (timestamptz) — date d'anonymisation si effectuée
+
+Sur contacts :
+- do_not_contact (boolean default false) — déjà présent, à respecter
+- rgpd_expiry_date (date)
+
+### Processus d'anonymisation
+Jamais de suppression physique — anonymisation uniquement.
+Anonymisation = remplacement des données personnelles par des valeurs
+neutres tout en conservant les métriques agrégées.
+
+Champs anonymisés sur candidates :
+first_name = "Anonymisé" · last_name = "Candidat" · email = null
+phone = null · linkedin_url = null · cv_url = null
+
+Les deal_candidates, scores et statistiques sont conservés.
+
+### Alertes RGPD
+- 30 jours avant rgpd_expiry_date → alerte dans le dashboard
+- L'utilisateur confirme : prolonger / anonymiser / archiver
+- Log de toutes les actions RGPD dans une table dédiée
+
+### Table : rgpd_log
+- id (uuid PK)
+- user_id (uuid)
+- object_type (text) — candidate | contact
+- object_id (uuid)
+- action (text) — consent_recorded | anonymized | expiry_extended |
+                   deletion_requested | data_exported
+- performed_by (uuid FK users)
+- notes (text)
+- created_at (timestamptz)
+
+---
+
+## Statistiques cabinet — reporting global
+
+Le cabinet doit pouvoir mesurer sa performance globale et par métier.
+
+### Table : cabinet_stats (vue calculée ou table matérialisée)
+Calculée à la volée depuis les données existantes.
+Pas de table dédiée — utiliser des Server Actions qui agrègent.
+
+### Métriques globales (dashboard général)
+
+Revenue cabinet :
+- Fees encaissés YTD (fee_milestones.status = 'paid', année en cours)
+- Fees facturés YTD (status = 'invoiced')
+- Pipeline fees (status = 'pending')
+- Objectif annuel vs réalisé (paramétrable dans settings)
+- Projection fin d'année (linear extrapolation)
+
+Performance dossiers :
+- Taux de closing par deal_type (won / total fermés)
+- Durée moyenne par stade et par deal_type
+- Dossiers ouverts / fermés / en attente
+- Valeur moyenne des deals par type
+
+Performance équipe :
+- Fees générés par owner_id
+- Nombre de dossiers actifs par collaborateur
+- Taux de conversion individuel
+
+### Métriques par métier
+
+Fundraising :
+- Montants levés YTD total
+- Taille moyenne des rounds
+- Délai moyen signing → closing
+- Top secteurs fundraising
+
+M&A :
+- Valeur totale des transactions YTD
+- Nombre de deals signés
+- Valorisation moyenne
+- Répartition sell-side / buy-side
+
+Recrutement :
+- Nombre de placements YTD
+- Taux de conversion vivier → placement
+- Délai moyen sourcing → placement
+- Source la plus efficace (LinkedIn / réseau / inbound)
+- Taux de réussite à 6 mois (candidat toujours en poste)
+
+### Dashboard statistiques (/protected/statistiques)
+Filtres : période (mois / trimestre / année) · deal_type · owner_id
+Graphiques : évolution fees · pipeline par stade · conversions
+Export : CSV ou PDF des statistiques
+
+---
+
+## Données financières — modèle central unifié
+
+Les données financières sont communes à tous les types de dossiers.
+Chaque métier utilise un sous-ensemble de la même table financial_data.
+Ne jamais créer de tables financières séparées par deal_type.
+
+### Principe fondamental
+La table financial_data est universelle.
+Un dossier M&A peut avoir des métriques SaaS (ARR, NRR) si la cible est SaaS.
+Un dossier Fundraising peut avoir un EBITDA si la société est profitable.
+Tous les champs sont nullable — on renseigne ce qui est pertinent.
+L'affichage est conditionnel selon le contexte, pas le stockage.
+
+### Table : financial_data
+- id (uuid PK)
+- user_id (uuid)
+- deal_id (uuid FK deals, nullable)
+- organization_id (uuid FK organisations, nullable)
+- fiscal_year (integer NOT NULL)
+- period_type (text) — annual | quarterly | monthly
+- period_label (text) — ex: "Q1 2024", "FY 2023"
+- currency (text default 'EUR') — devise native des données
+
+Métriques P&L et bilan :
+- revenue · gross_profit · gross_margin · ebitda · ebitda_margin
+- ebit · net_income · total_assets · net_debt · equity
+- cash · capex · working_capital
+- revenue_growth · ebitda_growth
+
+Métriques opérationnelles :
+- headcount · headcount_growth · revenue_per_employee
+
+Métriques SaaS / récurrence (disponibles pour tous les deal_types) :
+- arr · mrr · nrr · grr · churn_rate · cagr
+- ltv · cac · ltv_cac_ratio · payback_months
+
+Valorisation :
+- ev_estimate · ev_revenue_multiple · ev_ebitda_multiple
+- ev_arr_multiple · equity_value
+
+Métadonnées import :
+- source (text) — manual | csv | excel | gdrive | harmonic |
+                   crunchbase | pitchbook | client_upload | api | portal
+- external_id (text)
+- raw_data (jsonb)
+- ai_extracted (boolean default false)
+- ai_confidence_score (numeric)
+- ai_extraction_notes (text)
+- imported_at (timestamptz)
+- created_at · updated_at (timestamptz)
+
+RLS : auth.uid() = user_id.
+Index : (deal_id, fiscal_year), (organization_id, fiscal_year), source.
 
 ### Règle affichage historique
 Toujours afficher N, N-1, N-2 en dashboard dossier.
-N = dernier exercice disponible (pas nécessairement l'année en cours).
+N = dernier exercice disponible.
 Calcul automatique des variations N vs N-1, N-1 vs N-2.
+Affichage conditionnel métriques SaaS si arr > 0 ou mrr > 0.
+Affichage conditionnel EBITDA si ebitda renseigné.
 
 ---
 
-## Dashboards — spécifications par type
+## Import des données financières — multi-canaux
 
-### Dashboard général (app/protected/dashboard)
+Tous les canaux aboutissent à la même table financial_data.
+Le champ source trace l'origine. L'upsert évite les doublons.
 
-KPIs globaux :
-- Dossiers actifs par type (fundraising / ma_sell / ma_buy / recruitment)
-- Pipeline par stade (Sankey ou barres empilées)
-- Chiffre d'affaires potentiel des mandats actifs
-- Tâches en retard (rouge) + à relancer cette semaine (orange)
-- Prochains entretiens (module RH)
-- Dernières activités (fil chronologique)
-- Top 5 dossiers par priorité
+### Canal 1 — Saisie manuelle
+Formulaire dans la fiche dossier ou organisation.
+Champs organisés par catégorie (P&L · Bilan · SaaS · Valorisation).
 
-Widgets par métier (filtrables) :
-- Fundraising : ARR moyen des dossiers · rounds en cours · closings proches
-- M&A : dossiers par stade · deals signés YTD · valorisations moyennes
-- RH : candidats en process · placements YTD · taux de conversion
+### Canal 2 — Import CSV / Excel
+Upload fichier → lib/import/csv-parser.ts.
+Mapping automatique des colonnes avec suggestion IA.
+Prévisualisation avant import (10 premières lignes).
+Rapport d'import (lignes importées / erreurs / doublons).
 
-### Dashboard dossier Fundraising (deal_type = fundraising)
+### Canal 3 — Google Drive
+lib/import/gdrive-sync.ts.
+Sélection d'un fichier Google Sheets depuis le CRM.
+Parsing automatique → même pipeline que CSV.
+Synchronisation manuelle (bouton) ou planifiée (Make).
+Scope OAuth : lecture seule sur les fichiers sélectionnés.
 
-Bloc données entreprise :
-- ARR · MRR · NRR · CAGR — affichage N / N-1 / N-2 côte à côte
-- Variation colorée (vert si hausse, rouge si baisse)
-- Montant recherché · valorisation cible · runway
+### Canal 4 — Connecteurs externes
+Harmonic · Crunchbase / PitchBook → upsert via ConnectorRecord pattern.
+Déclenchement : manuel (bouton Enrichir) ou automatique à la création.
 
-Bloc pipeline investisseurs :
-- Entonnoir : approchés → intéressés → NDA → meeting → term sheet → closing
-- Tableau investisseurs avec statut contact et score matching
-- Prochaines relances (date + contact)
+### Canal 5 — Portail client
+Le client uploade ses documents depuis son espace.
+Analyse IA automatique à l'upload.
+Résultats persistés avec source = 'portal'.
 
-Bloc matching :
-- Top investisseurs matchés (score ≥ 70)
-- Investisseurs à approcher (score 40-70, non contactés)
-- Investisseurs incompatibles (score < 40 ou deal breaker)
+### Canal 6 — API externe
+Endpoint POST /api/financial-data avec authentification API key.
+Pour intégrations futures (ERP client, outils comptables).
 
-Bloc activités :
-- Fil chronologique des interactions
-- Prochaine action recommandée
+### Analyse IA documents
+lib/ai/document-extraction.ts — extraction depuis PDF/Excel/images
+lib/ai/presentation-analysis.ts — analyse decks, teasers, BP
 
-### Dashboard dossier M&A Sell-side (deal_type = ma_sell)
+Types analysés : bilans · P&L · business plans · présentations ·
+teasers M&A · états financiers consolidés
 
-Bloc données cédant :
-- CA / EBITDA / marge / dette nette — N / N-1 / N-2
-- Effectif · géographie · secteur
-- Valorisation indicative IA (fourchette basse / haute)
-- Score financier IA (jauge 0-100)
-- Asking price vs valorisation indicative
-
-Bloc matching acquéreurs :
-- Top acquéreurs potentiels triés par combined_score
-- Deal breakers identifiés (badge rouge)
-- Statut contact par acquéreur
-
-Bloc progression dossier :
-- Stade actuel du pipeline · probabilité de closing
-- Documents présents / manquants (teaser · NDA · IM · dataroom)
-- Prochaine action
-
-### Dashboard dossier M&A Buy-side (deal_type = ma_buy)
-
-Bloc critères acquisition :
-- Secteurs cibles · géographies · fourchette taille · budget
-- Critères exclusifs (deal breakers configurés)
-- Rationale stratégique
-
-Bloc cibles identifiées :
-- Liste cibles scorées (BDD interne + connecteurs)
-- Source par cible (badge : interne / Harmonic / Crunchbase / portail)
-- Score stratégique + score financier + combined_score
-- Statut approche (identifiée → approchée → NDA → discussions → offre)
-
-Bloc pipeline cibles :
-- Kanban des cibles par stade d'approche
-- Prochaines actions
-
-### Dashboard dossier RH (deal_type = recruitment)
-
-Bloc fiche de poste :
-- Intitulé · séniorité · localisation · remote · rémunération cible
-- Compétences requises (liste)
-- Stades pipeline configurés
-
-Bloc pipeline candidats :
-- Kanban par stage (Sourcing → Approche → Entretien RH →
-  Entretien client → Offre → Closing)
-- Score moyen des candidats actifs
-- Top 3 candidats par combined_score
-
-Bloc vivier matching :
-- Candidats du vivier compatibles (getMatchingDeals)
-- Score par critère · statut disponibilité
-
-KPIs recrutement :
-- Nb candidats par stade · taux de conversion
-- Temps moyen par stade · source la plus efficace
-
-### Dashboard organisation (fiche organisation)
-
-Bloc profil :
-- Type · statut · localisation · secteur
-- Contacts clés (avec email/tel direct)
-
-Bloc financier (si données disponibles) :
-- Tableau N / N-1 / N-2 : CA · EBITDA · marge · effectif
-- Source des données (badge)
-- Dernière mise à jour
-
-Bloc relations CRM :
-- Dossiers liés (deals actifs et historiques)
-- Candidats liés (module RH)
-- Dernières activités
-
-Bloc matching (si investisseur) :
-- Dossiers fundraising compatibles et scores
+L'IA retourne toujours :
+- Métriques extraites avec niveau de confiance
+- Métriques manquantes ou ambiguës
+- Résumé narratif de l'entreprise
+- Flags si incohérences détectées
 
 ---
 
-## Données financières Fundraising — champs spécifiques
+## Données financières — spécificités par deal_type
 
-La levée de fonds nécessite des métriques SaaS / croissance spécifiques
-en plus des données financières générales.
+### Fundraising
+Champs spécifiques sur deals :
+target_raise_amount · pre_money_valuation · post_money_valuation
+use_of_funds · runway_months · current_investors · round_type
 
-Colonnes supplémentaires sur deals (deal_type = fundraising) :
-- target_raise_amount (numeric) — montant recherché
-- pre_money_valuation (numeric) — valorisation pre-money cible
-- post_money_valuation (numeric) — valorisation post-money
-- use_of_funds (text) — utilisation des fonds
-- runway_months (integer) — runway actuel en mois
-- current_investors (text[]) — investisseurs actuels
-- round_type (text) — seed | pre-series-a | series-a | series-b | growth |
-                       bridge | convertible
+Métriques prioritaires : ARR · MRR · NRR · CAGR · churn · LTV · CAC
++ revenue · gross_margin · ebitda si société profitable
 
-Métriques SaaS (dans financial_data pour l'année en cours) :
-ARR · MRR · NRR · CAGR · churn_rate · LTV · CAC · LTV_CAC_ratio
+### M&A Sell-side
+Champs spécifiques sur deals :
+asking_price_min/max · partial_sale_ok · management_retention
+deal_timing · ai_financial_score · ai_valuation_low/high
+ai_financial_notes · ai_analyzed_at
+
+Métriques prioritaires : revenue · ebitda · ebitda_margin · net_debt
++ arr / nrr si modèle récurrent
+
+### M&A Buy-side
+Champs spécifiques sur deals :
+target_sectors · target_geographies · target_revenue_min/max
+target_ev_min/max · target_stage · acquisition_budget_min/max
+full_acquisition_required · strategic_rationale
+excluded_sectors · excluded_geographies · target_timing
 
 ---
 
-## Données financières M&A — champs spécifiques
+## Module RH — liens et architecture
 
-Colonnes sell-side (deal_type = ma_sell) :
-- asking_price_min / asking_price_max (numeric)
-- partial_sale_ok (boolean default true)
-- management_retention (boolean)
-- deal_timing (text) — now | 6months | 1year | 2years+
-- ai_financial_score (numeric) — notation IA 0-100
-- ai_valuation_low / ai_valuation_high (numeric)
-- ai_financial_notes (text)
-- ai_analyzed_at (timestamptz)
+### Chaîne de données client RH complète
+Organisation cliente (organisations)
+  → Mandat recruitment (mandates via client_organization_id)
+    → Dossier recruitment (deals via mandate_id + organization_id)
+      → Candidats en process (deal_candidates)
+        → Candidat placé (candidates.current_organization_id)
 
-Colonnes buy-side (deal_type = ma_buy) :
-- target_sectors (text[])
-- target_geographies (text[])
-- target_revenue_min / max (numeric)
-- target_ev_min / max (numeric)
-- target_stage (text[])
-- acquisition_budget_min / max (numeric)
-- full_acquisition_required (boolean default false)
-- strategic_rationale (text)
-- excluded_sectors (text[]) — deal breaker éliminatoire
-- excluded_geographies (text[])
-- target_timing (text)
+### Règles de liaison
+- deal_candidates.deal_id → deals.id (deal_type = recruitment)
+- deal_candidates.candidate_id → candidates.id
+- candidates.current_organization_id = deals.organization_id au placement
+- candidates.contact_id → contacts.id (nullable, si contact CRM existant)
+
+### Trigger placement (M5)
+Quand deal_candidates passe en placed :
+→ candidates.global_status = 'placed'
+→ candidates.current_organization_id = deals.organization_id
+→ candidate_status_log INSERT (note obligatoire)
+→ deal.status = 'won'
+→ fee_milestones success_fee → status = 'invoiced'
+→ mandate.confirmed_fee_amount mis à jour
+
+### Dashboard organisation — onglet RH
+- Dossiers RH actifs et historiques
+- Candidats en process pour ce client
+- Candidats placés avec date et poste
+- Taux de placement (placés / présentés)
+- Honoraires générés via dossiers RH
+
+### Architecture 6 modules séquentiels
+M1 BDD + Vivier · M2 Fiche 360° · M3 Pipeline kanban
+M4 Scoring + matching bidirel. · M5 Connexions + triggers
+M6 Export + Stats
+
+### Statuts candidat
+searching · in_process · placed · employed · inactive · blacklisted
+Règle : changement = note obligatoire + INSERT log immuable
+
+### Confidentialité
+notes_internal → jamais dans exports
+notes_shareable → rapport client OK
+is_confidential → interne uniquement
 
 ---
 
 ## Matching M&A — algorithme
 
-### Deal breakers éliminatoires (score = 0 immédiat)
-- Secteur dans excluded_sectors
-- Taille revenue hors fourchette × 0.5 / × 2
-- full_acquisition_required = true ET org.partial_sale_ok = false
+### Deal breakers éliminatoires
+Secteur dans excluded_sectors · Revenue hors fourchette ×0.5/×2
+full_acquisition_required = true ET org.partial_sale_ok = false
 
-### Scoring stratégique (100pts, pondération dynamique)
-Secteur          30pts — exact / adjacent / aucun
-Taille           25pts — dans fourchette / ±30% / hors
-Géographie       15pts — exact / compatible / incompatible (GEO_COMPATIBILITY)
-Profil stratég.  20pts — similarité sémantique IA (Claude API)
-Timing           10pts — now+actively_selling / open / incompatible
+### Scoring stratégique (100pts)
+Secteur 30 · Taille 25 · Géographie 15 · Profil stratég. 20 · Timing 10
 
 ### Score IA financier (séparé 0-100)
-Croissance CA 3 ans   25pts
-Marge EBITDA          25pts
-Structure bilan       25pts
-Comparables secteur   25pts
-Input : financial_data N/N-1/N-2 + documents uploadés
+Croissance revenue 25 · Marge EBITDA 25 · Bilan 25 · Comparables 25
 
 ### Score combiné
-combined_score = strategic_score × 0.65 + financial_score × 0.35
-Si financial_score absent → combined_score = strategic_score
+strategic × 0.65 + financial × 0.35
+Si financial absent → combined = strategic
 
-### Direction matching
-sell_to_buyer : dossier ma_sell → organisations type Repreneur / ma_buy
-buy_to_target : dossier ma_buy → organisations type Cible M&A
-
-### Matching proactif (sans mandat actif)
-Un acquéreur dans la base peut être matché sur toutes les cibles connues.
-Une cible peut être proposée à des acquéreurs sans qu'elle soit mandante.
-C'est l'outil de croissance externe proactive de ScaleUp.
+### Directions
+sell_to_buyer : ma_sell → Repreneur / ma_buy
+buy_to_target : ma_buy → Cible M&A
+Matching proactif sans mandat actif possible.
 
 ---
 
 ## Matching Fundraising — algorithme
 
-Fonction : getInvestorMatches(dealId)
-Scope : TOUTES les organisations investisseurs (base_status IN active/to_qualify)
-Pas de filtre FK vers le dossier.
-
-### Scoring (100pts, pondération dynamique)
-Ticket          30pts — dans fourchette / adjacent / hors
-Secteur         30pts — exact / Généraliste=100 / aucun
-Stade           25pts — STAGE_MAP compatible / adjacent / incompatible
-Géographie      15pts — GEO_COMPATIBILITY exact / compatible / incompatible
-
-### Règles spéciales
-- Généraliste = score secteur 100 automatiquement
-- Critères null → ignorés, poids redistribués
-- Profil < 3 critères renseignés → pénalité × (critères/4)
-- Affichage : texte critères colorés (vert/orange/rouge/gris), pas de barres
+Scope : TOUTES organisations investisseurs actives.
+Scoring : Ticket 30 · Secteur 30 · Stade 25 · Géographie 15
+Généraliste = secteur 100. Pondération dynamique. Pénalité < 3 critères.
 
 ---
 
 ## Matching RH — algorithme
 
-### Scoring candidat vs poste (100pts, pondération dynamique)
-Compétences req.   35pts — match normalisé lowercase + pondération weight
-Séniorité          15pts — SENIORITY_MAP exact/adjacent/incompatible
-Rémunération       20pts — dans fourchette / ±20% / hors
-Géographie         15pts — RH_GEO_COMPATIBILITY exact/compatible
-Remote             10pts — REMOTE_COMPATIBILITY exact/compatible
-Entretiens         bonus — moyenne scores × 2 + go sur dernier (+5pts)
-
-### Matching bidirectionnel
-Dossier → vivier : getCandidateRanking(dealId)
-Candidat → dossiers : getMatchingDeals(candidateId)
-
-### Deal breakers RH
-Compétence is_mandatory absente → éliminatoire sur ce critère
+Scoring : Compétences 35 · Séniorité 15 · Rémunération 20 ·
+Géographie 15 · Remote 10 · Entretiens bonus
+Bidirectionnel : getCandidateRanking(dealId) / getMatchingDeals(candidateId)
 
 ---
 
-## Module RH — architecture 6 modules séquentiels
+## Documents — table ma_documents
 
-### M1 — BDD + Vivier candidats
-Tables :
-candidates               → vivier global, statut global, CV, LinkedIn
-candidate_status_log     → immuable (INSERT uniquement), note obligatoire
-candidate_jobs           → historique postes + organisations
-deal_candidates          → pivot dossier ↔ candidat, stage, score, confid.
-candidate_stages         → pipeline personnalisable par dossier
-candidate_interviews     → feedback, score, recommandation, confidentialité
-candidate_skills         → compétences scorées, internal vs shareable
-deal_required_skills     → compétences requises par poste
-
-### Statuts candidat (candidate_status)
-searching    → En recherche active  (vert)
-in_process   → En process           (bleu)
-placed       → Placé                (purple)
-employed     → En poste             (amber)
-inactive     → Inactif              (gris)
-blacklisted  → Blacklisté           (rouge)
-
-Règle : changement de statut = note obligatoire + log immuable (INSERT)
-
-### Confidentialité
-notes_internal    → jamais dans exports ou rapports client
-notes_shareable   → peuvent figurer dans rapport client
-is_confidential   → visible internes uniquement
-
-### Triggers M5
-Candidat Placé → deal closing/won automatique
-Deal won → autres candidats du dossier → statut à revoir
-Entretien créé → activité auto dans agenda
-Alerte réactivation si Placé depuis 18+ mois sans interaction
-Fee de placement → deal.value_amount mis à jour
-
-### M6 — Export rapport client
-Contenu : skills scorées (shareable uniquement) · entretiens (non confid.)
-Format : PDF via Supabase Storage · lien partageable temporaire
-
----
-
-## Documents financiers — table ma_documents
-
-- id (uuid PK)
-- user_id (uuid)
-- deal_id (uuid FK, nullable)
-- organization_id (uuid FK, nullable)
-- document_type (text) — bilan | pl | business_plan | organigramme |
-                          teaser | nda | im | dataroom | autre
-- file_url (text) — Supabase Storage
-- fiscal_year (integer)
-- ai_extracted_data (jsonb) — métriques extraites
-- ai_processed_at (timestamptz)
-- ai_confidence_score (numeric)
+- id · user_id · deal_id · organization_id · candidate_id (nullable)
+- document_type : bilan | pl | business_plan | organigramme | teaser |
+                   nda | im | dataroom | cv | presentation | rapport | autre
+- file_url · file_name · file_size · fiscal_year
+- current_version_number (integer default 1)
+- ai_extracted_data · ai_summary · ai_processed_at · ai_confidence_score
 - is_confidential (boolean default true)
-- source (text) — internal | client_upload | connector
-- created_at (timestamptz)
+- source · external_id · created_at
+
+---
+
+## Dashboards — spécifications par type
+
+### Dashboard général
+KPIs globaux :
+- Dossiers actifs par type
+- Pipeline par stade
+- Fees encaissés YTD · pipeline fees · projection annuelle
+- Tâches en retard · relances dues
+- Prochains entretiens RH
+- Dernières activités
+
+Widgets par métier (filtrables) :
+- Fundraising : ARR moyen · rounds · closings proches
+- M&A : dossiers par stade · deals signés · valorisations
+- RH : candidats en process · placements YTD · taux conversion
+- Fees : encaissé · facturé · pipeline · objectif vs réalisé
+
+### Dashboard dossier Fundraising
+Bloc données : ARR/MRR/NRR/CAGR + EBITDA si profitable — N/N-1/N-2
+Bloc fees : jalons du mandat · statut encaissement
+Bloc pipeline investisseurs + matching + activités
+
+### Dashboard dossier M&A Sell-side
+Bloc données : CA/EBITDA/marge/dette + ARR si SaaS — N/N-1/N-2
+Bloc valorisation IA · asking price
+Bloc fees : success fee estimé · jalons
+Bloc matching acquéreurs + progression
+
+### Dashboard dossier M&A Buy-side
+Bloc critères acquisition + deal breakers
+Bloc cibles scorées + pipeline kanban
+Bloc fees : honoraires mandat
+
+### Dashboard dossier RH
+Bloc fiche de poste + organisation cliente
+Bloc pipeline candidats (kanban)
+Bloc vivier matching
+Bloc fees : success fee placement prévu
+KPIs recrutement
+
+### Dashboard organisation
+Bloc profil · contacts clés · tags
+Bloc financier N/N-1/N-2 (devise native + conversion)
+Bloc relations CRM : dossiers · mandats · activités
+Bloc RH si client recrutement
+Bloc matching si investisseur
+
+### Dashboard statistiques (/protected/statistiques)
+Période · deal_type · owner_id filtrables
+Revenue cabinet · performance dossiers · métriques par métier
+Export CSV/PDF
 
 ---
 
 ## Connecteurs — architecture extensible
 
-Pattern uniforme lib/connectors/[source].ts :
+Pattern lib/connectors/[source].ts :
 export interface ConnectorRecord {
   external_id: string
   source: string
   data: Record<string, unknown>
 }
-export async function upsertFromSource(
-  records: ConnectorRecord[], source: string
-): Promise<void>
+export async function upsertFromSource(records, source): Promise<void>
+
+Règles : source + external_id · upsert uniquement · enriched_at tracé
+Un connecteur qui échoue ne bloque pas le CRM.
+
+### Actifs
+Gmail · Google Calendar · Google Drive · Apollo.io · Harmonic · Make
+Notion · Canva
+
+### Planifiés
+Crunchbase/PitchBook · LinkedIn · Docusign · Slack · Stripe
+
+---
+
+## IA — couche transversale
+
+Matching · Traitement documents · Génération documents
+Automatisation communications · Enrichissement données
 
 Règles :
-- Chaque enregistrement porte source + external_id
-- Upsert uniquement — jamais de duplication
-- Champs enrichis : enriched_at, enriched_by_source
-- Un connecteur qui échoue ne bloque pas le reste du CRM
+- Appels dans actions/ai/[module].ts
+- Résultats dans colonnes dédiées (ai_*)
+- L'IA suggère, l'équipe valide
+- Modèle : claude-sonnet-4-20250514
 
-### Connecteurs actifs
-Gmail            → relances, drafts, suivi emails
-Google Calendar  → agenda, entretiens
-Apollo.io        → enrichissement contacts + candidats
-Harmonic         → enrichissement organisations + données financières
-Make             → automatisations workflows
-Notion           → documentation
-Canva            → génération documents
+---
 
-### Connecteurs planifiés
-Crunchbase / PitchBook → données financières M&A
-LinkedIn               → profils candidats RH
-Docusign               → NDA, mandats, signatures
-Slack                  → notifications équipe
-Stripe                 → facturation honoraires
+## Portail client — architecture cible
+
+Parcours : besoin → compte → NDA → upload → analyse IA → dossier CRM
+→ suivi → matchmaking
+
+Sécurité : client_id isolation · RLS dédiée · URLs signées · logs accès
+
+Tables : client_accounts · client_submissions · client_documents ·
+         client_ndas · client_reports
 
 ---
 
 ## Enums et référentiels — lib/crm/matching-maps.ts
 
-Source de vérité unique. Jamais hardcodé ailleurs.
+deal_type : fundraising | ma_sell | ma_buy | cfo_advisor | recruitment
+deal_stage : kickoff | preparation | outreach | management meetings | dd |
+             negotiation | closing | Post_closing | Ongoing_support | search
+deal_status : open | won | lost | paused
+mandate_status : draft | active | on_hold | won | lost | closed
+base_status : active | to_qualify | inactive
+task_status : open | done | cancelled
+agenda_event_type : deadline | follow_up | meeting | call | delivery |
+                    closing | other
+candidate_status : searching | in_process | placed | employed |
+                   inactive | blacklisted
+fee_milestone_type : retainer | success_fee | fixed | expense
+fee_milestone_status : pending | invoiced | paid | cancelled
+round_type : seed | pre-series-a | series-a | series-b | growth |
+             bridge | convertible
+company_stage : startup | pme | eti | grand_groupe
+sale_readiness : not_for_sale | open | actively_selling
+deal_timing : now | 6months | 1year | 2years+
+period_type : annual | quarterly | monthly
+rgpd_action : consent_recorded | anonymized | expiry_extended |
+              deletion_requested | data_exported
+currency : EUR | CHF | USD | GBP
+tag_category : réseau | secteur | statut | source | autre
+import_source : manual | csv | excel | gdrive | harmonic | crunchbase |
+                pitchbook | client_upload | api | portal
 
-### deal_type
-fundraising | ma_sell | ma_buy | cfo_advisor | recruitment
-
-### deal_stage
-kickoff | preparation | outreach | management meetings | dd |
-negotiation | closing | Post_closing | Ongoing_support | search
-
-### deal_status
-open | won | lost | paused
-
-### base_status (organisations)
-active | to_qualify | inactive
-
-### task_status
-open | done | cancelled
-
-### agenda_event_type
-deadline | follow_up | meeting | call | delivery | closing | other
-
-### candidate_status
-searching | in_process | placed | employed | inactive | blacklisted
-
-### round_type (fundraising)
-seed | pre-series-a | series-a | series-b | growth | bridge | convertible
-
-### company_stage (M&A)
-startup | pme | eti | grand_groupe
-
-### sale_readiness (M&A)
-not_for_sale | open | actively_selling
-
-### deal_timing
-now | 6months | 1year | 2years+
-
-### Secteurs (partagés organisations + deals + RH + M&A)
-Généraliste | SaaS | Fintech | Healthtech | Deeptech | Industrie |
-Retail | Energie | Juridique | Transport | Impact | Food |
+Secteurs : Généraliste | SaaS | Fintech | Healthtech | Deeptech |
+Industrie | Retail | Energie | Juridique | Transport | Impact | Food |
 Immobilier | Edtech | Cybersécurité | Marketplace | Hardware | Autre
 
-### Géographies investisseurs + M&A
-france | suisse | dach | ue | europe |
-amerique_nord | amerique_sud | asie | moyen_orient | afrique | oceanie | global
+Géographies investisseurs + M&A :
+france | suisse | dach | ue | europe | amerique_nord | amerique_sud |
+asie | moyen_orient | afrique | oceanie | global
 
-### Géographies RH
+Géographies RH :
 France : ile_de_france | auvergne_rhone | paca | occitanie |
          nouvelle_aquitaine | bretagne | grand_est | hauts_de_france |
          normandie | bourgogne | pays_de_la_loire | centre_val_loire |
@@ -602,87 +913,10 @@ Europe : belgique | luxembourg | allemagne | royaume_uni |
          espagne | italie | pays_bas | europe_entiere
 Global : international
 
-### Remote (RH)
-onsite | hybrid | remote | flexible
-
-### Tickets investisseurs
-<500K | 500K-1M | 1M-3M | 3M-10M | 10M-25M | >25M
-
-### Stades entreprise (fundraising)
-seed | pre-series-a | series-a | series-b | growth
-
-### Séniorité (RH)
-junior | mid | senior | lead | director | c-level
-
----
-
-## IA — couche transversale
-
-### Fonctions actives ou planifiées
-
-Matching algorithmique
-  Investisseurs ↔ fundraising (en cours de fix)
-  Candidats ↔ postes RH bidirectionnel (M4)
-  Acquéreurs ↔ cédants M&A (futur)
-  Cibles ↔ acquéreurs buy-side (futur)
-
-Traitement documents financiers
-  Extraction automatique depuis bilans, P&L, BP uploadés
-  Calcul financial_score (0-100) + valorisation indicative
-  Comparables sectoriels via données connecteurs
-  Persistance dans financial_data + ai_financial_notes
-
-Génération documents
-  NDA / clause de confidentialité automatique
-  Rapport investisseur (matching + profil entreprise)
-  Rapport candidat RH (scoring + fiche partageable)
-  Teaser / one-pager pré-rempli depuis données dossier
-
-Automatisation communications
-  Drafts emails relance selon stade pipeline
-  Suggestions prochaine action sur deal inactif
-  Alertes réactivation candidats (18-24 mois)
-  Séquences de relance planifiées
-
-Enrichissement données
-  Apollo.io → contacts + candidats
-  Harmonic → organisations + financiers
-  Key people search sur cibles M&A
-
-### Règles IA
-- Appels IA dans actions/ai/[module].ts
-- Résultats IA dans colonnes dédiées (ai_score, ai_notes, ai_data)
-  jamais dans les colonnes métier
-- L'IA suggère, l'équipe valide — pas d'action automatique irréversible
-- Modèle : claude-sonnet-4-20250514
-
----
-
-## Portail client — architecture cible
-
-### Parcours
-1. Client décrit son besoin sur le site (fundraising / M&A / RH)
-2. Création compte sécurisé
-3. Signature NDA généré automatiquement
-4. Upload documents (bilan, BP, organigramme, etc.)
-5. Extraction IA + création dossier dans le CRM
-6. Équipe notifiée + prise en charge
-7. Client suit l'avancement depuis son espace
-8. Matchmaking proposé selon le besoin
-
-### Sécurité portail
-- Isolation stricte client_id — un client ne voit jamais un autre client
-- RLS dédiée portail (séparée de la RLS interne)
-- Documents via URLs signées temporaires (Supabase Storage)
-- NDA obligatoire avant accès aux fonctionnalités sensibles
-- Logs d'accès sur toutes les consultations de documents
-
-### Tables portail
-client_accounts    → comptes clients externes
-client_submissions → formulaires de besoin
-client_documents   → documents uploadés
-client_ndas        → NDA générés et signés
-client_reports     → livrables partagés avec le client
+Remote RH : onsite | hybrid | remote | flexible
+Tickets investisseurs : <500K | 500K-1M | 1M-3M | 3M-10M | 10M-25M | >25M
+Stades entreprise : seed | pre-series-a | series-a | series-b | growth
+Séniorité RH : junior | mid | senior | lead | director | c-level
 
 ---
 
@@ -702,34 +936,30 @@ Matching investisseurs :
 ### Roadmap 📋
 
 Immédiat
-  Fix matching investisseurs (prompt disponible)
-  Harmonisation formulaires organisations
+  Fix matching investisseurs · Harmonisation formulaires organisations
 
-Module RH (6 modules séquentiels M1→M6)
-  M1 BDD + Vivier · M2 Fiche 360° · M3 Pipeline kanban
-  M4 Scoring + matching bidirel. · M5 Connexions CRM
-  M6 Export + Stats
+Module RH — 6 modules séquentiels M1→M6
 
-Données financières (transversal M&A + Fundraising)
-  Table financial_data avec historique N/N-1/N-2
-  Import multi-canaux (manuel / CSV / connecteurs / portail / IA)
-  Dashboards financiers par type de dossier
-  Notation IA + valorisation indicative
+Données financières — transversal
+  Table financial_data unifiée · Import multi-canaux
+  Analyse IA documents · Dashboards N/N-1/N-2
 
-Module M&A matching (après RH)
-  Deal breakers : secteur exclu · taille · reprise partielle
-  Scoring stratégique 5 critères + scoring IA financier séparé
-  Matching bidirectionnel sell↔buy
-  Matching proactif (croissance externe sans mandat)
-  Sources : BDD interne + Harmonic + Crunchbase + PitchBook + portail
+Mandats et honoraires
+  Tables mandates + fee_milestones · Calcul fees par deal_type
+  Dashboard fees cabinet
+
+Module M&A matching
+  Deal breakers · scoring · IA financière · matching bidirel.
+
+Données transversales
+  Tags · Déduplication · Versioning documents
+  Multi-devise · RGPD log · Statistiques cabinet
 
 Portail client
-  Espace client public · upload documents · NDA auto · suivi dossier
 
 Transversal
   Import CSV global · Recherche/filtre global
   Automatisation relances · Déploiement Vercel
-  Statistiques globales
 
 ---
 
@@ -738,19 +968,19 @@ Transversal
 ### Pour un bug
 1. Fichiers concernés (après grep + lecture)
 2. Cause racine précise
-3. Correction minimale — ne toucher que le nécessaire
+3. Correction minimale
 4. Impact sur les autres modules
 
 ### Pour une nouvelle fonctionnalité
-1. Audit de l'existant (colonnes, composants, actions présents)
-2. Conflits avec l'existant + résolution proposée
-3. Migration SQL avec vérification préalable (information_schema)
-4. Code complet des fichiers créés ou modifiés
+1. Audit de l'existant
+2. Conflits + résolution
+3. Migration SQL avec vérification préalable
+4. Code complet des fichiers modifiés
 5. Test de validation concret
 
 ### Pour un nouveau module
-1. Audit de l'existant réutilisable
-2. Tables manquantes + migrations dans l'ordre
+1. Audit réutilisable
+2. Tables + migrations dans l'ordre
 3. Conflits + résolution
 4. Architecture fichiers complète
 5. Ordre de build avec dépendances
@@ -759,6 +989,6 @@ Transversal
 ### Toujours
 - Diagnostic avant action — jamais de modification aveugle
 - Zéro régression sur les modules livrés
-- Si conflit détecté → le dire avant de coder
+- Si conflit → le dire avant de coder
 - Si quelque chose est mauvais → le dire et proposer mieux
-- Si une décision peut bloquer la vision plateforme → le signaler
+- Si une décision bloque la vision plateforme → le signaler

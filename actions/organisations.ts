@@ -21,6 +21,22 @@ export interface OrgActionData {
   investor_stages: string[];
   investor_geographies: string[];
   investor_thesis: string | null;
+  // Profil entreprise (client, prospect, cible, repreneur)
+  sector: string | null;
+  founded_year: number | null;
+  employee_count: number | null;
+  company_stage: string | null;
+  revenue_range: string | null;
+  // M&A vendeur (target)
+  sale_readiness: string | null;
+  partial_sale_ok: boolean;
+  // M&A acquéreur (buyer)
+  acquisition_rationale: string | null;
+  target_sectors: string[];
+  excluded_sectors: string[];
+  target_geographies: string[];
+  target_revenue_min: number | null;
+  target_revenue_max: number | null;
 }
 
 export type OrgActionResult =
@@ -72,6 +88,22 @@ export async function createOrganisationAction(
       investor_stages:      data.investor_stages.length > 0 ? data.investor_stages : null,
       investor_geographies: data.investor_geographies.length > 0 ? data.investor_geographies : null,
       investor_thesis:      data.investor_thesis,
+      // Profil entreprise
+      sector:               data.sector,
+      founded_year:         data.founded_year,
+      employee_count:       data.employee_count,
+      company_stage:        data.company_stage,
+      revenue_range:        data.revenue_range,
+      // M&A vendeur
+      sale_readiness:       data.sale_readiness,
+      partial_sale_ok:      data.partial_sale_ok,
+      // M&A acquéreur
+      acquisition_rationale: data.acquisition_rationale,
+      target_sectors:        data.target_sectors.length > 0 ? data.target_sectors : null,
+      excluded_sectors:      data.excluded_sectors.length > 0 ? data.excluded_sectors : null,
+      target_geographies:    data.target_geographies.length > 0 ? data.target_geographies : null,
+      target_revenue_min:    data.target_revenue_min,
+      target_revenue_max:    data.target_revenue_max,
       user_id: user.id,
     })
     .select("id")
@@ -116,6 +148,22 @@ export async function updateOrganisationAction(
       investor_stages:      data.investor_stages.length > 0 ? data.investor_stages : null,
       investor_geographies: data.investor_geographies.length > 0 ? data.investor_geographies : null,
       investor_thesis:      data.investor_thesis,
+      // Profil entreprise
+      sector:               data.sector,
+      founded_year:         data.founded_year,
+      employee_count:       data.employee_count,
+      company_stage:        data.company_stage,
+      revenue_range:        data.revenue_range,
+      // M&A vendeur
+      sale_readiness:       data.sale_readiness,
+      partial_sale_ok:      data.partial_sale_ok,
+      // M&A acquéreur
+      acquisition_rationale: data.acquisition_rationale,
+      target_sectors:        data.target_sectors.length > 0 ? data.target_sectors : null,
+      excluded_sectors:      data.excluded_sectors.length > 0 ? data.excluded_sectors : null,
+      target_geographies:    data.target_geographies.length > 0 ? data.target_geographies : null,
+      target_revenue_min:    data.target_revenue_min,
+      target_revenue_max:    data.target_revenue_max,
     })
     .eq("id", id)
     .eq("user_id", user.id);
@@ -124,5 +172,24 @@ export async function updateOrganisationAction(
 
   revalidatePath("/protected/organisations");
   revalidatePath(`/protected/organisations/${id}`);
+  // Les dossiers fundraising/M&A utilisent les données investisseur pour le matching
+  revalidatePath("/protected/dossiers");
   return { success: true, id };
+}
+
+// ── getAllOrganisationsSimple ──────────────────────────────────────────
+// Liste légère id+name — utilisée pour les sélecteurs dans les formulaires
+
+export async function getAllOrganisationsSimple(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("organizations")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .order("name");
+
+  return (data ?? []) as { id: string; name: string }[];
 }

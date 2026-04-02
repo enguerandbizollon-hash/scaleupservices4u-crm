@@ -78,6 +78,8 @@ export async function getDealsView() {
   const dealsView: DealView[] = deals.map((deal) => ({
     id: deal.id,
     name: deal.name,
+    deal_status: deal.deal_status,
+    deal_type: deal.deal_type,
     typeLabel: dealTypeLabels[deal.deal_type] ?? deal.deal_type,
     statusLabel: dealStatusLabels[deal.deal_status] ?? deal.deal_status,
     stageLabel: dealStageLabels[deal.deal_stage] ?? deal.deal_stage,
@@ -93,7 +95,7 @@ export async function getDealsView() {
 
   return {
     allDeals: dealsView,
-    activeDeals: dealsView.filter((deal) => deal.statusLabel === "Actif"),
-    inactiveDeals: dealsView.filter((deal) => deal.statusLabel !== "Actif"),
+    activeDeals: dealsView.filter((deal) => ["open", "paused"].includes(deal.deal_status)),
+    inactiveDeals: dealsView.filter((deal) => ["won", "lost"].includes(deal.deal_status)),
   };
 }
