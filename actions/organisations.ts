@@ -21,6 +21,8 @@ export interface OrgActionData {
   investor_stages: string[];
   investor_geographies: string[];
   investor_thesis: string | null;
+  investor_stage_min?: string | null;
+  investor_stage_max?: string | null;
   // Profil entreprise (client, prospect, cible, repreneur)
   sector: string | null;
   founded_year: number | null;
@@ -88,6 +90,8 @@ export async function createOrganisationAction(
       investor_stages:      data.investor_stages.length > 0 ? data.investor_stages : null,
       investor_geographies: data.investor_geographies.length > 0 ? data.investor_geographies : null,
       investor_thesis:      data.investor_thesis,
+      investor_stage_min:   data.investor_stage_min ?? null,
+      investor_stage_max:   data.investor_stage_max ?? null,
       // Profil entreprise
       sector:               data.sector,
       founded_year:         data.founded_year,
@@ -148,6 +152,8 @@ export async function updateOrganisationAction(
       investor_stages:      data.investor_stages.length > 0 ? data.investor_stages : null,
       investor_geographies: data.investor_geographies.length > 0 ? data.investor_geographies : null,
       investor_thesis:      data.investor_thesis,
+      investor_stage_min:   data.investor_stage_min ?? null,
+      investor_stage_max:   data.investor_stage_max ?? null,
       // Profil entreprise
       sector:               data.sector,
       founded_year:         data.founded_year,

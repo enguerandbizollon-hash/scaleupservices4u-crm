@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, ArrowLeft } from "lucide-react";
 import { OrganisationTypeGrid, INVESTOR_TYPES } from "./OrganisationTypeGrid";
-import { InvestorProfileFields, TICKET_OPTIONS, ticketKeyFromMinMax, type InvestorProfileData } from "./InvestorProfileFields";
+import { InvestorProfileFields, type InvestorProfileData } from "./InvestorProfileFields";
 import { CompanyProfileFields, type CompanyProfileData } from "./CompanyProfileFields";
 import { MaSellerFields, type MaSellerData } from "./MaSellerFields";
 import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
@@ -35,6 +35,8 @@ export interface OrgFormInitialData {
   investor_stages?: string[];
   investor_geographies?: string[];
   investor_thesis?: string | null;
+  investor_stage_min?: string | null;
+  investor_stage_max?: string | null;
   // Company profile fields
   sector?: string | null;
   founded_year?: number | null;
@@ -96,8 +98,10 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
 
   // Investor profile
   const [investorData, setInvestorData] = useState<InvestorProfileData>({
-    ticketKey:   ticketKeyFromMinMax(initialData.investor_ticket_min ?? null, initialData.investor_ticket_max ?? null),
-    stages:      initialData.investor_stages ?? [],
+    ticketMin:   initialData.investor_ticket_min ?? null,
+    ticketMax:   initialData.investor_ticket_max ?? null,
+    stageMin:    initialData.investor_stage_min ?? (initialData.investor_stages ?? [])[0] ?? null,
+    stageMax:    initialData.investor_stage_max ?? (initialData.investor_stages ?? []).at(-1) ?? null,
     sectors:     initialData.investor_sectors ?? [],
     geographies: initialData.investor_geographies ?? [],
     thesis:      initialData.investor_thesis ?? "",
@@ -154,7 +158,16 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     setLoading(true);
     setError("");
 
-    const ticketOpt = TICKET_OPTIONS.find(t => t.key === investorData.ticketKey);
+    // Construire investor_stages[] depuis stageMin/stageMax
+    const STAGE_ORDER = ["Seed", "Pré-Série A", "Série A", "Série B", "Growth", "Late Stage"];
+    let investorStages: string[] = [];
+    if (isInvestorType && investorData.stageMin && investorData.stageMax) {
+      const minIdx = STAGE_ORDER.indexOf(investorData.stageMin);
+      const maxIdx = STAGE_ORDER.indexOf(investorData.stageMax);
+      if (minIdx >= 0 && maxIdx >= 0) {
+        investorStages = STAGE_ORDER.slice(Math.min(minIdx, maxIdx), Math.max(minIdx, maxIdx) + 1);
+      }
+    }
 
     const data = {
       name:         name.trim(),
@@ -166,12 +179,14 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       description:  description.trim() || null,
       notes:        notes.trim() || null,
       // Investor
-      investor_ticket_min:  isInvestorType ? (ticketOpt?.min ?? null) : null,
-      investor_ticket_max:  isInvestorType ? (ticketOpt?.max ?? null) : null,
-      investor_stages:      isInvestorType ? investorData.stages.filter(Boolean) : [],
+      investor_ticket_min:  isInvestorType ? investorData.ticketMin : null,
+      investor_ticket_max:  isInvestorType ? investorData.ticketMax : null,
+      investor_stages:      isInvestorType ? investorStages : [],
       investor_sectors:     isInvestorType ? investorData.sectors : [],
       investor_geographies: isInvestorType ? investorData.geographies : [],
       investor_thesis:      isInvestorType ? (investorData.thesis.trim() || null) : null,
+      investor_stage_min:   isInvestorType ? investorData.stageMin : null,
+      investor_stage_max:   isInvestorType ? investorData.stageMax : null,
       // Company profile
       sector:         isCompanyType ? (companyData.sector || null) : null,
       founded_year:   isCompanyType ? companyData.founded_year : null,
