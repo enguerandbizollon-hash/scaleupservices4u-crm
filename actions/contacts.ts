@@ -110,6 +110,20 @@ export async function deleteContact(id: string): Promise<{ success: boolean; err
   return { success: true };
 }
 
+export async function getAllContactsSimple(): Promise<{ id: string; first_name: string; last_name: string; email: string | null }[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("contacts")
+    .select("id, first_name, last_name, email")
+    .eq("user_id", user.id)
+    .order("last_name");
+
+  return (data ?? []) as { id: string; first_name: string; last_name: string; email: string | null }[];
+}
+
 export async function getContactById(id: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

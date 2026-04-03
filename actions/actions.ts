@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { syncToGCal } from "@/lib/gcal/sync-helper";
+import { generateMeetLink } from "@/lib/gcal/meet-generator";
+import { generateActionSummary } from "@/lib/ai/action-summary";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -308,4 +310,60 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
 
   revalidatePath("/protected/agenda");
   return { success: true };
+}
+
+// ── Google Meet ───────────────────────────────────────────────────────────────
+
+export async function generateMeetLinkAction(): Promise<{ success: boolean; meet_link?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const link = await generateMeetLink(user.id);
+  if (!link) return { success: false, error: "Impossible de générer le lien Meet. Vérifiez la connexion Google Calendar." };
+  return { success: true, meet_link: link };
+}
+
+// ── Résumé IA ─────────────────────────────────────────────────────────────────
+
+export async function generateActionSummaryAction(actionId: string): Promise<{ success: boolean; summary?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: action } = await supabase
+    .from("actions")
+    .select(`
+      *,
+      action_contacts(contact_id, role, contacts:contact_id(first_name, last_name)),
+      action_organizations(organization_id, role, organizations:organization_id(name))
+    `)
+    .eq("id", actionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!action) return { success: false, error: "Action introuvable" };
+
+  const summary = await generateActionSummary({
+    type: action.type,
+    title: action.title,
+    start_datetime: action.start_datetime,
+    due_date: action.due_date,
+    notes: action.notes,
+    contacts: (action.action_contacts ?? []).map((c: { contacts: { first_name: string; last_name: string }; role: string | null }) => ({
+      name: `${c.contacts.first_name} ${c.contacts.last_name}`,
+      role: c.role ?? undefined,
+    })),
+    organizations: (action.action_organizations ?? []).map((o: { organizations: { name: string }; role: string | null }) => ({
+      name: o.organizations.name,
+      role: o.role ?? undefined,
+    })),
+  });
+
+  if (!summary) return { success: false, error: "Erreur lors de la génération du résumé IA" };
+
+  await supabase.from("actions").update({ summary_ai: summary, updated_at: new Date().toISOString() }).eq("id", actionId);
+
+  revalidatePath("/protected/agenda");
+  return { success: true, summary };
 }
