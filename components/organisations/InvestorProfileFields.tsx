@@ -61,6 +61,14 @@ const profileTitle: Record<string, string> = {
 };
 
 export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfileFieldsProps) {
+  const safeSectors     = data?.sectors      ?? [];
+  const safeGeographies = data?.geographies  ?? [];
+  const safeStageMin    = data?.stageMin     ?? null;
+  const safeStageMax    = data?.stageMax     ?? null;
+  const safeTicketMin   = data?.ticketMin    ?? null;
+  const safeTicketMax   = data?.ticketMax    ?? null;
+  const safeThesis      = data?.thesis       ?? "";
+
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 14 }}>
@@ -72,7 +80,7 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
         <label style={{ ...lbl, paddingTop: 4 }}>Ticket d&apos;investissement</label>
         <div style={{ padding: "6px 0 0" }}>
           <TicketRangeSlider
-            value={{ min: data.ticketMin ?? null, max: data.ticketMax ?? null }}
+            value={{ min: safeTicketMin, max: safeTicketMax }}
             onChange={v => onChange({ ...data, ticketMin: v.min, ticketMax: v.max })}
           />
         </div>
@@ -81,19 +89,19 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Stades d&apos;investissement</label>
         <StageRangeSelector
-          value={{ min: data.stageMin ?? null, max: data.stageMax ?? null }}
+          value={{ min: safeStageMin, max: safeStageMax }}
           onChange={v => onChange({ ...data, stageMin: v.min, stageMax: v.max })}
         />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Secteurs d&apos;investissement</label>
-        <SectorsMultiSelect value={data.sectors ?? []} onChange={val => onChange({ ...data, sectors: val })} />
+        <SectorsMultiSelect value={safeSectors} onChange={val => onChange({ ...data, sectors: val })} />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18, paddingBottom: 20 }}>
         <label style={lbl}>Géographies d&apos;investissement</label>
-        <GeoSelect mode="multi" value={data.geographies ?? []} onChange={val => onChange({ ...data, geographies: val })} />
+        <GeoSelect mode="multi" value={safeGeographies} onChange={val => onChange({ ...data, geographies: val })} />
       </div>
 
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 18 }}>
@@ -102,7 +110,7 @@ export function InvestorProfileFields({ orgType, data, onChange }: InvestorProfi
           rows={3}
           style={{ ...inp, resize: "vertical" }}
           placeholder="ex: Spécialiste SaaS B2B Europe, tickets Seed à Série A..."
-          value={data.thesis}
+          value={safeThesis}
           onChange={e => onChange({ ...data, thesis: e.target.value })}
         />
       </div>
