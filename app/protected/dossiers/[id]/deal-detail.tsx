@@ -19,6 +19,7 @@ import {
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
+import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
@@ -146,6 +147,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [orgSearchOpen, setOrgSearchOpen] = useState(false);
   const [orgSearchQuery, setOrgSearchQuery] = useState("");
   const [orgLinking, setOrgLinking] = useState(false);
+  const [orgCreateOpen, setOrgCreateOpen] = useState(false);
+  const [orgCreateName, setOrgCreateName] = useState("");
+  const [orgCreateType, setOrgCreateType] = useState("other");
+  const [orgCreateWebsite, setOrgCreateWebsite] = useState("");
+  const [orgCreateLocation, setOrgCreateLocation] = useState("");
 
   // Charger toutes les orgs CRM (pour le sélecteur dans Engagement)
   useEffect(() => {
@@ -495,8 +501,82 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                               </button>
                             ))}
                           {allOrgs.filter(o => o.name.toLowerCase().includes(orgSearchQuery.toLowerCase()) && !orgs.some(existing => existing.id === o.id)).length === 0 && (
-                            <div style={{ padding:"12px", fontSize:12.5, color:"var(--text-5)", textAlign:"center" }}>Aucune organisation trouvée</div>
+                            <div style={{ padding:"10px 12px" }}>
+                              <div style={{ fontSize:12.5, color:"var(--text-5)", marginBottom:6 }}>Aucun résultat pour &quot;{orgSearchQuery}&quot;</div>
+                              <button onClick={()=>{ setOrgCreateOpen(true); setOrgCreateName(orgSearchQuery); setOrgCreateType("other"); setOrgCreateWebsite(""); setOrgCreateLocation(""); }} style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 12px", border:"1px solid var(--border)", borderRadius:7, background:"var(--surface-2)", color:"var(--su-500,#1a56db)", fontSize:12.5, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
+                                <Plus size={11}/> Créer &quot;{orgSearchQuery}&quot;
+                              </button>
+                            </div>
                           )}
+                        </div>
+                      )}
+                      {/* Inline org creation */}
+                      {orgCreateOpen && (
+                        <div style={{ border:"1px solid var(--border)", borderRadius:8, padding:12, background:"var(--surface-2)", marginTop:6 }}>
+                          <div style={{ fontSize:12.5, fontWeight:700, color:"var(--text-2)", marginBottom:8 }}>Nouvelle organisation</div>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                            <div>
+                              <label style={{ display:"block", fontSize:11, fontWeight:600, color:"var(--text-4)", marginBottom:3 }}>NOM *</label>
+                              <input value={orgCreateName} onChange={e=>setOrgCreateName(e.target.value)} style={{ width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:6, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface)", color:"var(--text-1)", boxSizing:"border-box" }}/>
+                            </div>
+                            <div>
+                              <label style={{ display:"block", fontSize:11, fontWeight:600, color:"var(--text-4)", marginBottom:3 }}>TYPE *</label>
+                              <select value={orgCreateType} onChange={e=>setOrgCreateType(e.target.value)} style={{ width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:6, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface)", color:"var(--text-1)", boxSizing:"border-box" }}>
+                                <option value="investor">Investisseur</option>
+                                <option value="business_angel">Business Angel</option>
+                                <option value="family_office">Family Office</option>
+                                <option value="corporate">Corporate / CVC</option>
+                                <option value="bank">Banque</option>
+                                <option value="client">Client</option>
+                                <option value="buyer">Repreneur</option>
+                                <option value="law_firm">Cabinet juridique</option>
+                                <option value="accounting_firm">Cabinet comptable</option>
+                                <option value="consulting_firm">Conseil</option>
+                                <option value="other">Autre</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display:"block", fontSize:11, fontWeight:600, color:"var(--text-4)", marginBottom:3 }}>SITE WEB</label>
+                              <input value={orgCreateWebsite} onChange={e=>setOrgCreateWebsite(e.target.value)} placeholder="https://..." style={{ width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:6, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface)", color:"var(--text-1)", boxSizing:"border-box" }}/>
+                            </div>
+                            <div>
+                              <label style={{ display:"block", fontSize:11, fontWeight:600, color:"var(--text-4)", marginBottom:3 }}>LOCALISATION</label>
+                              <input value={orgCreateLocation} onChange={e=>setOrgCreateLocation(e.target.value)} placeholder="Paris, Genève..." style={{ width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:6, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface)", color:"var(--text-1)", boxSizing:"border-box" }}/>
+                            </div>
+                          </div>
+                          <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                            <button onClick={()=>setOrgCreateOpen(false)} style={{ padding:"5px 12px", borderRadius:7, border:"1px solid var(--border)", background:"var(--surface)", cursor:"pointer", fontSize:12, color:"var(--text-3)", fontFamily:"inherit" }}>Annuler</button>
+                            <button disabled={!orgCreateName.trim() || orgLinking} onClick={async ()=>{
+                              setOrgLinking(true);
+                              const res = await createOrganisationAction({
+                                name: orgCreateName.trim(),
+                                organization_type: orgCreateType,
+                                base_status: "to_qualify",
+                                website: orgCreateWebsite.trim() || null,
+                                location: orgCreateLocation.trim() || null,
+                                linkedin_url: null, description: null, notes: null,
+                                investor_ticket_min: null, investor_ticket_max: null,
+                                investor_sectors: [], investor_stages: [],
+                                investor_geographies: [], investor_thesis: null,
+                                sector: null, founded_year: null, employee_count: null,
+                                company_stage: null, revenue_range: null,
+                                sale_readiness: null, partial_sale_ok: true,
+                                acquisition_rationale: null, target_sectors: [],
+                                excluded_sectors: [], target_geographies: [],
+                                target_revenue_min: null, target_revenue_max: null,
+                              });
+                              if (res.success && res.id) {
+                                await linkOrganisationToDeal(deal.id, res.id);
+                                setOrgs(prev => [...prev, { id:res.id!, name:orgCreateName.trim(), organization_type:orgCreateType, base_status:"to_qualify", contacts:[] }]);
+                                setOrgCreateOpen(false);
+                                setOrgSearchOpen(false);
+                                setOrgSearchQuery("");
+                              }
+                              setOrgLinking(false);
+                            }} style={{ padding:"5px 12px", borderRadius:7, border:"none", background:"var(--su-500,#1a56db)", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"inherit", opacity: orgLinking ? 0.6 : 1 }}>
+                              {orgLinking ? "..." : "Créer et lier"}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
