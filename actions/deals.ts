@@ -56,6 +56,12 @@ export interface DealInput {
   strategic_rationale?: string | null;
   excluded_sectors?: string[];
   target_stage?: string | null;
+  // Dirigeant
+  dirigeant_id?: string | null;
+  dirigeant_nom?: string | null;
+  dirigeant_email?: string | null;
+  dirigeant_telephone?: string | null;
+  dirigeant_titre?: string | null;
 }
 
 export type DealActionResult =
@@ -468,13 +474,62 @@ export async function deleteDealDocument(dealId: string, documentId: string) {
 
 // ── Liaison deal ↔ organisation ───────────────────────────────────────────────
 
-export async function linkOrganisationToDeal(dealId: string, organisationId: string) {
+export async function linkOrganisationToDeal(dealId: string, organisationId: string, roleInDossier?: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
 
   const { error } = await supabase.from("deal_organizations")
-    .upsert({ deal_id: dealId, organization_id: organisationId, user_id: user.id }, { onConflict: "deal_id,organization_id" });
+    .upsert({
+      deal_id: dealId,
+      organization_id: organisationId,
+      user_id: user.id,
+      role_in_dossier: roleInDossier ?? "autre",
+    }, { onConflict: "deal_id,organization_id" });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true };
+}
+
+export async function updateDealDirigeant(dealId: string, data: {
+  dirigeant_id?: string | null;
+  dirigeant_nom?: string | null;
+  dirigeant_email?: string | null;
+  dirigeant_telephone?: string | null;
+  dirigeant_titre?: string | null;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase.from("deals")
+    .update({
+      dirigeant_id: data.dirigeant_id ?? null,
+      dirigeant_nom: data.dirigeant_nom ?? null,
+      dirigeant_email: data.dirigeant_email ?? null,
+      dirigeant_telephone: data.dirigeant_telephone ?? null,
+      dirigeant_titre: data.dirigeant_titre ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true };
+}
+
+export async function updateDealOrgRole(dealId: string, organisationId: string, role: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase.from("deal_organizations")
+    .update({ role_in_dossier: role })
+    .eq("deal_id", dealId)
+    .eq("organization_id", organisationId)
+    .eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
   revalidatePath(`/protected/dossiers/${dealId}`);

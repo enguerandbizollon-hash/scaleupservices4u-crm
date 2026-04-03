@@ -17,13 +17,14 @@ import {
   linkOrganisationToDeal, unlinkOrganisationFromDeal,
 } from "@/actions/deals";
 import { TagInput } from "@/components/tags/TagInput";
+import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
-  Mail, Phone, Linkedin, Users, Building2, TrendingUp, CheckSquare,
+  Mail, Phone, Linkedin, Users, User, Building2, TrendingUp, CheckSquare,
   Activity, FileText, ExternalLink, AlertTriangle, CalendarDays, Send
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
@@ -432,6 +433,24 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
           {/* ── Colonne gauche ── */}
           <div>
+
+            {/* DIRIGEANT */}
+            <div style={cardStyle}>
+              <div style={{ padding:"12px 16px", display:"flex", alignItems:"center", gap:8 }}>
+                <User size={14} color="var(--text-4)"/>
+                <span style={{ fontSize:13, fontWeight:700, color:"var(--text-2)", textTransform:"uppercase", letterSpacing:".06em" }}>Dirigeant</span>
+              </div>
+              <DirigeantSection
+                dealId={deal.id}
+                initial={{
+                  dirigeant_id: deal.dirigeant_id ?? null,
+                  dirigeant_nom: deal.dirigeant_nom ?? null,
+                  dirigeant_email: deal.dirigeant_email ?? null,
+                  dirigeant_telephone: deal.dirigeant_telephone ?? null,
+                  dirigeant_titre: deal.dirigeant_titre ?? null,
+                }}
+              />
+            </div>
 
             {/* ORGANISATIONS + CONTACTS */}
             <div style={cardStyle}>

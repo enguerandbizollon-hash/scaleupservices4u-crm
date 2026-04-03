@@ -11,14 +11,14 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal, error: dealError } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,description,start_date,target_date,next_action_date,target_amount,committed_amount,closed_amount,currency,company_stage,company_geography,mandate_id,pre_money_valuation,post_money_valuation,round_type,runway_months,use_of_funds,current_investors,asking_price_min,asking_price_max,partial_sale_ok,management_retention,deal_timing,ai_financial_score,ai_valuation_low,ai_valuation_high,target_sectors,target_geographies,target_revenue_min,target_revenue_max,target_ev_min,target_ev_max,acquisition_budget_min,acquisition_budget_max,full_acquisition_required,strategic_rationale,target_stage")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,description,start_date,target_date,next_action_date,target_amount,committed_amount,closed_amount,currency,company_stage,company_geography,mandate_id,pre_money_valuation,post_money_valuation,round_type,runway_months,use_of_funds,current_investors,asking_price_min,asking_price_max,partial_sale_ok,management_retention,deal_timing,ai_financial_score,ai_valuation_low,ai_valuation_high,target_sectors,target_geographies,target_revenue_min,target_revenue_max,target_ev_min,target_ev_max,acquisition_budget_min,acquisition_budget_max,full_acquisition_required,strategic_rationale,target_stage,dirigeant_id,dirigeant_nom,dirigeant_email,dirigeant_telephone,dirigeant_titre")
     .eq("id", id).maybeSingle();
   if (dealError) throw new Error(dealError.message);
   if (!deal) notFound();
 
   const [orgsRes, docsRes, tasksRes, activitiesRes, commitmentsRes, financialRes] = await Promise.all([
     supabase.from("deal_organizations")
-      .select("organization_id,organizations(id,name,organization_type,base_status,location,investment_ticket,investment_stage)")
+      .select("organization_id,role_in_dossier,organizations(id,name,organization_type,base_status,location,investment_ticket,investment_stage)")
       .eq("deal_id", id),
     supabase.from("deal_documents").select("id,name,document_type,document_status,document_url,version_label,added_at,note").eq("deal_id", id).order("added_at",{ascending:false}),
     supabase.from("tasks").select("id,title,task_status,priority_level,due_date,description,contact_id").eq("deal_id",id).order("due_date",{ascending:true}),
@@ -29,7 +29,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const orgs = (orgsRes.data ?? []).map(r => {
     const o = Array.isArray(r.organizations) ? r.organizations[0] : r.organizations as any;
-    return o ? { ...o, contacts: [] } : null;
+    return o ? { ...o, role_in_dossier: (r as any).role_in_dossier ?? "autre", contacts: [] } : null;
   }).filter(Boolean);
 
   const orgIds = orgs.map((o:any) => o.id);
