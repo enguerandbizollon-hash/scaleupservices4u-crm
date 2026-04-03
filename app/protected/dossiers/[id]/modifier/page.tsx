@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
-import { SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES, SECTORS, COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES, SECTORS, COMPANY_STAGES } from "@/lib/crm/matching-maps";
+import { GeoSelectField } from "@/components/ui/GeoSelectField";
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -109,12 +110,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
               <div>
                 <label style={{ cssText: lbl } as any}>Localisation</label>
-                <select name="location" defaultValue={deal.location ?? ""} style={{ cssText: sel } as any}>
-                  <option value="">— Non renseignée —</option>
-                  <optgroup label="Zones">
-                    {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                  </optgroup>
-                </select>
+                <GeoSelectField name="location" defaultValue={deal.location ?? ""} />
               </div>
 
               <div>
@@ -169,10 +165,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                   <div>
                     <label style={{ cssText: lbl } as any}>Géographie de l&apos;entreprise</label>
-                    <select name="company_geography" defaultValue={(deal as any).company_geography ?? ""} style={{ cssText: sel } as any}>
-                      <option value="">— Non renseignée —</option>
-                      {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
+                    <GeoSelectField name="company_geography" defaultValue={(deal as any).company_geography ?? ""} />
                   </div>
                 </>
               )}

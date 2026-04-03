@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createDealAction } from "./actions";
-import { SECTORS, COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { SECTORS, COMPANY_STAGES } from "@/lib/crm/matching-maps";
+import { GeoSelectField } from "@/components/ui/GeoSelectField";
 
 export default function NouveauDossierPage() {
   return (
@@ -82,10 +83,7 @@ export default function NouveauDossierPage() {
               </div>
               <div>
                 <label className="lbl">LOCALISATION</label>
-                <select name="location" className="inp">
-                  <option value="">— Non renseignée —</option>
-                  {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
+                <GeoSelectField name="location" />
               </div>
             </div>
 
@@ -100,10 +98,7 @@ export default function NouveauDossierPage() {
               </div>
               <div>
                 <label className="lbl">GÉOGRAPHIE CIBLE</label>
-                <select name="company_geography" className="inp">
-                  <option value="">— Non renseignée —</option>
-                  {GEOGRAPHIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
+                <GeoSelectField name="company_geography" />
               </div>
             </div>
 
