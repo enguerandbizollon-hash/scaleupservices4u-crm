@@ -8,6 +8,7 @@ import { InvestorProfileFields, type InvestorProfileData } from "./InvestorProfi
 import { CompanyProfileFields, type CompanyProfileData } from "./CompanyProfileFields";
 import { MaSellerFields, type MaSellerData } from "./MaSellerFields";
 import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
+import { AcquirerProfileFields, type AcquirerProfileData } from "./AcquirerProfileFields";
 import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import { DedupAlert } from "./DedupAlert";
@@ -55,6 +56,12 @@ export interface OrgFormInitialData {
   target_geographies?: string[];
   target_revenue_min?: number | null;
   target_revenue_max?: number | null;
+  // Acquirer profile
+  acquirer_type?: string | null;
+  acquisition_motivations?: string[];
+  target_ebitda_min?: number | null;
+  target_ebitda_max?: number | null;
+  acquisition_history?: string | null;
 }
 
 interface OrganisationFormProps {
@@ -134,10 +141,25 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     target_revenue_max:    initialData.target_revenue_max ?? null,
   });
 
+  // Acquirer profile (type = buyer, corporate, private_equity)
+  const ACQUIRER_PROFILE_TYPES = ["buyer", "corporate"];
+  const [acquirerData, setAcquirerData] = useState<AcquirerProfileData>({
+    acquirer_type:           initialData.acquirer_type ?? "",
+    acquisition_motivations: initialData.acquisition_motivations ?? [],
+    target_sectors:          initialData.target_sectors ?? [],
+    target_geographies:      initialData.target_geographies ?? [],
+    target_revenue_min:      initialData.target_revenue_min ?? null,
+    target_revenue_max:      initialData.target_revenue_max ?? null,
+    target_ebitda_min:       initialData.target_ebitda_min ?? null,
+    target_ebitda_max:       initialData.target_ebitda_max ?? null,
+    acquisition_history:     initialData.acquisition_history ?? "",
+  });
+
   const isInvestorType     = INVESTOR_TYPES.includes(orgType);
   const isCompanyType      = COMPANY_PROFILE_TYPES.includes(orgType);
   const isMaTarget         = orgType === "target";
   const isMaBuyer          = orgType === "buyer";
+  const isAcquirerType     = ACQUIRER_PROFILE_TYPES.includes(orgType);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -189,8 +211,14 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       target_sectors:        isMaBuyer ? maBuyerData.target_sectors : [],
       excluded_sectors:      isMaBuyer ? maBuyerData.excluded_sectors : [],
       target_geographies:    isMaBuyer ? maBuyerData.target_geographies : [],
-      target_revenue_min:    isMaBuyer ? maBuyerData.target_revenue_min : null,
-      target_revenue_max:    isMaBuyer ? maBuyerData.target_revenue_max : null,
+      target_revenue_min:    (isMaBuyer || isAcquirerType) ? (acquirerData.target_revenue_min ?? maBuyerData.target_revenue_min) : null,
+      target_revenue_max:    (isMaBuyer || isAcquirerType) ? (acquirerData.target_revenue_max ?? maBuyerData.target_revenue_max) : null,
+      // Acquirer profile
+      acquirer_type:           isAcquirerType ? (acquirerData.acquirer_type || null) : null,
+      acquisition_motivations: isAcquirerType ? acquirerData.acquisition_motivations : [],
+      target_ebitda_min:       isAcquirerType ? acquirerData.target_ebitda_min : null,
+      target_ebitda_max:       isAcquirerType ? acquirerData.target_ebitda_max : null,
+      acquisition_history:     isAcquirerType ? (acquirerData.acquisition_history.trim() || null) : null,
     };
 
     try {
@@ -312,6 +340,13 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
           {isMaBuyer && (
             <div style={section}>
               <MaBuyerFields data={maBuyerData} onChange={setMaBuyerData} />
+            </div>
+          )}
+
+          {/* Bloc 3e — Profil acquéreur M&A (type = buyer, corporate) */}
+          {isAcquirerType && (
+            <div style={section}>
+              <AcquirerProfileFields data={acquirerData} onChange={setAcquirerData} />
             </div>
           )}
 

@@ -39,6 +39,12 @@ export interface OrgActionData {
   target_geographies: string[];
   target_revenue_min: number | null;
   target_revenue_max: number | null;
+  // Acquirer profile
+  acquirer_type?: string | null;
+  acquisition_motivations?: string[];
+  target_ebitda_min?: number | null;
+  target_ebitda_max?: number | null;
+  acquisition_history?: string | null;
 }
 
 export type OrgActionResult =
@@ -105,6 +111,12 @@ export async function createOrganisationAction(
       target_geographies:    data.target_geographies.length > 0 ? data.target_geographies : null,
       target_revenue_min:    data.target_revenue_min,
       target_revenue_max:    data.target_revenue_max,
+      // Acquirer profile
+      acquirer_type:           data.acquirer_type ?? null,
+      acquisition_motivations: (data.acquisition_motivations ?? []).length > 0 ? data.acquisition_motivations : null,
+      target_ebitda_min:       data.target_ebitda_min ?? null,
+      target_ebitda_max:       data.target_ebitda_max ?? null,
+      acquisition_history:     data.acquisition_history ?? null,
       user_id: user.id,
     })
     .select("id")
@@ -164,6 +176,12 @@ export async function updateOrganisationAction(
       target_geographies:    data.target_geographies.length > 0 ? data.target_geographies : null,
       target_revenue_min:    data.target_revenue_min,
       target_revenue_max:    data.target_revenue_max,
+      // Acquirer profile
+      acquirer_type:           data.acquirer_type ?? null,
+      acquisition_motivations: (data.acquisition_motivations ?? []).length > 0 ? data.acquisition_motivations : null,
+      target_ebitda_min:       data.target_ebitda_min ?? null,
+      target_ebitda_max:       data.target_ebitda_max ?? null,
+      acquisition_history:     data.acquisition_history ?? null,
     })
     .eq("id", id)
     .eq("user_id", user.id);

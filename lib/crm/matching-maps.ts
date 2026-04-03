@@ -26,6 +26,30 @@ export const REVENUE_RANGES = [
 
 export type RevenueRange = (typeof REVENUE_RANGES)[number]["value"];
 
+// ── Types acquéreur M&A ──────────────────────────────────────────────────────
+
+export const ACQUIRER_TYPES = [
+  { value: "repreneur",      label: "Repreneur individuel" },
+  { value: "corporate",      label: "Corporate / Industriel" },
+  { value: "private_equity",  label: "Private Equity" },
+  { value: "family_office",   label: "Family Office" },
+  { value: "management",      label: "Management (MBO/MBI)" },
+  { value: "autre",           label: "Autre" },
+] as const;
+
+export type AcquirerType = (typeof ACQUIRER_TYPES)[number]["value"];
+
+export const ACQUISITION_MOTIVATIONS = [
+  { value: "build_up",               label: "Build-up" },
+  { value: "diversification",        label: "Diversification" },
+  { value: "vertical_integration",   label: "Intégration verticale" },
+  { value: "financial",              label: "Investissement financier" },
+  { value: "geographic_expansion",   label: "Expansion géographique" },
+  { value: "technology_acquisition", label: "Acquisition technologique" },
+] as const;
+
+export type AcquisitionMotivation = (typeof ACQUISITION_MOTIVATIONS)[number]["value"];
+
 // ── Maturité cession M&A (organizations type = target) ───────────────────────
 
 export const SALE_READINESS_OPTIONS = [

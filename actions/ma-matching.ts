@@ -77,7 +77,8 @@ export async function getMaBuyerMatches(
       id, name, organization_type, base_status, sector, location,
       company_stage, revenue_range, sale_readiness, partial_sale_ok,
       acquisition_rationale, target_sectors, target_geographies,
-      target_revenue_min, target_revenue_max, excluded_sectors
+      target_revenue_min, target_revenue_max, excluded_sectors,
+      acquirer_type, acquisition_motivations, target_ebitda_min, target_ebitda_max
     `)
     .eq("user_id", user.id)
     .in("organization_type", BUYER_TYPES);
