@@ -14,7 +14,7 @@ import { updateDealMatchingProfile } from "@/actions/matching";
 import {
   createCommitment, updateCommitment, deleteCommitment,
   createDealDocument, deleteDealDocument,
-  linkOrganisationToDeal, unlinkOrganisationFromDeal,
+  linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
 } from "@/actions/deals";
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
@@ -31,7 +31,7 @@ import {
 import { StatusDropdown } from "../../components/status-dropdown";
 
 // ── Types ────────────────────────────────────────────────────
-type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; contacts: Contact[] };
+type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; role_in_dossier?:string; contacts: Contact[] };
 type Contact = { id:string; first_name:string; last_name:string; email?:string; phone?:string; title?:string; linkedin_url?:string; base_status:string; last_contact_date?:string; role_label?:string; org_id?:string; org_name?:string };
 type Commitment = { id:string; amount?:number; currency:string; status:string; committed_at?:string; notes?:string; organization_id?:string; org_name?:string };
 type Task = { id:string; title:string; task_type?:string; task_status:string; priority_level:string; due_date?:string; due_time?:string; description?:string; summary?:string; contact_id?:string; contact_name?:string; contact_ids?:string[] };
@@ -71,6 +71,19 @@ const COMM_S: Record<string,{label:string,bg:string,tx:string}> = {
   cancelled:{label:"Annulé",bg:"var(--rec-bg)",tx:"var(--rec-tx)"},
 };
 const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
+const ROLE_CONFIG: Record<string,{label:string;bg:string;tx:string}> = {
+  client:          {label:"Client",           bg:"#D1FAE5", tx:"#065F46"},
+  banque:          {label:"Banque",           bg:"#DBEAFE", tx:"#1D4ED8"},
+  repreneur:       {label:"Repreneur",        bg:"#EDE9FE", tx:"#5B21B6"},
+  investisseur:    {label:"Investisseur",     bg:"#FEF3C7", tx:"#92400E"},
+  avocat:          {label:"Cabinet juridique",bg:"#F3F4F6", tx:"#374151"},
+  expert_comptable:{label:"Expert-comptable", bg:"#F3F4F6", tx:"#374151"},
+  conseil:         {label:"Conseil",          bg:"#F3F4F6", tx:"#374151"},
+  cible:           {label:"Cible M&A",        bg:"#FEE2E2", tx:"#991B1B"},
+  acquereur:       {label:"Acquéreur",        bg:"#E0E7FF", tx:"#3730A3"},
+  autre:           {label:"Autre",            bg:"var(--surface-3)", tx:"var(--text-4)"},
+};
+const ROLE_OPTIONS = Object.entries(ROLE_CONFIG).map(([v,c])=>({value:v,label:c.label}));
 const PRIO_C: Record<string,string> = { high:"var(--rec-tx)", medium:"var(--sell-tx)", low:"var(--text-5)" };
 
 function fmt(d?:string|null){ if(!d) return "—"; return new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short"}).format(new Date(d)); }
@@ -152,6 +165,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [orgCreateType, setOrgCreateType] = useState("other");
   const [orgCreateWebsite, setOrgCreateWebsite] = useState("");
   const [orgCreateLocation, setOrgCreateLocation] = useState("");
+  const [orgLinkRole, setOrgLinkRole] = useState("autre");
 
   // Charger toutes les orgs CRM (pour le sélecteur dans Engagement)
   useEffect(() => {
@@ -595,8 +609,17 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       onClick={()=>setExpOrg(p=>({...p,[org.id]:!isExp}))}>
                       <Building2 size={13} color="var(--text-4)"/>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           <Link href={`/protected/organisations/${org.id}`} onClick={e=>e.stopPropagation()} style={{ fontSize:13.5, fontWeight:700, color:"var(--text-1)", textDecoration:"none" }}>{org.name}</Link>
+                          {(() => { const rc = ROLE_CONFIG[org.role_in_dossier ?? "autre"] ?? ROLE_CONFIG.autre; return (
+                            <select value={org.role_in_dossier ?? "autre"} onClick={e=>e.stopPropagation()} onChange={async (e) => {
+                              const newRole = e.target.value;
+                              setOrgs(prev => prev.map(o => o.id === org.id ? { ...o, role_in_dossier: newRole } : o));
+                              await updateDealOrgRole(deal.id, org.id, newRole);
+                            }} style={{ fontSize:10.5, fontWeight:600, padding:"2px 6px", borderRadius:12, background:rc.bg, color:rc.tx, border:"none", cursor:"pointer", fontFamily:"inherit", appearance:"auto" }}>
+                              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                            </select>
+                          ); })()}
                           <span style={{ fontSize:11, padding:"2px 7px", borderRadius:20, background:sc.bg, color:sc.tx }}>{STATUS_L[org.base_status]??org.base_status}</span>
                           {org.investment_ticket && <span style={{ fontSize:11, color:"var(--text-5)" }}>{org.investment_ticket}</span>}
                         </div>
