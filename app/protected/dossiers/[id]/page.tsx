@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DealDetail } from "./deal-detail";
+import { getMandateByDealId } from "@/actions/mandates";
 
 export const revalidate = 0;
 
@@ -56,6 +57,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     org_name: Array.isArray(c.organizations) ? c.organizations[0]?.name : (c.organizations as any)?.name,
   }));
 
+  // Mandat lié au dossier (null si deal.mandate_id est null)
+  const initialMandate = await getMandateByDealId(id);
+
   return (
     <DealDetail
       deal={deal}
@@ -64,6 +68,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       initialCommitments={comms}
       initialDocs={docsRes.data ?? []}
       initialFinancialData={financialRes.data ?? []}
+      initialMandate={initialMandate}
     />
   );
 }

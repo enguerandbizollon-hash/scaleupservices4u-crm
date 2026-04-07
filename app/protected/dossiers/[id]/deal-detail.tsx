@@ -4,6 +4,8 @@ import { TimeSelect } from "../../components/time-select";
 import { LossReasonModal } from "../../components/loss-reason-modal";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import ActionModal from "@/components/actions/ActionModal";
+import { MandateInlineForm } from "@/components/mandates/MandateInlineForm";
+import { getAllMandates, linkMandateToDeal, unlinkMandateFromDeal, getMandateByDealId } from "@/actions/mandates";
 import { MatchingTab } from "./matching-tab";
 import { MaMatchingTab } from "./ma-matching-tab";
 import { RecruitmentKanban } from "./recruitment-kanban";
@@ -139,13 +141,161 @@ function SectionHeader({ icon:Icon, title, count, expanded, onToggle, onAdd, add
 }
 
 // ════════════════════════════════════════════════════════════
-export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialDocs, initialFinancialData }: {
+// Sous-composant : onglet Mandat — vue résumée avec lien vers fiche complète.
+// Option B : pas de duplication avec /protected/mandats/[id], juste un résumé
+// des informations clés et des 3 prochains jalons à échéance.
+function MandateTabContent({
+  deal,
+  mandate,
+  clientOrgs,
+  onOpenCreate,
+  onOpenLink,
+  onOpenUnlink,
+}: {
+  deal: any;
+  mandate: any;
+  clientOrgs: { id: string; name: string }[];
+  onOpenCreate: () => void;
+  onOpenLink: () => void;
+  onOpenUnlink: () => void;
+}) {
+  const MANDATE_TYPE_LABELS: Record<string, string> = {
+    fundraising: "Fundraising", ma_sell: "M&A Sell-side", ma_buy: "M&A Buy-side",
+    cfo_advisor: "CFO Advisor", recruitment: "Recrutement",
+  };
+  const STATUS_COLORS: Record<string, { bg: string; tx: string; label: string }> = {
+    draft:   { bg: "var(--surface-3)", tx: "var(--text-4)",  label: "Brouillon" },
+    active:  { bg: "#D1FAE5",           tx: "#065F46",         label: "Actif" },
+    on_hold: { bg: "#FEF3C7",           tx: "#92400E",         label: "En pause" },
+    won:     { bg: "#DBEAFE",           tx: "#1E40AF",         label: "Gagné" },
+    lost:    { bg: "#FEE2E2",           tx: "#991B1B",         label: "Perdu" },
+    closed:  { bg: "var(--surface-3)", tx: "var(--text-5)",   label: "Clos" },
+  };
+
+  if (!mandate) {
+    return (
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"40px 24px", textAlign:"center" }}>
+        <div style={{ fontSize:14, color:"var(--text-3)", marginBottom:6, fontWeight:600 }}>Aucun mandat lié à ce dossier</div>
+        <div style={{ fontSize:12.5, color:"var(--text-5)", marginBottom:20 }}>
+          Créez un nouveau mandat ou liez-en un existant pour tracer les honoraires et les jalons commerciaux.
+        </div>
+        <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+          <button type="button" onClick={onOpenCreate} disabled={clientOrgs.length === 0}
+            title={clientOrgs.length === 0 ? "Ajoutez d'abord une organisation cliente au dossier" : ""}
+            style={{ padding:"9px 20px", borderRadius:8, border:"none", fontWeight:700, fontSize:13, cursor:"pointer", background:"var(--su-500)", color:"#fff", opacity: clientOrgs.length === 0 ? 0.5 : 1 }}>
+            + Créer un mandat
+          </button>
+          <button type="button" onClick={onOpenLink}
+            style={{ padding:"9px 20px", borderRadius:8, border:"1px solid var(--border)", fontWeight:600, fontSize:13, cursor:"pointer", background:"transparent", color:"var(--text-2)" }}>
+            Lier un mandat existant
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const sc = STATUS_COLORS[mandate.status] ?? STATUS_COLORS.draft;
+  const fees = Array.isArray(mandate.fee_milestones) ? mandate.fee_milestones : [];
+  const today = new Date().toISOString().split("T")[0];
+  const upcomingFees = fees
+    .filter((f: any) => f.status !== "paid" && f.status !== "cancelled" && f.due_date && f.due_date >= today)
+    .sort((a: any, b: any) => a.due_date.localeCompare(b.due_date))
+    .slice(0, 3);
+  const totalEstimated = mandate.estimated_fee_amount ?? 0;
+  const totalConfirmed = mandate.confirmed_fee_amount ?? 0;
+  const cur = mandate.currency ?? "EUR";
+
+  const fmt = (n: number | null) => n != null ? new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) : "—";
+  const fmtDate = (d: string | null) => d ? new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"short", year:"numeric" }).format(new Date(d)) : "—";
+
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"20px 24px" }}>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:18, flexWrap:"wrap" }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+            <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:sc.bg, color:sc.tx }}>{sc.label}</span>
+            <span style={{ fontSize:11.5, color:"var(--text-5)" }}>{MANDATE_TYPE_LABELS[mandate.type] ?? mandate.type}</span>
+          </div>
+          <div style={{ fontSize:18, fontWeight:700, color:"var(--text-1)", marginBottom:2 }}>{mandate.name}</div>
+          {mandate.client_name && (
+            <div style={{ fontSize:12.5, color:"var(--text-4)" }}>Client : {mandate.client_name}</div>
+          )}
+        </div>
+        <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+          <Link href={`/protected/mandats/${mandate.id}`}
+            style={{ padding:"7px 14px", borderRadius:7, border:"1px solid var(--border)", fontSize:12.5, fontWeight:600, textDecoration:"none", color:"var(--text-2)", background:"var(--surface-2)", display:"inline-flex", alignItems:"center", gap:5 }}>
+            Voir mandat complet →
+          </Link>
+          <button type="button" onClick={onOpenUnlink}
+            style={{ padding:"7px 12px", borderRadius:7, border:"1px solid var(--border)", fontSize:12.5, fontWeight:600, cursor:"pointer", background:"transparent", color:"var(--rec-tx)" }}>
+            Délier
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:10, marginBottom:18 }}>
+        <div style={{ background:"var(--surface-2)", borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ fontSize:10.5, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Fee estimé</div>
+          <div style={{ fontSize:16, fontWeight:700, color:"var(--text-1)" }}>{fmt(totalEstimated)} {cur}</div>
+        </div>
+        <div style={{ background:"var(--surface-2)", borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ fontSize:10.5, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Fee confirmé</div>
+          <div style={{ fontSize:16, fontWeight:700, color:"#065F46" }}>{fmt(totalConfirmed)} {cur}</div>
+        </div>
+        <div style={{ background:"var(--surface-2)", borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ fontSize:10.5, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Début</div>
+          <div style={{ fontSize:13, fontWeight:600, color:"var(--text-2)" }}>{fmtDate(mandate.start_date)}</div>
+        </div>
+        <div style={{ background:"var(--surface-2)", borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ fontSize:10.5, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Closing cible</div>
+          <div style={{ fontSize:13, fontWeight:600, color:"var(--text-2)" }}>{fmtDate(mandate.target_close_date)}</div>
+        </div>
+      </div>
+
+      {/* Prochains jalons */}
+      <div style={{ borderTop:"1px solid var(--border)", paddingTop:16 }}>
+        <div style={{ fontSize:11, fontWeight:700, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:10 }}>
+          Prochains jalons ({fees.length} au total)
+        </div>
+        {upcomingFees.length === 0 ? (
+          <div style={{ fontSize:12.5, color:"var(--text-5)" }}>Aucun jalon à échéance. Gérez les jalons depuis la fiche mandat complète.</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {upcomingFees.map((f: any) => (
+              <div key={f.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"var(--surface-2)", borderRadius:8 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{f.name}</div>
+                  <div style={{ fontSize:11.5, color:"var(--text-5)" }}>{f.milestone_type} · {fmtDate(f.due_date)}</div>
+                </div>
+                <div style={{ fontSize:13, fontWeight:700, color:"var(--text-2)" }}>{fmt(f.amount)} {f.currency ?? cur}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Description */}
+      {mandate.description && (
+        <div style={{ borderTop:"1px solid var(--border)", paddingTop:14, marginTop:14 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>Description</div>
+          <div style={{ fontSize:13, color:"var(--text-3)", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{mandate.description}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialDocs, initialFinancialData, initialMandate }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
   initialCommitments: Commitment[];
   initialDocs: Doc[];
   initialFinancialData: FinancialRow[];
+  initialMandate: any;
 }) {
   // State sections
   const [orgs, setOrgs] = useState<Org[]>(initialOrgs);
@@ -185,8 +335,60 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "matching" | "matching_ma" | "pipeline" | "matching_rh" | "financier">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "mandat" | "matching" | "matching_ma" | "pipeline" | "matching_rh" | "financier">("dossier");
   const [matchingRefreshKey, setMatchingRefreshKey] = useState(0);
+
+  // Mandat — state et handlers
+  const [mandate, setMandate] = useState<any>(initialMandate);
+  const [mandateFormOpen, setMandateFormOpen] = useState(false);
+  const [linkMandateOpen, setLinkMandateOpen] = useState(false);
+  const [allMandatesForLink, setAllMandatesForLink] = useState<any[]>([]);
+  const [selectedMandateToLink, setSelectedMandateToLink] = useState<string>("");
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [mandateActionLoading, setMandateActionLoading] = useState(false);
+
+  async function reloadMandate() {
+    const m = await getMandateByDealId(deal.id);
+    setMandate(m);
+  }
+
+  async function handleMandateCreated() {
+    await reloadMandate();
+  }
+
+  async function openLinkMandateModal() {
+    if (allMandatesForLink.length === 0) {
+      const list = await getAllMandates();
+      setAllMandatesForLink(list);
+    }
+    setSelectedMandateToLink("");
+    setLinkMandateOpen(true);
+  }
+
+  async function handleLinkMandate() {
+    if (!selectedMandateToLink) return;
+    setMandateActionLoading(true);
+    const r = await linkMandateToDeal(deal.id, selectedMandateToLink);
+    setMandateActionLoading(false);
+    if (r.success) {
+      setLinkMandateOpen(false);
+      await reloadMandate();
+    } else {
+      alert(r.error ?? "Erreur lors de la liaison");
+    }
+  }
+
+  async function handleUnlinkMandate() {
+    setMandateActionLoading(true);
+    const r = await unlinkMandateFromDeal(deal.id);
+    setMandateActionLoading(false);
+    if (r.success) {
+      setUnlinkConfirmOpen(false);
+      setMandate(null);
+    } else {
+      alert(r.error ?? "Erreur lors du déliement");
+    }
+  }
 
   // Matching profile inline edit
   const [matchingEditOpen, setMatchingEditOpen] = useState(false);
@@ -293,15 +495,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
         <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
           {(isFundraising
-            ? (["dossier","matching","financier"] as const)
+            ? (["dossier","mandat","matching","financier"] as const)
             : isRecruitment
-            ? (["dossier","pipeline","matching_rh"] as const)
+            ? (["dossier","mandat","pipeline","matching_rh"] as const)
             : isMa
-            ? (["dossier","matching_ma","financier"] as const)
-            : (["dossier","financier"] as const)
+            ? (["dossier","mandat","matching_ma","financier"] as const)
+            : (["dossier","mandat","financier"] as const)
           ).map(tab => {
             const labels: Record<string, string> = {
-              dossier:"Dossier", matching:"Matching", matching_ma:"Matching M&A",
+              dossier:"Dossier", mandat:"Mandat", matching:"Matching", matching_ma:"Matching M&A",
               pipeline:"Pipeline", matching_rh:"Matching vivier", financier:"Financier",
             };
             const accentColor = isFundraising ? "var(--fund-tx)" : isRecruitment ? "var(--rec-tx)" : isMa ? "var(--sell-tx)" : "var(--sell-tx)";
@@ -363,8 +565,20 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           <RecruitmentMatching dealId={deal.id} />
         )}
 
+        {/* Onglet Mandat — vue résumée + lien vers fiche mandat complète */}
+        {activeTab === "mandat" && (
+          <MandateTabContent
+            deal={deal}
+            mandate={mandate}
+            clientOrgs={orgs.map((o: any) => ({ id: o.id, name: o.name }))}
+            onOpenCreate={() => setMandateFormOpen(true)}
+            onOpenLink={openLinkMandateModal}
+            onOpenUnlink={() => setUnlinkConfirmOpen(true)}
+          />
+        )}
+
         {/* Layout 2 colonnes */}
-        {((!isFundraising && !isRecruitment) || activeTab === "dossier") && (
+        {((!isFundraising && !isRecruitment) || activeTab === "dossier") && activeTab !== "mandat" && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
 
           {/* ── Colonne gauche ── */}
@@ -856,6 +1070,81 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         defaultType={actionModalDefaultType}
         context={actionModalContext}
       />
+
+      {/* MandateInlineForm — création mandat depuis onglet Mandat */}
+      <MandateInlineForm
+        open={mandateFormOpen}
+        dealId={deal.id}
+        dealName={deal.name ?? ""}
+        clientOrgs={orgs.map((o: any) => ({ id: o.id, name: o.name }))}
+        defaultType={deal.deal_type}
+        onClose={() => setMandateFormOpen(false)}
+        onCreated={handleMandateCreated}
+      />
+
+      {/* Modale — lier un mandat existant */}
+      {linkMandateOpen && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setLinkMandateOpen(false)}>
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border-2)", borderRadius:16, padding:24, width:"100%", maxWidth:480 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <span style={{ fontSize:16, fontWeight:700, color:"var(--text-1)" }}>Lier un mandat existant</span>
+              <button onClick={() => setLinkMandateOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:"var(--text-4)", fontSize:18 }}>✕</button>
+            </div>
+            {allMandatesForLink.length === 0 ? (
+              <div style={{ padding:"20px 0", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
+                Aucun mandat disponible. Créez-en un d'abord.
+              </div>
+            ) : (
+              <>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:"var(--text-4)", marginBottom:5, textTransform:"uppercase", letterSpacing:".05em" }}>Mandat à lier</label>
+                <select value={selectedMandateToLink} onChange={e => setSelectedMandateToLink(e.target.value)}
+                  style={{ width:"100%", padding:"8px 12px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface-2)", color:"var(--text-1)", fontSize:13.5, fontFamily:"inherit", outline:"none", boxSizing:"border-box", marginBottom:16 }}>
+                  <option value="">— Sélectionner —</option>
+                  {allMandatesForLink.map((m:any) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} · {m.type} · {m.status}{m.client_name ? ` · ${m.client_name}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button type="button" onClick={() => setLinkMandateOpen(false)}
+                style={{ padding:"9px 22px", borderRadius:8, border:"1px solid var(--border)", fontWeight:600, fontSize:13.5, cursor:"pointer", background:"transparent", color:"var(--text-3)" }}>
+                Annuler
+              </button>
+              <button type="button" onClick={handleLinkMandate}
+                disabled={!selectedMandateToLink || mandateActionLoading}
+                style={{ padding:"9px 22px", borderRadius:8, border:"none", fontWeight:700, fontSize:13.5, cursor:"pointer", background:"var(--su-500)", color:"#fff", opacity: (!selectedMandateToLink || mandateActionLoading) ? 0.6 : 1 }}>
+                {mandateActionLoading ? "Liaison..." : "Lier"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale — confirmation déliement */}
+      {unlinkConfirmOpen && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={() => setUnlinkConfirmOpen(false)}>
+          <div style={{ background:"var(--surface)", border:"1px solid var(--border-2)", borderRadius:16, padding:24, width:"100%", maxWidth:440 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:16, fontWeight:700, color:"var(--text-1)", marginBottom:10 }}>Délier le mandat ?</div>
+            <div style={{ fontSize:13.5, color:"var(--text-3)", marginBottom:20, lineHeight:1.5 }}>
+              Le mandat <strong>{mandate?.name}</strong> restera existant mais ne sera plus lié à ce dossier.
+              Les fee_milestones du mandat ne seront pas affectés.
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button type="button" onClick={() => setUnlinkConfirmOpen(false)}
+                style={{ padding:"9px 22px", borderRadius:8, border:"1px solid var(--border)", fontWeight:600, fontSize:13.5, cursor:"pointer", background:"transparent", color:"var(--text-3)" }}>
+                Annuler
+              </button>
+              <button type="button" onClick={handleUnlinkMandate} disabled={mandateActionLoading}
+                style={{ padding:"9px 22px", borderRadius:8, border:"none", fontWeight:700, fontSize:13.5, cursor:"pointer", background:"#b91c1c", color:"#fff", opacity: mandateActionLoading ? 0.6 : 1 }}>
+                {mandateActionLoading ? "Déliement..." : "Délier"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LossReasonModal */}
       {showLossModal && (
