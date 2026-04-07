@@ -77,17 +77,6 @@ export interface CommitmentInput {
   notes?: string | null;
 }
 
-export interface TaskInput {
-  title: string;
-  task_type?: string;
-  priority_level?: string;
-  due_date?: string | null;
-  due_time?: string | null;
-  summary?: string | null;
-  contact_ids?: string[];
-  organization_id?: string | null;
-}
-
 export interface DocumentInput {
   name: string;
   document_type?: string;
@@ -319,95 +308,6 @@ export async function deleteCommitment(dealId: string, commitmentId: string) {
     .eq("id", commitmentId)
     .eq("deal_id", dealId)
     .eq("user_id", user.id);
-
-  if (error) return { success: false, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true };
-}
-
-// ── Tâches ────────────────────────────────────────────────────────────────────
-
-const VALID_TASK_TYPES = [
-  "todo","email_sent","email_received","call","meeting",
-  "follow_up","intro","note","deck_sent","nda","document_sent","other",
-];
-
-export async function createTask(dealId: string, data: TaskInput) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false as const, error: "Non autorisé" };
-  if (!data.title?.trim()) return { success: false as const, error: "Titre requis" };
-
-  const { data: task, error } = await supabase.from("tasks").insert({
-    deal_id:         dealId,
-    user_id:         user.id,
-    title:           data.title.trim(),
-    task_type:       VALID_TASK_TYPES.includes(data.task_type ?? "") ? data.task_type : "todo",
-    task_status:     "open",
-    priority_level:  data.priority_level   ?? "medium",
-    due_date:        data.due_date         ?? null,
-    due_time:        data.due_time         ?? null,
-    summary:         data.summary          ?? null,
-    description:     data.summary          ?? null,
-    contact_id:      data.contact_ids?.[0] ?? null,
-    organization_id: data.organization_id  ?? null,
-  }).select("*").single();
-
-  if (error) return { success: false as const, error: error.message };
-
-  if (data.contact_ids && data.contact_ids.length > 0 && task) {
-    await supabase.from("task_contacts").insert(
-      data.contact_ids.map(cid => ({ task_id: task.id, contact_id: cid, user_id: user.id }))
-    );
-  }
-
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true as const, data: { ...task, contact_ids: data.contact_ids ?? [] } };
-}
-
-export async function updateTask(dealId: string, taskId: string, updates: Partial<TaskInput> & { task_status?: string }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false as const, error: "Non autorisé" };
-
-  const payload: Record<string, unknown> = {};
-  if (updates.title        !== undefined) payload.title        = updates.title.trim();
-  if (updates.task_type    !== undefined) payload.task_type    = VALID_TASK_TYPES.includes(updates.task_type) ? updates.task_type : "todo";
-  if (updates.task_status  !== undefined) {
-    payload.task_status = updates.task_status;
-    if (updates.task_status === "done") payload.completed_at = new Date().toISOString();
-  }
-  if (updates.priority_level !== undefined) payload.priority_level = updates.priority_level;
-  if (updates.due_date       !== undefined) payload.due_date       = updates.due_date;
-  if (updates.due_time       !== undefined) payload.due_time       = updates.due_time;
-  if (updates.summary        !== undefined) { payload.summary = updates.summary; payload.description = updates.summary; }
-
-  const { data: task, error } = await supabase.from("tasks")
-    .update(payload).eq("id", taskId).eq("deal_id", dealId).eq("user_id", user.id)
-    .select("*").single();
-
-  if (error) return { success: false as const, error: error.message };
-
-  if (updates.contact_ids !== undefined) {
-    await supabase.from("task_contacts").delete().eq("task_id", taskId);
-    if (updates.contact_ids.length > 0) {
-      await supabase.from("task_contacts").insert(
-        updates.contact_ids.map(cid => ({ task_id: taskId, contact_id: cid, user_id: user.id }))
-      );
-    }
-  }
-
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true as const, data: task };
-}
-
-export async function deleteTask(dealId: string, taskId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Non autorisé" };
-
-  const { error } = await supabase.from("tasks")
-    .delete().eq("id", taskId).eq("deal_id", dealId).eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
   revalidatePath(`/protected/dossiers/${dealId}`);
