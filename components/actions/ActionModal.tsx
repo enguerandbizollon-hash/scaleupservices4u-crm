@@ -363,22 +363,26 @@ export default function ActionModal({
             rows={3} placeholder="Details de l'action..." style={{ ...inp, resize: "vertical" }} />
         </div>
 
-        {/* Section 3: Date fields */}
-        <div style={mb14}>
-          <label style={lbl}>Date</label>
-          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inp} />
-        </div>
+        {/* Section 3: Date fields — masqué pour meeting/call (qui ont start_datetime) */}
+        {!["meeting", "call"].includes(type) && (
+          <>
+            <div style={mb14}>
+              <label style={lbl}>Date</label>
+              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inp} />
+            </div>
 
-        <div style={{ ...mb14, display: "flex", alignItems: "center", gap: 10 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-2)", cursor: "pointer" }}>
-            <input type="checkbox" checked={isAllDay} onChange={e => setIsAllDay(e.target.checked)}
-              style={{ accentColor: "var(--su-500)" }} />
-            Toute la journee
-          </label>
-          {!isAllDay && (
-            <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} style={{ ...inp, width: 130 }} />
-          )}
-        </div>
+            <div style={{ ...mb14, display: "flex", alignItems: "center", gap: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-2)", cursor: "pointer" }}>
+                <input type="checkbox" checked={isAllDay} onChange={e => setIsAllDay(e.target.checked)}
+                  style={{ accentColor: "var(--su-500)" }} />
+                Toute la journee
+              </label>
+              {!isAllDay && (
+                <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} style={{ ...inp, width: 130 }} />
+              )}
+            </div>
+          </>
+        )}
 
         {/* Meeting/Call specific */}
         {showMeetingFields && (
