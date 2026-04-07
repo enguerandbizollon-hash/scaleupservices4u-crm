@@ -195,3 +195,118 @@ export async function getMandatesByClient(clientOrganizationId: string) {
 
   return data ?? [];
 }
+
+// ── Relation deal ↔ mandat ─────────────────────────────────────────────────────
+
+/**
+ * Récupère le mandat lié à un dossier (via deals.mandate_id), avec jalons
+ * et organisation cliente. Retourne null si le dossier n'a pas de mandat.
+ */
+export async function getMandateByDealId(dealId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("mandate_id")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!deal?.mandate_id) return null;
+
+  const { data } = await supabase
+    .from("mandates")
+    .select(`
+      *,
+      organizations:client_organization_id(id, name),
+      fee_milestones(id, name, milestone_type, amount, currency, due_date, invoiced_date, paid_date, status, invoice_reference, notes)
+    `)
+    .eq("id", deal.mandate_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!data) return null;
+  return {
+    ...data,
+    client_name: Array.isArray(data.organizations) ? data.organizations[0]?.name : (data.organizations as any)?.name,
+    client_id:   Array.isArray(data.organizations) ? data.organizations[0]?.id  : (data.organizations as any)?.id,
+  };
+}
+
+/**
+ * Lie un mandat existant à un dossier. Le mandat doit appartenir à user.id.
+ */
+export async function linkMandateToDeal(
+  dealId: string,
+  mandateId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  // Vérifier que le mandat existe et appartient à l'utilisateur
+  const { data: mandate } = await supabase
+    .from("mandates").select("id").eq("id", mandateId).eq("user_id", user.id).maybeSingle();
+  if (!mandate) return { success: false, error: "Mandat introuvable" };
+
+  const { error } = await supabase.from("deals")
+    .update({ mandate_id: mandateId, updated_at: new Date().toISOString() })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  revalidatePath(`/protected/mandats/${mandateId}`);
+  revalidatePath("/protected/mandats");
+  return { success: true };
+}
+
+/**
+ * Délie le mandat courant d'un dossier (mandate_id = null).
+ */
+export async function unlinkMandateFromDeal(
+  dealId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  // Récupérer le mandat actuel pour revalider sa fiche
+  const { data: deal } = await supabase
+    .from("deals").select("mandate_id").eq("id", dealId).eq("user_id", user.id).maybeSingle();
+
+  const { error } = await supabase.from("deals")
+    .update({ mandate_id: null, updated_at: new Date().toISOString() })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  if (deal?.mandate_id) revalidatePath(`/protected/mandats/${deal.mandate_id}`);
+  revalidatePath("/protected/mandats");
+  return { success: true };
+}
+
+/**
+ * Crée un mandat et le lie immédiatement au dossier fourni.
+ * client_organization_id est obligatoire — passé explicitement par l'appelant.
+ */
+export async function createMandateAndLink(
+  dealId: string,
+  input: MandateInput,
+): Promise<MandateActionResult> {
+  const result = await createMandate(input);
+  if (!result.success) return result;
+
+  const linkResult = await linkMandateToDeal(dealId, result.id);
+  if (!linkResult.success) {
+    return { success: false, error: linkResult.error ?? "Erreur lors de la liaison" };
+  }
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return result;
+}
