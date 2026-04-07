@@ -76,6 +76,7 @@ export default function ActionModal({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [emailDirection, setEmailDirection] = useState("sent");
   const [emailSubject, setEmailSubject] = useState("");
+  const [documentUrl, setDocumentUrl] = useState("");
   const [dealId, setDealId] = useState(context?.deal_id || "");
   const [organizationId, setOrganizationId] = useState(context?.organization_id || "");
   const [mandateId, setMandateId] = useState(context?.mandate_id || "");
@@ -130,6 +131,7 @@ export default function ActionModal({
       setPhoneNumber(editingAction.phone_number || "");
       setEmailDirection(editingAction.email_direction || "sent");
       setEmailSubject(editingAction.email_subject || "");
+      setDocumentUrl(editingAction.document_url || "");
       setDealId(editingAction.deal_id || "");
       setOrganizationId(editingAction.organization_id || "");
       setMandateId(editingAction.mandate_id || "");
@@ -166,6 +168,7 @@ export default function ActionModal({
       setPhoneNumber("");
       setEmailDirection("sent");
       setEmailSubject("");
+      setDocumentUrl("");
       setDealId(context?.deal_id || "");
       setOrganizationId(context?.organization_id || "");
       setMandateId(context?.mandate_id || "");
@@ -237,6 +240,7 @@ export default function ActionModal({
       phone_number: type === "call" ? phoneNumber || undefined : undefined,
       email_direction: type === "email" ? emailDirection : undefined,
       email_subject: type === "email" ? emailSubject || undefined : undefined,
+      document_url: documentUrl.trim() || undefined,
       deal_id: dealId || undefined,
       organization_id: organizationId || undefined,
       mandate_id: mandateId || undefined,
@@ -531,6 +535,18 @@ export default function ActionModal({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Section 4c: Lien / Document (tous types) */}
+        <div style={mb14}>
+          <label style={lbl}>Lien / Document (optionnel)</label>
+          <input
+            type="url"
+            value={documentUrl}
+            onChange={e => setDocumentUrl(e.target.value)}
+            placeholder="https://drive.google.com/... ou lien externe"
+            style={inp}
+          />
         </div>
 
         {/* Section 5: Context links */}
