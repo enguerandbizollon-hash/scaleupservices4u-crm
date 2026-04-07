@@ -4,6 +4,11 @@ import { Suspense } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { DashboardClient } from "./dashboard-client";
 
+// Les widgets lisent des données mutables (actions, deals, relances) :
+// on force le rendu dynamique pour que revalidatePath depuis les Server
+// Actions déclenche un vrai re-fetch.
+export const dynamic = "force-dynamic";
+
 const PRIO: Record<string,string> = { high:"var(--rec-dot)", medium:"var(--sell-dot)", low:"var(--border-2)" };
 const DT: Record<string,{label:string;bg:string;tx:string;border:string}> = {
   fundraising:{label:"Fundraising",bg:"var(--fund-bg)",tx:"var(--fund-tx)",border:"var(--fund-mid)"},
@@ -24,17 +29,39 @@ async function Content() {
   const today    = new Date().toISOString().split("T")[0];
   const in30     = new Date(Date.now()+30*864e5).toISOString().split("T")[0];
 
-  const [dealsRes, tasksRes, relancesRes, activitiesRes, eventsRes, kpiRes, allContactsRes] = await Promise.all([
+  // Toutes les lectures de tâches, activités et événements viennent
+  // désormais de la table unifiée actions (V35). Les filtres type/status
+  // remplacent les filtres task_status / event_type des anciennes tables.
+  const [dealsRes, openTasksRes, relancesRes, recentActsRes, upcomingEventsRes, kpiRes, allContactsRes] = await Promise.all([
     supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,target_date").eq("deal_status","open").order("priority_level"),
-    supabase.from("tasks").select("id,title,priority_level,due_date,deal_id,deals(name)").eq("task_status","open").order("due_date",{ascending:true}).limit(6),
+    // Tâches ouvertes — widget "Tâches à faire"
+    supabase.from("actions")
+      .select("id,title,priority,due_date,deal_id,deals(name)")
+      .eq("type","task")
+      .not("status","in",'("done","cancelled","completed")')
+      .order("due_date",{ascending:true})
+      .limit(6),
     supabase.from("contacts").select("id,first_name,last_name,last_contact_date,organization_contacts(organizations(name))").not("last_contact_date","is",null).lte("last_contact_date",cutoff15).not("base_status","in","(excluded,inactive)").order("last_contact_date",{ascending:true}).limit(8),
-    supabase.from("activities").select("id,title,activity_type,activity_date,deal_id,deals(name)").order("activity_date",{ascending:false}).limit(8),
-    supabase.from("events").select("id,title,event_type,due_date,deal_id,contact_id,deals(name),contacts(first_name,last_name)").eq("status","open").gte("due_date",today).lte("due_date",in30).order("due_date",{ascending:true}).limit(20),
+    // Activités récentes — widget "Activités récentes" (tout sauf tâches)
+    supabase.from("actions")
+      .select("id,title,type,email_direction,start_datetime,due_date,deal_id,deals(name)")
+      .neq("type","task")
+      .order("created_at",{ascending:false})
+      .limit(8),
+    // Événements à venir — widget calendrier 30j (meetings / calls / deadlines ouverts)
+    supabase.from("actions")
+      .select("id,title,type,due_date,start_datetime,deal_id,deals(name)")
+      .in("type",["meeting","call","deadline"])
+      .not("status","in",'("done","cancelled","completed")')
+      .gte("due_date",today)
+      .lte("due_date",in30)
+      .order("due_date",{ascending:true})
+      .limit(20),
     Promise.all([
       supabase.from("deals").select("*",{count:"exact",head:true}).eq("deal_status","open"),
       supabase.from("contacts").select("*",{count:"exact",head:true}),
       supabase.from("organizations").select("*",{count:"exact",head:true}),
-      supabase.from("tasks").select("*",{count:"exact",head:true}).eq("task_status","open"),
+      supabase.from("actions").select("*",{count:"exact",head:true}).eq("type","task").not("status","in",'("done","cancelled","completed")'),
     ]),
     supabase.from("contacts")
       .select("id,first_name,last_name,email,organization_contacts(organizations(name))")
@@ -42,26 +69,32 @@ async function Content() {
       .order("last_name").limit(200),
   ]);
 
-  const deals     = dealsRes.data ?? [];
-  const tasks     = tasksRes.data ?? [];
-  const relances  = relancesRes.data ?? [];
-  const activities = activitiesRes.data ?? [];
-  const events    = eventsRes.data ?? [];
+  const deals      = dealsRes.data ?? [];
+  const tasks      = openTasksRes.data ?? [];
+  const relances   = relancesRes.data ?? [];
+  const activities = recentActsRes.data ?? [];
+  const events     = upcomingEventsRes.data ?? [];
   const [cDeals, cContacts, cOrgs, cTasks] = await kpiRes;
 
-  const relancesUrgentes = relances.filter(c => c.last_contact_date && c.last_contact_date <= cutoff30);
+  // Mapping Action.type → clé historique pour ACT_ICON / EVT_COLOR
+  // du DashboardClient (qui connaît email_sent, follow_up, etc.).
+  const toLegacyType = (t: string, emailDir?: string | null) => {
+    if (t === "email") return emailDir === "received" ? "email_received" : "email_sent";
+    if (t === "deadline") return "deadline";
+    if (t === "document_request") return "other";
+    return t; // task, call, meeting, note
+  };
 
   // Préparer les événements du calendrier (30 prochains jours)
   const calendarEvents = events.map(e => {
     const deal = Array.isArray(e.deals) ? e.deals[0] : e.deals as any;
-    const contact = Array.isArray(e.contacts) ? e.contacts[0] : e.contacts as any;
     return {
       id: e.id,
       title: e.title,
-      date: e.due_date,
-      type: e.event_type,
+      date: (e.due_date ?? e.start_datetime) as string,
+      type: toLegacyType(e.type),
       dealName: deal?.name ?? null,
-      contactName: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contactName: null as string | null,
     };
   });
   // Ajouter les tâches dans le calendrier
@@ -80,8 +113,8 @@ async function Content() {
       ]}
       deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.fundraising, stageLabel:STAGE[d.deal_stage]??d.deal_stage, prioColor:PRIO[d.priority_level]??PRIO.medium }))}
       relances={relances.map(c => { const org=(c.organization_contacts as any[])?.[0]?.organizations; return { id:c.id, firstName:c.first_name, lastName:c.last_name, days:daysSince(c.last_contact_date!), orgName:Array.isArray(org)?org[0]?.name:org?.name }; })}
-      tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority_level, dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority_level]??PRIO.medium }; })}
-      activities={activities.map(a => { const deal=Array.isArray(a.deals)?a.deals[0]:a.deals as any; return { id:a.id, title:a.title, type:a.activity_type, date:a.activity_date, dealId:a.deal_id, dealName:deal?.name }; })}
+      tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority ?? "medium", dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority ?? "medium"]??PRIO.medium }; })}
+      activities={activities.map(a => { const deal=Array.isArray(a.deals)?a.deals[0]:a.deals as any; return { id:a.id, title:a.title, type:toLegacyType(a.type, a.email_direction), date:(a.start_datetime ?? a.due_date) as string, dealId:a.deal_id, dealName:deal?.name }; })}
       calendarItems={[...calendarEvents, ...calendarTasks]}
       allContacts={(allContactsRes.data ?? []).map((c:any) => {
         const org = (c.organization_contacts as any[])?.[0]?.organizations;

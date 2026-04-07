@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { UnifiedActivityModal } from "./components/unified-activity-modal";
+import { useRouter } from "next/navigation";
+import ActionModal from "@/components/actions/ActionModal";
 import Link from "next/link";
 import { Plus, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -29,8 +30,9 @@ function fmt(v:string|null){ if(!v)return"—"; return new Date(v).toLocaleDateS
 function fmtFull(v:string){ return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}); }
 
 export function DashboardClient({ kpis, deals, relances, tasks, activities, calendarItems, allContacts }: DashboardClientProps) {
-  const [unifiedModalOpen, setUnifiedModalOpen] = useState(false);
-  const [unifiedModalContext, setUnifiedModalContext] = useState<any>(null);
+  const router = useRouter();
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [actionModalDefaultType, setActionModalDefaultType] = useState<string | undefined>(undefined);
   const [calMonth, setCalMonth] = useState(() => { const d=new Date(); return { year:d.getFullYear(), month:d.getMonth() }; });
   const [selectedDate, setSelectedDate] = useState<string|null>(null);
 
@@ -174,7 +176,7 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
                 <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:7,height:7,borderRadius:4,background:"#6B7280",display:"inline-block" }}/>Tâche</span>
                 <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:7,height:7,borderRadius:4,background:"#1a56db",display:"inline-block" }}/>Événement</span>
               </div>
-              <button onClick={() => {setUnifiedModalContext({type:"event"}); setUnifiedModalOpen(true);}} style={{ display:"flex", alignItems:"center", gap:4, fontSize:11.5, padding:"4px 10px", borderRadius:7, background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1a56db", cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
+              <button onClick={() => { setActionModalDefaultType("meeting"); setActionModalOpen(true); }} style={{ display:"flex", alignItems:"center", gap:4, fontSize:11.5, padding:"4px 10px", borderRadius:7, background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1a56db", cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
                 <Plus size={11}/> Créer
               </button>
             </div>
@@ -186,9 +188,9 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
                   {fmtFull(selectedDate)}
                 </div>
                 {selectedItems.length === 0 ? (
-                    <div style={{ fontSize:12.5, color:"var(--text-5)" }}>Rien ce jour — <button onClick={() => {setUnifiedModalContext({type:"event", date: selectedDate}); setUnifiedModalOpen(true);}} style={{ background:"none", border:"none", color:"#1a56db", cursor:"pointer", fontSize:12.5, fontFamily:"inherit" }}>créer un événement</button></div>
+                    <div style={{ fontSize:12.5, color:"var(--text-5)" }}>Rien ce jour — <button onClick={() => { setActionModalDefaultType("meeting"); setActionModalOpen(true); }} style={{ background:"none", border:"none", color:"#1a56db", cursor:"pointer", fontSize:12.5, fontFamily:"inherit" }}>créer un événement</button></div>
                 ) : selectedItems.map((item,i) => (
-                  <div key={i} onClick={() => {setUnifiedModalContext({type:"item", item}); setUnifiedModalOpen(true);}} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:i<selectedItems.length-1?"1px solid var(--border)":"none", cursor:"pointer" }}>
+                  <div key={i} onClick={() => { setActionModalDefaultType(item.type); setActionModalOpen(true); }} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:i<selectedItems.length-1?"1px solid var(--border)":"none", cursor:"pointer" }}>
                     <span style={{ fontSize:13 }}>{ACT_ICON[item.type]??"📌"}</span>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:12.5, fontWeight:600, color:"var(--text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.title}</div>
@@ -211,7 +213,7 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
               </div>
               {tasks.length === 0 && <div style={{ padding:"20px", textAlign:"center", fontSize:13, color:"var(--text-5)" }}>✅ Aucune tâche</div>}
               {tasks.map((t,i) => (
-                <div key={t.id} onClick={() => {setUnifiedModalContext({type:"task", task:t}); setUnifiedModalOpen(true);}} style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 14px", borderBottom:i<tasks.length-1?"1px solid var(--border)":"none", cursor:"pointer" }}>
+                <div key={t.id} onClick={() => { setActionModalDefaultType("task"); setActionModalOpen(true); }} style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 14px", borderBottom:i<tasks.length-1?"1px solid var(--border)":"none", cursor:"pointer" }}>
                   <div style={{ width:6, height:6, borderRadius:3, background:t.prioColor, flexShrink:0 }}/>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.title}</div>
@@ -243,16 +245,11 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
         </div>
       </div>
 
-      <UnifiedActivityModal
-        isOpen={unifiedModalOpen}
-        onClose={() => {
-          setUnifiedModalOpen(false);
-          setUnifiedModalContext(null);
-        }}
-        onSave={async (formData) => {
-          return true;
-        }}
-        defaultType="meeting"
+      <ActionModal
+        open={actionModalOpen}
+        onClose={() => setActionModalOpen(false)}
+        onSaved={() => { setActionModalOpen(false); router.refresh(); }}
+        defaultType={actionModalDefaultType}
       />
     </div>
   );
