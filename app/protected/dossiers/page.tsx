@@ -55,19 +55,24 @@ async function Content() {
   // Charger tâches ouvertes + activités récentes + events à venir pour chaque deal
   const dealIds = deals.map(d => d.id);
 
-  const [tasksRes, activitiesRes, eventsRes, orgsRes] = await Promise.all([
-    supabase.from("tasks")
-      .select("id,deal_id,task_status,due_date,priority_level")
+  // Table unifiée actions : tâches, activités passées et événements à venir
+  // sont tous dérivés de la même requête avec un filtre type + status.
+  const [openTasksRes, recentActsRes, upcomingEventsRes, orgsRes] = await Promise.all([
+    supabase.from("actions")
+      .select("id,deal_id,status,due_date,priority")
       .in("deal_id", dealIds)
-      .eq("task_status", "open"),
-    supabase.from("activities")
-      .select("id,deal_id,activity_date")
+      .eq("type", "task")
+      .not("status", "in", '("done","cancelled","completed")'),
+    supabase.from("actions")
+      .select("id,deal_id,start_datetime,due_date")
       .in("deal_id", dealIds)
-      .order("activity_date", { ascending: false }),
-    supabase.from("events")
-      .select("id,deal_id,title,event_type,due_date,status")
+      .neq("type", "task")
+      .order("start_datetime", { ascending: false, nullsFirst: false }),
+    supabase.from("actions")
+      .select("id,deal_id,title,type,due_date,start_datetime,status")
       .in("deal_id", dealIds)
-      .eq("status", "open")
+      .in("type", ["meeting", "deadline", "call"])
+      .not("status", "in", '("done","cancelled","completed")')
       .gte("due_date", today)
       .order("due_date", { ascending: true }),
     supabase.from("deal_organizations")
@@ -75,23 +80,40 @@ async function Content() {
       .in("deal_id", dealIds),
   ]);
 
-  // Indexer par deal_id
-  const tasksByDeal: Record<string, typeof tasksRes.data> = {};
-  const actsByDeal: Record<string, typeof activitiesRes.data> = {};
-  const eventsByDeal: Record<string, typeof eventsRes.data> = {};
+  // Indexer par deal_id — on conserve les shapes historiques TaskType/EventType
+  // consommées par la carte ci-dessous.
+  const tasksByDeal: Record<string, TaskType[]> = {};
+  const actsByDeal: Record<string, { activity_date: string | null }[]> = {};
+  const eventsByDeal: Record<string, NonNullable<EventType>[]> = {};
   const orgCountByDeal: Record<string, number> = {};
 
-  for (const t of tasksRes.data ?? []) {
+  for (const t of openTasksRes.data ?? []) {
+    if (!t.deal_id) continue;
     if (!tasksByDeal[t.deal_id]) tasksByDeal[t.deal_id] = [];
-    tasksByDeal[t.deal_id]!.push(t);
+    tasksByDeal[t.deal_id]!.push({
+      id: t.id,
+      deal_id: t.deal_id,
+      task_status: t.status,
+      due_date: t.due_date,
+      priority_level: t.priority ?? "medium",
+    });
   }
-  for (const a of activitiesRes.data ?? []) {
+  for (const a of recentActsRes.data ?? []) {
+    if (!a.deal_id) continue;
     if (!actsByDeal[a.deal_id]) actsByDeal[a.deal_id] = [];
-    actsByDeal[a.deal_id]!.push(a);
+    actsByDeal[a.deal_id]!.push({ activity_date: a.start_datetime ?? a.due_date });
   }
-  for (const e of eventsRes.data ?? []) {
+  for (const e of upcomingEventsRes.data ?? []) {
+    if (!e.deal_id || !e.due_date) continue;
     if (!eventsByDeal[e.deal_id]) eventsByDeal[e.deal_id] = [];
-    eventsByDeal[e.deal_id]!.push(e);
+    eventsByDeal[e.deal_id]!.push({
+      id: e.id,
+      deal_id: e.deal_id,
+      title: e.title,
+      event_type: e.type,
+      due_date: e.due_date,
+      status: e.status,
+    });
   }
   for (const o of orgsRes.data ?? []) {
     orgCountByDeal[o.deal_id] = (orgCountByDeal[o.deal_id] ?? 0) + 1;
