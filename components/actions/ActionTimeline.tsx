@@ -142,7 +142,7 @@ export default function ActionTimeline({
     fontWeight: 600, cursor: "pointer", transition: "all .15s",
   };
   const pillActive: React.CSSProperties = {
-    ...pillBase, background: "var(--su-500)", color: "#fff", borderColor: "var(--su-500)",
+    ...pillBase, background: "var(--su-500)", color: "#fff", border: "1px solid var(--su-500)",
   };
   const btnCreate: React.CSSProperties = {
     padding: "7px 16px", borderRadius: 8, border: "none", fontWeight: 700,
