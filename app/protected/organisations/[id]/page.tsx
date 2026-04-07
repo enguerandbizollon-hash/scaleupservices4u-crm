@@ -24,7 +24,8 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   // Les activités/tâches de l'organisation sont chargées côté client par
   // <ActionTimeline filters={{ organization_id: id }} /> dans OrgDetail.
-  const [{ data: orgContacts }, { data: dealOrgs }, { data: mandates }, { data: financialData }] = await Promise.all([
+  // On récupère juste le count ici pour l'afficher dans la barre d'onglets.
+  const [{ data: orgContacts }, { data: dealOrgs }, { data: mandates }, { data: financialData }, { count: actionsCount }] = await Promise.all([
     supabase.from("organization_contacts")
       .select("contact_id,role_label,is_primary,contacts(id,first_name,last_name,title,email,phone,linkedin_url,base_status,last_contact_date)")
       .eq("organization_id", id),
@@ -39,6 +40,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       .select("*")
       .eq("organization_id", id)
       .order("fiscal_year", { ascending: false }),
+    supabase.from("actions")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", id),
   ]);
 
   const contacts = (orgContacts ?? []).map(oc => {
@@ -51,7 +55,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     return d;
   }).filter(Boolean);
 
-  return <OrgDetail org={org} contacts={contacts} deals={deals} mandates={mandates ?? []} financialData={financialData ?? []} />;
+  return <OrgDetail org={org} contacts={contacts} deals={deals} mandates={mandates ?? []} financialData={financialData ?? []} actionsCount={actionsCount ?? 0} />;
 }
 
 export default function OrgPage({ params }: { params: Promise<{ id: string }> }) {

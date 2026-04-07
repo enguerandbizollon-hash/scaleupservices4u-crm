@@ -181,6 +181,20 @@ export default function ActionModal({
     setError("");
   }, [open, isEdit, editingAction, defaultType, context]);
 
+  // Pré-remplir participants depuis context.contact_id en mode création,
+  // dès que contactOptions est chargé.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    if (!context?.contact_id) return;
+    if (!contactOptions.length) return;
+    const c = contactOptions.find(opt => opt.id === context.contact_id);
+    if (!c) return;
+    setParticipants(prev => {
+      if (prev.some(p => p.contact_id === c.id)) return prev;
+      return [...prev, { contact_id: c.id, name: `${c.first_name} ${c.last_name}`, role: "", attended: true }];
+    });
+  }, [open, isEdit, context?.contact_id, contactOptions]);
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function addParticipant(c: ContactOption) {

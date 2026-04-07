@@ -75,8 +75,8 @@ const MANDATE_STATUS: Record<string, { bg: string; tx: string }> = {
   closed:  { bg: "var(--surface-3)", tx: "var(--text-4)"  },
 };
 
-export function OrgDetail({ org, contacts, deals, mandates, financialData }: {
-  org: any; contacts: any[]; deals: any[]; mandates: any[]; financialData: FinancialRow[];
+export function OrgDetail({ org, contacts, deals, mandates, financialData, actionsCount }: {
+  org: any; contacts: any[]; deals: any[]; mandates: any[]; financialData: FinancialRow[]; actionsCount: number;
 }) {
   const [tab, setTab] = useState<Tab>("contacts");
   const sc = STATUS_COLORS[org.base_status] ?? STATUS_COLORS.to_qualify;
@@ -192,7 +192,7 @@ export function OrgDetail({ org, contacts, deals, mandates, financialData }: {
           { icon:FolderOpen, label:"Dossiers",  val:deals.length,      tab:"dossiers" as Tab,  noCount:false },
           { icon:FileCheck,  label:"Mandats",   val:mandates.length,   tab:"mandats" as Tab,   noCount:false },
           { icon:TrendingUp, label:"Finances",  val:financialData.length, tab:"financier" as Tab, noCount:false },
-          { icon:Activity,   label:"Activités", val:"",                tab:"activites" as Tab, noCount:true  },
+          { icon:Activity,   label:"Activités", val:actionsCount,      tab:"activites" as Tab, noCount:false },
         ].map(({ icon:Icon, label, val, tab:t, noCount }) => (
           <button key={t} onClick={() => setTab(t)} style={{
             textAlign:"center", padding:"14px 12px",

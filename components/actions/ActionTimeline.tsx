@@ -311,8 +311,9 @@ export default function ActionTimeline({
         onSaved={handleSaved}
         editingAction={editingAction}
         context={{
-          deal_id: filters.deal_id,
+          deal_id:         filters.deal_id,
           organization_id: filters.organization_id,
+          contact_id:      filters.contact_id,
         }}
       />
     </div>
