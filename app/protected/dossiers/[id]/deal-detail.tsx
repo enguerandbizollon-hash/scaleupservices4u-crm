@@ -1,10 +1,9 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { TimeSelect } from "../../components/time-select";
-import { UnifiedActivityModal, type UnifiedActivityFormData } from "../../components/unified-activity-modal";
 import { LossReasonModal } from "../../components/loss-reason-modal";
-import { MailTaskModal } from "../../components/mail-task-modal";
-import { createUnifiedActivityAction, updateUnifiedActivityAction, deleteUnifiedActivityAction } from "../../actions/unified-activity-actions";
+import ActionTimeline from "@/components/actions/ActionTimeline";
+import ActionModal from "@/components/actions/ActionModal";
 import { MatchingTab } from "./matching-tab";
 import { MaMatchingTab } from "./ma-matching-tab";
 import { RecruitmentKanban } from "./recruitment-kanban";
@@ -24,9 +23,9 @@ import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import Link from "next/link";
 import {
-  ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp,
-  Mail, Phone, Linkedin, Users, User, Building2, TrendingUp, CheckSquare,
-  Activity, FileText, ExternalLink, AlertTriangle, CalendarDays, Send
+  ArrowLeft, Plus, Trash2, Pencil, X, ChevronDown, ChevronUp,
+  Mail, Phone, Linkedin, Users, User, Building2, TrendingUp,
+  FileText, ExternalLink, AlertTriangle, CalendarDays
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 
@@ -34,8 +33,6 @@ import { StatusDropdown } from "../../components/status-dropdown";
 type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; role_in_dossier?:string; contacts: Contact[] };
 type Contact = { id:string; first_name:string; last_name:string; email?:string; phone?:string; title?:string; linkedin_url?:string; base_status:string; last_contact_date?:string; role_label?:string; org_id?:string; org_name?:string };
 type Commitment = { id:string; amount?:number; currency:string; status:string; committed_at?:string; notes?:string; organization_id?:string; org_name?:string };
-type Task = { id:string; title:string; task_type?:string; task_status:string; priority_level:string; due_date?:string; due_time?:string; description?:string; summary?:string; contact_id?:string; contact_name?:string; contact_ids?:string[] };
-type Act = { id:string; title:string; activity_type:string; activity_date:string; summary?:string; contact_ids?:string[]; contact_names?:string[] };
 type Doc = { id:string; name:string; document_type:string; document_status:string; document_url?:string; version_label?:string; added_at:string };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -70,7 +67,6 @@ const COMM_S: Record<string,{label:string,bg:string,tx:string}> = {
   transferred:{label:"Transféré",bg:"var(--fund-bg)",tx:"var(--fund-tx)"},
   cancelled:{label:"Annulé",bg:"var(--rec-bg)",tx:"var(--rec-tx)"},
 };
-const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
 const ROLE_CONFIG: Record<string,{label:string;bg:string;tx:string}> = {
   client:          {label:"Client",           bg:"#D1FAE5", tx:"#065F46"},
   banque:          {label:"Banque",           bg:"#DBEAFE", tx:"#1D4ED8"},
@@ -84,7 +80,6 @@ const ROLE_CONFIG: Record<string,{label:string;bg:string;tx:string}> = {
   autre:           {label:"Autre",            bg:"var(--surface-3)", tx:"var(--text-4)"},
 };
 const ROLE_OPTIONS = Object.entries(ROLE_CONFIG).map(([v,c])=>({value:v,label:c.label}));
-const PRIO_C: Record<string,string> = { high:"var(--rec-tx)", medium:"var(--sell-tx)", low:"var(--text-5)" };
 
 function fmt(d?:string|null){ if(!d) return "—"; return new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short"}).format(new Date(d)); }
 function fmtA(n?:number,c="EUR"){ if(!n) return "—"; return n>=1e6?`${(n/1e6).toFixed(1)}M ${c}`:n>=1e3?`${(n/1e3).toFixed(0)}k ${c}`:`${n} ${c}`; }
@@ -144,13 +139,11 @@ function SectionHeader({ icon:Icon, title, count, expanded, onToggle, onAdd, add
 }
 
 // ════════════════════════════════════════════════════════════
-export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialTasks, initialActivities, initialDocs, initialFinancialData }: {
+export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialDocs, initialFinancialData }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
   initialCommitments: Commitment[];
-  initialTasks: Task[];
-  initialActivities: Act[];
   initialDocs: Doc[];
   initialFinancialData: FinancialRow[];
 }) {
@@ -173,25 +166,21 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   }, []);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [activities, setActivities] = useState<Act[]>(initialActivities);
   const [docs, setDocs] = useState<Doc[]>(initialDocs);
 
   // Expanded sections
   const [expOrgs, setExpOrgs] = useState(true);
   const [expOrg, setExpOrg] = useState<Record<string,boolean>>({});
   const [expPipeline, setExpPipeline] = useState(true);
-  const [expTasks, setExpTasks] = useState(true);
-  const [expActs, setExpActs] = useState(true);
   const [expDocs, setExpDocs] = useState(true);
 
   // Modals
   const [modal, setModal] = useState<string|null>(null);
   const [showLossModal, setShowLossModal] = useState(false);
-  const [mailTask, setMailTask] = useState<Task|null>(null);
-  const [unifiedActivityModalOpen, setUnifiedActivityModalOpen] = useState(false);
-  const [activityContextType, setActivityContextType] = useState<"task" | "activity" | null>(null);
-  const [editingActivity, setEditingActivity] = useState<any>(null);
+  // ActionModal depuis onglets (MatchingTab, etc.)
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [actionModalContext, setActionModalContext] = useState<{ deal_id: string; organization_id?: string }>({ deal_id: deal.id });
+  const [actionModalDefaultType, setActionModalDefaultType] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
@@ -213,7 +202,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const hard = commitments.filter(c=>["hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
   const soft = commitments.filter(c=>["soft","hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
   const pct = target > 0 ? Math.min(100, Math.round(hard/target*100)) : 0;
-  const openTasks = tasks.filter(t=>t.task_status==="open").length;
 
   const setF = (k:string) => (e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => setForm(p=>({...p,[k]:e.target.value}));
   const openModal = (name:string, data?:any) => { setModal(name); setEditing(data??null); setForm(data ? {...data, amount:data.amount??"", committed_at:toDateStr(data.committed_at), due_date:toDateStr(data.due_date), activity_date:toDateStr(data.activity_date), organization_id:data.organization_id??""} : {}); };
@@ -250,78 +238,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     const r = await deleteCommitment(deal.id, id);
     if (!r.success) { alert(r.error); return; }
     setCommitments(p=>p.filter(c=>c.id!==id));
-  }
-
-  // ── UNIFIED ACTIVITIES CRUD (Server Actions) ──────────────
-  async function handleSaveUnifiedActivity(formData: UnifiedActivityFormData, isNew: boolean, oldActivityId?: string) {
-    setLoading(true);
-    try {
-      if (isNew) {
-        // Create new activity
-        const result = await createUnifiedActivityAction({
-          ...formData,
-          dealId: deal.id,
-        });
-        if (!result.success) {
-          alert(result.error || "Erreur lors de la création");
-          return false;
-        }
-        // Refresh: pour l'instant on recharge les tâches/activités en mémoire
-        // (Dans un cas réel, il faudrait refetcher les données côté serveur)
-        return true;
-      } else if (oldActivityId) {
-        // Update existing activity
-        const result = await updateUnifiedActivityAction(oldActivityId, formData);
-        if (!result.success) {
-          alert(result.error || "Erreur lors de la modification");
-          return false;
-        }
-        return true;
-      }
-      return false;
-    } catch(e:any) {
-      console.error("Error in handleSaveUnifiedActivity:", e);
-      alert(e.message || "Erreur serveur");
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function toggleTask(t: Task) {
-    try {
-      const newStatus = t.task_status === "open" ? "done" : "open";
-      const result = await updateUnifiedActivityAction(t.id, {
-        status: newStatus as "open" | "done" | "cancelled",
-        title: t.title,
-        activityType: t.task_type || "todo",
-      });
-      if (result.success) {
-        setTasks(p => p.map(x => x.id === t.id ? {...x, task_status: newStatus} : x));
-      }
-    } catch(e:any) {
-      console.error("Error toggling task:", e);
-    }
-  }
-
-  async function deleteTask(id: string) {
-    if(!confirm("Supprimer cette tâche ?")) return;
-    try {
-      await deleteUnifiedActivityAction(id);
-      setTasks(p => p.filter(t => t.id !== id));
-    } catch(e:any) {
-      alert(e.message || "Erreur lors de la suppression");
-    }
-  }
-
-  async function deleteActivity(id: string) {
-    if(!confirm("Supprimer cette activité ?")) return;
-    try {
-      await deleteUnifiedActivityAction(id);
-      setActivities(p => p.filter(a => a.id !== id));
-    } catch(e:any) {
-      alert(e.message || "Erreur lors de la suppression");
-    }
   }
 
   async function saveDocument() {
@@ -421,10 +337,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           <MatchingTab
             dealId={deal.id}
             refreshKey={matchingRefreshKey}
-            onCreateActivity={() => {
-              setActivityContextType("activity");
-              setEditingActivity(null);
-              setUnifiedActivityModalOpen(true);
+            onCreateActivity={(orgId) => {
+              setActionModalContext({ deal_id: deal.id, organization_id: orgId });
+              setActionModalDefaultType("email");
+              setActionModalOpen(true);
             }}
           />
         )}
@@ -795,65 +711,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           {/* ── Colonne droite ── */}
           <div>
 
-            {/* TÂCHES */}
-            <div style={cardStyle}>
-              <SectionHeader icon={CheckSquare} title="Tâches" count={openTasks} expanded={expTasks} onToggle={()=>setExpTasks(p=>!p)} onAdd={()=>{setActivityContextType("task"); setEditingActivity(null); setUnifiedActivityModalOpen(true);}} addLabel="Tâche"/>
-              {expTasks && tasks.slice(0,8).map((t,i) => {
-                const overdue = t.due_date && new Date(t.due_date) < new Date() && t.task_status==="open";
-                return (
-                  <div key={t.id} style={{ ...rowStyle, borderBottom: i<Math.min(tasks.length,8)-1?"1px solid var(--border)":"none", opacity:t.task_status==="done"?.45:1 }}>
-                    <button onClick={()=>toggleTask(t)} style={{ width:18, height:18, borderRadius:5, border:`2px solid ${t.task_status==="done"?"var(--fund-tx)":PRIO_C[t.priority_level]??PRIO_C.medium}`, background:t.task_status==="done"?"var(--fund-tx)":"transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                      {t.task_status==="done" && <Check size={10} color="#fff"/>}
-                    </button>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", textDecoration:t.task_status==="done"?"line-through":"none" }}>{t.title}</div>
-                      {(t.contact_name||t.due_date) && (
-                        <div style={{ fontSize:11.5, color: overdue?"var(--rec-tx)":"var(--text-5)", marginTop:1 }}>
-                          {t.contact_name && <span>{t.contact_name}</span>}
-                          {t.contact_name && t.due_date && <span> · </span>}
-                          {t.due_date && <span>{overdue?"⚠ ":""}{fmt(t.due_date)}</span>}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                      {(contacts.length > 0) && (
-                        <button onClick={()=>setMailTask(t)} title="Envoyer un email aux contacts liés" style={{...actionBtn, color:"#1a56db"}}><Send size={11}/></button>
-                      )}
-                      <button onClick={()=>{setActivityContextType("task"); setEditingActivity(t); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
-                      <button onClick={()=>deleteTask(t.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
-                    </div>
-                  </div>
-                );
-              })}
-              {expTasks && tasks.length===0 && <div style={{ padding:"20px 16px", fontSize:13, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>Aucune tâche</div>}
-              {expTasks && tasks.length>8 && <div style={{ padding:"8px 16px", fontSize:12, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>+{tasks.length-8} tâches supplémentaires</div>}
-            </div>
-
-            {/* ACTIVITÉS */}
-            <div style={cardStyle}>
-              <SectionHeader icon={Activity} title="Tâches & Actions" count={activities.length + tasks.length} expanded={expActs} onToggle={()=>setExpActs(p=>!p)} onAdd={()=>setModal("task")} addLabel="Ajouter"/>
-              {expActs && activities.slice(0,6).map((a,i) => (
-                <div key={a.id} style={{ ...rowStyle, borderBottom: i<Math.min(activities.length,6)-1?"1px solid var(--border)":"none" }}>
-                  <div style={{ width:28, height:28, borderRadius:7, background:"var(--surface-2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
-                    {ACT_ICON[a.activity_type]??"📌"}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{a.title}</div>
-                    {(a.contact_names && (a.contact_names as string[]).length > 0) && (
-                      <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:1 }}>
-                        {(a.contact_names as string[]).join(", ")}
-                      </div>
-                    )}
-                  </div>
-                  <span style={{ fontSize:11.5, color:"var(--text-5)", flexShrink:0 }}>{fmt(a.activity_date)}</span>
-                  <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                    <button onClick={()=>{setActivityContextType("activity"); setEditingActivity(a); setUnifiedActivityModalOpen(true);}} style={{...actionBtn}}><Pencil size={11}/></button>
-                    <button onClick={()=>deleteActivity(a.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
-                  </div>
-                </div>
-              ))}
-              {expActs && activities.length===0 && <div style={{ padding:"20px 16px", fontSize:13, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>Aucune activité</div>}
-              {expActs && activities.length>6 && <div style={{ padding:"8px 16px", fontSize:12, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>+{activities.length-6} activités supplémentaires</div>}
+            {/* ACTIONS — timeline unifiée (tâches, appels, meetings, emails, notes, deadlines, documents) */}
+            <div style={{ ...cardStyle, padding: "16px 18px" }}>
+              <ActionTimeline filters={{ deal_id: deal.id }} showCreateButton={true} />
             </div>
 
             {/* DOCUMENTS */}
@@ -988,66 +848,14 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         </Modal>
       )}
 
-      {/* TaskModal unifié */}
-      <UnifiedActivityModal
-        isOpen={unifiedActivityModalOpen && activityContextType === "task"}
-        onClose={() => {
-          setUnifiedActivityModalOpen(false);
-          setActivityContextType(null);
-          setEditingActivity(null);
-        }}
-        onSave={async (formData) => {
-          const isNew = !editingActivity?.id;
-          const success = await handleSaveUnifiedActivity(
-            formData,
-            isNew,
-            editingActivity?.id
-          );
-          if (success) {
-            setUnifiedActivityModalOpen(false);
-            setActivityContextType(null);
-            setEditingActivity(null);
-          }
-          return success;
-        }}
-        dealId={deal.id}
-        defaultType="todo"
+      {/* ActionModal — déclenchée depuis MatchingTab pour créer une action ciblant un investisseur */}
+      <ActionModal
+        open={actionModalOpen}
+        onClose={() => setActionModalOpen(false)}
+        onSaved={() => setActionModalOpen(false)}
+        defaultType={actionModalDefaultType}
+        context={actionModalContext}
       />
-
-      {/* Activity Modal */}
-      <UnifiedActivityModal
-        isOpen={unifiedActivityModalOpen && activityContextType === "activity"}
-        onClose={() => {
-          setUnifiedActivityModalOpen(false);
-          setActivityContextType(null);
-          setEditingActivity(null);
-        }}
-        onSave={async (formData) => {
-          const isNew = !editingActivity?.id;
-          const success = await handleSaveUnifiedActivity(
-            formData,
-            isNew,
-            editingActivity?.id
-          );
-          if (success) {
-            setUnifiedActivityModalOpen(false);
-            setActivityContextType(null);
-            setEditingActivity(null);
-          }
-          return success;
-        }}
-        dealId={deal.id}
-        defaultType="meeting"
-      />
-
-      {/* Modale email tâche */}
-      {mailTask && (
-        <MailTaskModal
-          task={mailTask}
-          contacts={contacts}
-          onClose={() => setMailTask(null)}
-        />
-      )}
 
       {/* LossReasonModal */}
       {showLossModal && (

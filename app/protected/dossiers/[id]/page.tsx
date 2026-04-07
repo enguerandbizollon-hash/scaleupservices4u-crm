@@ -16,13 +16,14 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   if (dealError) throw new Error(dealError.message);
   if (!deal) notFound();
 
-  const [orgsRes, docsRes, tasksRes, activitiesRes, commitmentsRes, financialRes] = await Promise.all([
+  // Les actions (tâches + activités) sont chargées côté client par
+  // <ActionTimeline filters={{ deal_id: id }} /> dans DealDetail —
+  // plus de fetch server-side ici.
+  const [orgsRes, docsRes, commitmentsRes, financialRes] = await Promise.all([
     supabase.from("deal_organizations")
       .select("organization_id,role_in_dossier,organizations(id,name,organization_type,base_status,location,investment_ticket,investment_stage)")
       .eq("deal_id", id),
     supabase.from("deal_documents").select("id,name,document_type,document_status,document_url,version_label,added_at,note").eq("deal_id", id).order("added_at",{ascending:false}),
-    supabase.from("tasks").select("id,title,task_status,priority_level,due_date,description,contact_id").eq("deal_id",id).order("due_date",{ascending:true}),
-    supabase.from("activities").select("id,title,activity_type,activity_date,summary,activity_contacts(contacts(id,first_name,last_name))").eq("deal_id",id).order("activity_date",{ascending:false}).limit(30),
     supabase.from("investor_commitments").select("id,amount,currency,status,committed_at,notes,organization_id,organizations(name)").eq("deal_id",id).order("committed_at",{ascending:false}),
     supabase.from("financial_data").select("*").eq("deal_id",id).order("fiscal_year",{ascending:false}),
   ]);
@@ -50,29 +51,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     }
   }
 
-  const acts = (activitiesRes.data ?? []).map((a: any) => {
-    const acLinks = a.activity_contacts ?? [];
-    const contactNames = acLinks.map((ac: any) => {
-      const c = Array.isArray(ac.contacts) ? ac.contacts[0] : ac.contacts;
-      return c ? `${c.first_name} ${c.last_name}` : null;
-    }).filter(Boolean);
-    const contactIds = acLinks.map((ac: any) => {
-      const c = Array.isArray(ac.contacts) ? ac.contacts[0] : ac.contacts;
-      return c?.id ?? null;
-    }).filter(Boolean);
-    return { ...a, contact_names: contactNames, contact_ids: contactIds };
-  });
-
   const comms = (commitmentsRes.data ?? []).map(c => ({
     ...c,
     org_name: Array.isArray(c.organizations) ? c.organizations[0]?.name : (c.organizations as any)?.name,
-  }));
-
-  const tasksList = (tasksRes.data ?? []).map(t => ({
-    ...t,
-    contact_name: contacts.find((c:any) => c.id === t.contact_id)
-      ? (() => { const c = contacts.find((ct:any) => ct.id === t.contact_id); return c ? `${c.first_name} ${c.last_name}` : undefined; })()
-      : undefined,
   }));
 
   return (
@@ -81,8 +62,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       initialOrgs={orgs}
       initialContacts={contacts}
       initialCommitments={comms}
-      initialTasks={tasksList}
-      initialActivities={acts}
       initialDocs={docsRes.data ?? []}
       initialFinancialData={financialRes.data ?? []}
     />
