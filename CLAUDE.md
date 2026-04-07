@@ -992,3 +992,158 @@ Transversal
 - Si conflit → le dire avant de coder
 - Si quelque chose est mauvais → le dire et proposer mieux
 - Si une décision bloque la vision plateforme → le signaler
+
+## ROADMAP ET BACKLOG — État au 2 avril 2026
+
+### ÉTAT DU PROJET
+Version : V35
+Zero erreur TypeScript confirmé.
+DB de test — sera vidée et reremplie proprement au passage en prod.
+Pas de migration SQL sur données existantes requise.
+
+---
+
+### P0 — AVANT TOUTE UTILISATION CLIENT
+
+#### 1. Validation ActionModal + GeoSelect
+- Tester ActionModal en conditions réelles sur chaque type
+  (task, call, meeting, email, note, deadline, document_request)
+- Confirmer que GeoSelect remplace bien tous les champs
+  localisation texte libre sur toutes les fiches
+  (organisations, dossiers, contacts, deals)
+- Confirmer que la sync GCal fonctionne sur meeting et deadline
+
+#### 2. Import financier — mapper colonnes
+- 12 colonnes ignorées lors de l'import CSV (dont sector,
+  other_opex, financial_charges, intangible_assets,
+  tangible_assets, net_income_bs, debt_lt, debt_st,
+  accounts_payable)
+- Fix : priorité exact match avant fuzzy matching
+- Fix : dédoublonnage colonnes (payroll mappé 4×, revenue 3×)
+
+---
+
+### P1 — FONCTIONNEL MAIS INCOMPLET
+
+#### 3. Module dossier — 3 problèmes ouverts
+- Dirigeant : champ structuré manquant (nom, email, téléphone,
+  titre). Doit être un contact lié avec création inline.
+- Création organisation inline : si org non trouvée dans
+  le sélecteur → bouton "Créer cette organisation" ouvre
+  une modale légère (nom, type, website) sans quitter le dossier
+- Type organisation dans le contexte dossier : badge visible
+  indiquant le rôle de l'org dans ce dossier spécifiquement
+  (Banque, Repreneur, Investisseur, Avocat, Expert-comptable)
+  Distinct du organization_type de la fiche org.
+  Table de liaison : dossier_organizations(dossier_id,
+  organization_id, role_in_dossier)
+
+#### 4. Matching M&A buy-side
+- Le matching investisseurs est refait et fonctionnel.
+- Le matching M&A (acquéreurs vs cibles) n'existe pas.
+- Logique : dossier cession → scorer les acquéreurs potentiels
+  selon secteur, taille, géographie, type d'opération.
+- Critères éliminatoires : géographie, secteur (même logique
+  que matching investisseurs)
+- Critères pondérés : taille cible vs capacité acquéreur,
+  type opération (build-up, diversification, financier),
+  historique d'acquisitions
+- Score 0-100, éliminatoires en premier
+
+#### 5. Connecteurs Harmonic/Apollo — validation
+- Vérifier que les connecteurs remplissent bien les colonnes
+  structurées : investor_sectors[], investor_stages[],
+  investor_geographies[], investor_ticket_min/max
+- Si non → adapter le mapping dans les connecteurs
+- Ne pas supprimer resolveInvestorFields() avant confirmation
+
+---
+
+### P2 — VALEUR AJOUTÉE FORTE
+
+#### 6. Pipeline kanban dossiers
+- Vue kanban par stade en complément de la vue liste
+- Colonnes : Kickoff → Préparation → Outreach →
+  Management Meetings → DD → Négociation → Closing
+- Drag & drop pour changer de stade
+- Carte : nom dossier, type, montant cible, prochaine action
+- Filtre par type de mission (M&A sell, M&A buy, Fundraising)
+
+#### 7. Notifications et rappels automatiques
+- reminder_days[] est en base sur la table actions
+  mais jamais déclenché
+- Implémenter via Vercel Cron (toutes les heures)
+- Pour chaque action avec reminder_days et due_date :
+  si (due_date - today) IN reminder_days → créer une
+  notification in-app (table notifications) + email si activé
+- Afficher badge de notification dans la sidebar
+
+#### 8. Export PDF / Word
+- Liste investisseurs avec scores et statuts de contact
+- Synthèse dossier (informations clés + données financières)
+- Rapport d'avancement client (pipeline + interactions)
+- Utiliser la skill docx disponible dans le projet
+
+---
+
+### P3 — BACKLOG MOYEN TERME
+
+#### 9. Module RH M4 — Matching bidirectionnel candidats
+- Architecture validée, non implémentée
+- Scorer candidat → poste ET poste → candidat
+- Critères : compétences, séniorité, secteur, géographie,
+  prétentions salariales
+- Intégrer dans le pipeline RH existant (M3)
+
+#### 10. Dashboard amélioré
+- Deals par stade avec montants
+- Investisseurs contactés par dossier (taux de couverture)
+- Taux de conversion par type de mission
+- Top 5 dossiers actifs avec prochaine action
+- Honoraires pipeline vs encaissé (graphe mensuel)
+
+#### 11. Enrichissement automatique organisations
+- Intégration Pappers API (données légales françaises)
+- Fallback INSEE/SIRENE (gratuit)
+- Bouton "Enrichir" sur fiche organisation
+- Peupler : SIREN, forme juridique, dirigeant légal,
+  CA, effectifs, adresse
+
+#### 12. Recherche globale
+- Barre de recherche transversale (Cmd+K)
+- Résultats : dossiers, organisations, contacts, actions
+- Recherche full-text sur nom, description, notes
+- Navigation directe vers la fiche
+
+---
+
+### PRINCIPES DE DÉVELOPPEMENT — RAPPEL
+
+**Règle absolue** : toujours lire les fichiers existants avant
+de proposer quoi que ce soit. Diagnostiquer avant d'implémenter.
+
+**Single source of truth** :
+- Secteurs → SECTORS dans matching-maps.ts
+- Géographies → GEO_ALL dans matching-maps.ts
+- Stages → STAGE_ORDER dans matching-maps.ts
+- Parsers → investor-parsers.ts
+
+**Ne jamais supprimer** sans instruction explicite.
+
+**Un commit par correction**, jamais groupés.
+
+**TypeScript strict** :
+npx tsc --noEmit 2>&1 | grep "error TS" | grep -v "node_modules\|\.next"
+Zéro erreur avant tout commit.
+
+**Migrations SQL** : toujours idempotentes.
+CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS,
+DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$
+
+**GCal** : toujours isolé par userId.
+Jamais de token partagé entre utilisateurs.
+
+**Pas de migration données existantes** : la DB de test
+sera vidée et reremplie proprement au passage en prod.
+resolveInvestorFields() reste en place jusqu'à cette date.
+
