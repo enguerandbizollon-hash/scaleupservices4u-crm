@@ -331,14 +331,17 @@ export async function getInvestorMatches(
     .eq("deal_id", dealId)
     .eq("user_id", user.id);
 
-  const { data: activities } = await supabase
-    .from("activities")
+  // Organisations avec lesquelles on a déjà eu une interaction sur ce deal
+  // (actions de type != task et != note — les notes ne comptent pas comme interaction)
+  const { data: interactions } = await supabase
+    .from("actions")
     .select("organization_id")
     .eq("deal_id", dealId)
     .eq("user_id", user.id)
-    .not("organization_id", "is", null);
+    .not("organization_id", "is", null)
+    .in("type", ["call", "meeting", "email", "deadline", "document_request"]);
 
-  const activityOrgIds = (activities ?? []).map((a: any) => a.organization_id).filter(Boolean) as string[];
+  const activityOrgIds = (interactions ?? []).map((a: any) => a.organization_id).filter(Boolean) as string[];
   const commitmentsList = (commitments ?? []) as { organization_id: string | null; status: string }[];
 
   const dealGeo = deal.company_geography ?? null;
