@@ -130,6 +130,7 @@ const ACTIVITY_TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
 export default function AgendaPage() {
   const [view, setView] = useState<"calendar" | "list">("list");
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [actionsRaw, setActionsRaw] = useState<ActionRow[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
@@ -192,6 +193,7 @@ export default function AgendaPage() {
         setActivityTypes(filterMeta.activityTypes);
       }
 
+      setActionsRaw(allActions);
       setActivities(allActions.map(actionToActivity));
     } finally {
       setLoading(false);
@@ -1291,6 +1293,7 @@ export default function AgendaPage() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setSelectedActivity(null); }}
         onSaved={handleSaveActivity}
+        editingAction={selectedActivity ? actionsRaw.find(r => r.id === selectedActivity.id) : undefined}
       />
     </div>
   );
