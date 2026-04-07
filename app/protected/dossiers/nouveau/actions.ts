@@ -32,6 +32,7 @@ export async function createDealAction(formData: FormData) {
     target_date:       ns(formData.get("target_date")),
     company_stage:     ns(formData.get("company_stage")),
     company_geography: ns(formData.get("company_geography")),
+    mandate_id:        ns(formData.get("mandate_id")),
     client_organization_id: null,  // Les orgs se lient aux dossiers, pas l'inverse
     user_id: user.id,
   }).select("id").single();

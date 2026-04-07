@@ -2,8 +2,23 @@ import Link from "next/link";
 import { createDealAction } from "./actions";
 import { SECTORS, COMPANY_STAGES } from "@/lib/crm/matching-maps";
 import { GeoSelectField } from "@/components/ui/GeoSelectField";
+import { MandateSelect } from "@/components/mandates/MandateSelect";
+import { createClient } from "@/lib/supabase/server";
 
-export default function NouveauDossierPage() {
+export default async function NouveauDossierPage() {
+  const supabase = await createClient();
+  const { data: mandatesRaw } = await supabase
+    .from("mandates")
+    .select("id,name,type,status,organizations:client_organization_id(name)")
+    .order("created_at", { ascending: false });
+  const mandates = (mandatesRaw ?? []).map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    status: m.status,
+    client_name: Array.isArray(m.organizations) ? m.organizations[0]?.name : m.organizations?.name ?? null,
+  }));
+
   return (
     <div style={{ padding:32, minHeight:"100vh", background:"var(--bg)" }}>
       <div style={{ maxWidth:680, margin:"0 auto" }}>
@@ -112,6 +127,14 @@ export default function NouveauDossierPage() {
                 <label className="lbl">DATE CIBLE</label>
                 <input name="target_date" type="date" className="inp"/>
               </div>
+            </div>
+
+            {/* Mandat associé — la création inline d'un mandat est volontairement
+                désactivée ici car le dossier n'existe pas encore. Pour créer un
+                mandat lié, créer d'abord le dossier puis utiliser l'onglet Mandat. */}
+            <div>
+              <label className="lbl">MANDAT ASSOCIÉ</label>
+              <MandateSelect name="mandate_id" mandates={mandates} />
             </div>
 
             {/* Description */}

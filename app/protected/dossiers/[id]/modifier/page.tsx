@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
 import { SENIORITY_OPTIONS, REMOTE_OPTIONS, RH_GEOGRAPHIES, SECTORS, COMPANY_STAGES } from "@/lib/crm/matching-maps";
 import { GeoSelectField } from "@/components/ui/GeoSelectField";
+import { MandateSelect } from "@/components/mandates/MandateSelect";
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,10 +19,18 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   if (!deal) notFound();
 
-  const { data: mandates } = await supabase
+  const { data: mandatesRaw } = await supabase
     .from("mandates")
-    .select("id,name,type")
+    .select("id,name,type,status,organizations:client_organization_id(name)")
     .order("created_at", { ascending: false });
+
+  const mandates = (mandatesRaw ?? []).map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    status: m.status,
+    client_name: Array.isArray(m.organizations) ? m.organizations[0]?.name : m.organizations?.name ?? null,
+  }));
 
   const inp = "width:100%;padding:9px 13px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:#111";
   const sel = inp;
@@ -144,13 +153,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
               <div style={{ gridColumn:"1 / -1" }}>
                 <label style={{ cssText: lbl } as any}>Mandat associé</label>
-                <select name="mandate_id" defaultValue={(deal as any).mandate_id ?? ""} style={{ cssText: sel } as any}>
-                  <option value="">— Aucun mandat —</option>
-                  {(mandates ?? []).map((m: any) => {
-                    const typeLabel: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisory", recruitment:"Recrutement" };
-                    return <option key={m.id} value={m.id}>[{typeLabel[m.type] ?? m.type}] {m.name}</option>;
-                  })}
-                </select>
+                <MandateSelect
+                  name="mandate_id"
+                  mandates={mandates}
+                  defaultValue={(deal as any).mandate_id ?? null}
+                />
               </div>
 
               {/* Profil matching — fundraising et M&A */}
