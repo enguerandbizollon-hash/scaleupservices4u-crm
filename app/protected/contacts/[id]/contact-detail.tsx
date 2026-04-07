@@ -24,8 +24,6 @@ const TYPE_LABELS: Record<string,string> = {
   investor:"Investisseur", family_office:"Family Office", corporate:"Corporate",
   bank:"Banque", advisor:"Conseil", other:"Autre",
 };
-const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
-
 function daysSince(d: string | null) {
   if (!d) return null;
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
@@ -35,7 +33,7 @@ function fmtDate(d: string | null) {
   return new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"short", year:"numeric" }).format(new Date(d));
 }
 
-export function ContactDetail({ contact, orgs, activities }: { contact: any; orgs: any[]; activities: any[] }) {
+export function ContactDetail({ contact, orgs }: { contact: any; orgs: any[] }) {
   const sc = STATUS_COLORS[contact.base_status] ?? STATUS_COLORS.to_qualify;
   const days = daysSince(contact.last_contact_date);
   const initials = `${contact.first_name?.[0] ?? ""}${contact.last_name?.[0] ?? ""}`.toUpperCase();

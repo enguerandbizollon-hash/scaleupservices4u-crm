@@ -14,22 +14,18 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   if (!contact) notFound();
 
-  const [{ data: orgContacts }, { data: activities }] = await Promise.all([
-    supabase.from("organization_contacts")
-      .select("role_label,is_primary,organizations(id,name,organization_type,base_status,location,website,investment_ticket)")
-      .eq("contact_id", id),
-    supabase.from("activities")
-      .select("id,activity_type,title,summary,activity_date,deal_id,deals(name)")
-      .eq("contact_id", id)
-      .order("activity_date", { ascending: false }).limit(15),
-  ]);
+  // Les actions du contact sont chargées côté client par
+  // <ActionTimeline filters={{ contact_id: id }} /> dans ContactDetail.
+  const { data: orgContacts } = await supabase.from("organization_contacts")
+    .select("role_label,is_primary,organizations(id,name,organization_type,base_status,location,website,investment_ticket)")
+    .eq("contact_id", id);
 
   const orgs = (orgContacts ?? []).map(oc => {
     const o = Array.isArray(oc.organizations) ? oc.organizations[0] : oc.organizations as any;
     return { ...o, role_label: oc.role_label, is_primary: oc.is_primary };
   }).filter(Boolean);
 
-  return <ContactDetail contact={contact} orgs={orgs} activities={activities ?? []} />;
+  return <ContactDetail contact={contact} orgs={orgs} />;
 }
 
 export default function ContactPage({ params }: { params: Promise<{ id: string }> }) {
