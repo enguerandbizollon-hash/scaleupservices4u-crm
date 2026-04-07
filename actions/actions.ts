@@ -207,8 +207,14 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
     });
   }
 
+  revalidatePath("/protected");
   revalidatePath("/protected/agenda");
+  revalidatePath("/protected/dossiers");
+  revalidatePath("/protected/organisations");
+  revalidatePath("/protected/contacts");
+  revalidatePath("/protected/mandats");
   if (input.deal_id) revalidatePath(`/protected/dossiers/${input.deal_id}`);
+  if (input.organization_id) revalidatePath(`/protected/organisations/${input.organization_id}`);
   return { success: true, id: action.id };
 }
 
@@ -267,7 +273,14 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
     });
   }
 
+  revalidatePath("/protected");
   revalidatePath("/protected/agenda");
+  revalidatePath("/protected/dossiers");
+  revalidatePath("/protected/organisations");
+  revalidatePath("/protected/contacts");
+  revalidatePath("/protected/mandats");
+  if (input.deal_id) revalidatePath(`/protected/dossiers/${input.deal_id}`);
+  if (input.organization_id) revalidatePath(`/protected/organisations/${input.organization_id}`);
   return { success: true };
 }
 
@@ -275,6 +288,14 @@ export async function deleteAction(id: string): Promise<{ success: boolean; erro
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
+
+  // Récupérer les liens parents avant suppression pour cibler les revalidations
+  const { data: existing } = await supabase
+    .from("actions")
+    .select("deal_id, organization_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
   // Sync GCal delete
   syncToGCal({
@@ -285,7 +306,14 @@ export async function deleteAction(id: string): Promise<{ success: boolean; erro
   const { error } = await supabase.from("actions").delete().eq("id", id).eq("user_id", user.id);
   if (error) return { success: false, error: error.message };
 
+  revalidatePath("/protected");
   revalidatePath("/protected/agenda");
+  revalidatePath("/protected/dossiers");
+  revalidatePath("/protected/organisations");
+  revalidatePath("/protected/contacts");
+  revalidatePath("/protected/mandats");
+  if (existing?.deal_id) revalidatePath(`/protected/dossiers/${existing.deal_id}`);
+  if (existing?.organization_id) revalidatePath(`/protected/organisations/${existing.organization_id}`);
   return { success: true };
 }
 
@@ -294,8 +322,8 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
 
-  // Déterminer le statut de completion selon le type
-  const { data: action } = await supabase.from("actions").select("type").eq("id", id).eq("user_id", user.id).maybeSingle();
+  // Déterminer le statut de completion selon le type + lire les liens parents
+  const { data: action } = await supabase.from("actions").select("type, deal_id, organization_id").eq("id", id).eq("user_id", user.id).maybeSingle();
   if (!action) return { success: false, error: "Action introuvable" };
 
   const completedStatus: Record<string, string> = {
@@ -312,7 +340,14 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
   const { error } = await supabase.from("actions").update(payload).eq("id", id).eq("user_id", user.id);
   if (error) return { success: false, error: error.message };
 
+  revalidatePath("/protected");
   revalidatePath("/protected/agenda");
+  revalidatePath("/protected/dossiers");
+  revalidatePath("/protected/organisations");
+  revalidatePath("/protected/contacts");
+  revalidatePath("/protected/mandats");
+  if (action.deal_id) revalidatePath(`/protected/dossiers/${action.deal_id}`);
+  if (action.organization_id) revalidatePath(`/protected/organisations/${action.organization_id}`);
   return { success: true };
 }
 
