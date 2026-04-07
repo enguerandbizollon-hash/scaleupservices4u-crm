@@ -83,7 +83,7 @@ export async function checkDuplicates(
 
 /**
  * Fusionne org secondaire dans org maître.
- * - Toutes les FK (deals, contacts, activities, tags, commitments) pointent vers le maître
+ * - Toutes les FK (deals, contacts, actions, tags, commitments) pointent vers le maître
  * - L'org secondaire passe is_merged=true, merged_into_id=masterId
  */
 export async function mergeOrganisations(
@@ -104,7 +104,7 @@ export async function mergeOrganisations(
   const transfers = [
     supabase.from("deal_organizations").update({ organization_id: masterId }).eq("organization_id", secondaryId).eq("user_id", user.id),
     supabase.from("organization_contacts").update({ organization_id: masterId }).eq("organization_id", secondaryId),
-    supabase.from("activities").update({ organization_id: masterId }).eq("organization_id", secondaryId).eq("user_id", user.id),
+    supabase.from("actions").update({ organization_id: masterId }).eq("organization_id", secondaryId).eq("user_id", user.id),
     supabase.from("investor_commitments").update({ organization_id: masterId }).eq("organization_id", secondaryId).eq("user_id", user.id),
     supabase.from("object_tags").update({ object_id: masterId }).eq("object_id", secondaryId).eq("object_type", "organisation"),
   ];
