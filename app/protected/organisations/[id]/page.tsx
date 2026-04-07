@@ -22,17 +22,15 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   if (!org) notFound();
 
-  const [{ data: orgContacts }, { data: dealOrgs }, { data: activities }, { data: mandates }, { data: financialData }] = await Promise.all([
+  // Les activités/tâches de l'organisation sont chargées côté client par
+  // <ActionTimeline filters={{ organization_id: id }} /> dans OrgDetail.
+  const [{ data: orgContacts }, { data: dealOrgs }, { data: mandates }, { data: financialData }] = await Promise.all([
     supabase.from("organization_contacts")
       .select("contact_id,role_label,is_primary,contacts(id,first_name,last_name,title,email,phone,linkedin_url,base_status,last_contact_date)")
       .eq("organization_id", id),
     supabase.from("deal_organizations")
       .select("deal_id,deals(id,name,deal_type,deal_status,deal_stage,priority_level,target_date,target_amount,currency)")
       .eq("organization_id", id),
-    supabase.from("activities")
-      .select("id,activity_type,title,summary,activity_date")
-      .eq("organization_id", id)
-      .order("activity_date", { ascending: false }).limit(15),
     supabase.from("mandates")
       .select("id,name,type,status,estimated_fee_amount,confirmed_fee_amount,currency,start_date,target_close_date")
       .eq("client_organization_id", id)
@@ -53,7 +51,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     return d;
   }).filter(Boolean);
 
-  return <OrgDetail org={org} contacts={contacts} deals={deals} activities={activities ?? []} mandates={mandates ?? []} financialData={financialData ?? []} />;
+  return <OrgDetail org={org} contacts={contacts} deals={deals} mandates={mandates ?? []} financialData={financialData ?? []} />;
 }
 
 export default function OrgPage({ params }: { params: Promise<{ id: string }> }) {

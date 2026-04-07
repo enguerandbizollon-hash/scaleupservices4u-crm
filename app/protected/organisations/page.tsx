@@ -15,18 +15,22 @@ const TYPE_LABELS: Record<string,string> = {
 async function Content() {
   const supabase = await createClient();
 
-  const [orgsRes, contactLinksRes, tasksRes, activitiesRes] = await Promise.all([
+  const [orgsRes, contactLinksRes, openTasksRes, recentActsRes] = await Promise.all([
     supabase.from("organizations")
       .select("id,name,organization_type,base_status,sector,location,country,website,notes,investment_ticket,investment_stage,description")
       .order("name", { ascending: true }),
     supabase.from("organization_contacts")
       .select("organization_id,contact_id,role_label,is_primary,contacts(id,first_name,last_name,title,email,base_status,last_contact_date)"),
-    supabase.from("tasks")
-      .select("id,deal_id,organization_id,task_status,due_date")
-      .eq("task_status", "open"),
-    supabase.from("activities")
-      .select("id,organization_id,activity_date")
-      .order("activity_date", { ascending: false }),
+    supabase.from("actions")
+      .select("id,organization_id,status")
+      .eq("type", "task")
+      .not("status", "in", '("done","cancelled","completed")')
+      .not("organization_id", "is", null),
+    supabase.from("actions")
+      .select("id,organization_id,start_datetime,due_date,created_at")
+      .neq("type", "task")
+      .not("organization_id", "is", null)
+      .order("start_datetime", { ascending: false, nullsFirst: false }),
   ]);
 
   const orgs = orgsRes.data ?? [];
@@ -41,15 +45,15 @@ async function Content() {
 
   // Tâches ouvertes par org
   const tasksByOrg: Record<string, number> = {};
-  for (const t of tasksRes.data ?? []) {
+  for (const t of openTasksRes.data ?? []) {
     if (t.organization_id) tasksByOrg[t.organization_id] = (tasksByOrg[t.organization_id] ?? 0) + 1;
   }
 
-  // Dernière activité par org
+  // Dernière activité par org (première trouvée = la plus récente grâce au ORDER BY)
   const lastActivityByOrg: Record<string, string> = {};
-  for (const a of activitiesRes.data ?? []) {
+  for (const a of recentActsRes.data ?? []) {
     if (a.organization_id && !lastActivityByOrg[a.organization_id]) {
-      lastActivityByOrg[a.organization_id] = a.activity_date;
+      lastActivityByOrg[a.organization_id] = a.start_datetime ?? a.due_date ?? a.created_at;
     }
   }
 
