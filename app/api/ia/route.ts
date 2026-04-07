@@ -119,25 +119,41 @@ async function executeTool(name: string, input: Record<string, string>, userId: 
   }
 
   if (name === "get_deal_detail") {
-    const [{ data: deal }, { data: contacts }, { data: tasks }, { data: activities }, { data: docs }] = await Promise.all([
+    const [{ data: deal }, { data: contacts }, { data: openTasks }, { data: recentActs }, { data: docs }] = await Promise.all([
       supabase.from("deals").select("id, name, deal_type, deal_status, deal_stage, description").eq("id", input.deal_id).maybeSingle(),
       supabase.from("deal_contacts").select("id, role_in_deal, status_in_deal, next_follow_up_at, notes, contact:contacts(full_name, first_name, last_name, email, title)").eq("deal_id", input.deal_id),
-      supabase.from("tasks").select("id, title, task_status, priority_level, due_date").eq("deal_id", input.deal_id).eq("task_status", "open"),
-      supabase.from("activities").select("id, activity_type, title, summary, activity_date").eq("deal_id", input.deal_id).order("activity_date", { ascending: false }).limit(10),
+      supabase.from("actions")
+        .select("id, title, status, priority, due_date")
+        .eq("deal_id", input.deal_id)
+        .eq("type", "task")
+        .not("status", "in", '("done","cancelled","completed")'),
+      supabase.from("actions")
+        .select("id, type, title, description, due_date, start_datetime")
+        .eq("deal_id", input.deal_id)
+        .neq("type", "task")
+        .order("start_datetime", { ascending: false, nullsFirst: false })
+        .limit(10),
       supabase.from("deal_documents").select("id, name, document_type, document_url").eq("deal_id", input.deal_id),
     ]);
-    return { deal, contacts: contacts ?? [], tasks: tasks ?? [], activities: activities ?? [], docs: docs ?? [] };
+    // Préserver la forme historique attendue par les prompts IA :
+    const tasks = (openTasks ?? []).map(t => ({
+      id: t.id, title: t.title, task_status: t.status, priority_level: t.priority, due_date: t.due_date,
+    }));
+    const activities = (recentActs ?? []).map(a => ({
+      id: a.id, activity_type: a.type, title: a.title, summary: a.description, activity_date: a.start_datetime ?? a.due_date,
+    }));
+    return { deal, contacts: contacts ?? [], tasks, activities, docs: docs ?? [] };
   }
 
   if (name === "create_task") {
-    const today = new Date().toISOString().split("T")[0];
-    const { data, error } = await supabase.from("tasks").insert({
+    const { data, error } = await supabase.from("actions").insert({
+      type: "task",
+      status: "open",
       title: input.title,
       deal_id: input.deal_id ?? null,
       due_date: input.due_date ?? null,
-      priority_level: input.priority_level ?? "medium",
+      priority: input.priority_level ?? "medium",
       description: input.description ?? null,
-      task_status: "open",
       user_id: userId,
     }).select("id, title").single();
     if (error) return { error: error.message };
@@ -145,14 +161,25 @@ async function executeTool(name: string, input: Record<string, string>, userId: 
   }
 
   if (name === "create_activity") {
+    // Mapper les anciens activity_type du prompt IA vers les types unifiés de actions
+    const ACTIVITY_TYPE_MAP: Record<string, string> = {
+      email_sent: "email", email_received: "email",
+      call: "call", meeting: "meeting",
+      follow_up: "task", note: "note",
+      document_sent: "note", nda: "note", deck_sent: "note", other: "note",
+    };
+    const mappedType = ACTIVITY_TYPE_MAP[input.activity_type] ?? "note";
     const today = new Date().toISOString().split("T")[0];
-    const { data, error } = await supabase.from("activities").insert({
-      deal_id: input.deal_id,
-      activity_type: input.activity_type,
+    const activityDate = input.activity_date ?? today;
+    const { data, error } = await supabase.from("actions").insert({
+      type: mappedType,
+      status: "completed",
       title: input.title,
-      summary: input.summary ?? null,
-      activity_date: input.activity_date ?? today,
-      source: "claude",
+      description: input.summary ?? null,
+      start_datetime: activityDate,
+      due_date: activityDate,
+      email_direction: input.activity_type === "email_received" ? "received" : input.activity_type === "email_sent" ? "sent" : null,
+      deal_id: input.deal_id,
       user_id: userId,
     }).select("id, title").single();
     if (error) return { error: error.message };
