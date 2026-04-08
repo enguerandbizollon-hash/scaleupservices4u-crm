@@ -42,6 +42,8 @@ interface Activity {
   deal_id?: string;
   contact_id?: string;
   organization_id?: string;
+  meet_link?: string;
+  document_url?: string;
   created_at: string;
   deals?: { id: string; name: string; deal_type: string } | null;
   contacts?: { id: string; first_name: string; last_name: string } | null;
@@ -159,6 +161,8 @@ export default function AgendaPage() {
 
   // Mapper ActionRow → Activity pour compatibilité avec le reste du composant
   function actionToActivity(a: ActionRow): Activity {
+    // Premier participant (pour lien navigation contact)
+    const firstParticipant = a.action_contacts?.[0]?.contacts ?? null;
     return {
       id: a.id, title: a.title, summary: a.description ?? undefined,
       activity_type: a.type, activity_date: a.start_datetime ?? undefined,
@@ -166,11 +170,17 @@ export default function AgendaPage() {
       location: a.location ?? undefined, is_all_day: a.is_all_day,
       task_status: (a.status === "done" || a.status === "completed" || a.status === "met") ? "done"
         : a.status === "cancelled" ? "cancelled" : "open",
-      deal_id: a.deal_id ?? undefined, contact_id: undefined,
+      deal_id: a.deal_id ?? undefined,
+      contact_id: firstParticipant?.id ?? undefined,
       organization_id: a.organization_id ?? undefined,
+      meet_link: a.meet_link ?? undefined,
+      document_url: a.document_url ?? undefined,
       created_at: a.created_at,
       deals: a.deals ? { id: a.deals.id, name: a.deals.name, deal_type: a.deals.deal_type } : null,
-      contacts: null, organisations: a.organizations ? { id: a.organizations.id, name: a.organizations.name } : null,
+      contacts: firstParticipant
+        ? { id: firstParticipant.id, first_name: firstParticipant.first_name, last_name: firstParticipant.last_name }
+        : null,
+      organisations: a.organizations ? { id: a.organizations.id, name: a.organizations.name } : null,
       participants: (a.action_contacts ?? []).map(ac => ac.contacts).filter(Boolean),
     };
   }
@@ -579,6 +589,44 @@ export default function AgendaPage() {
                             flexWrap: "wrap",
                           }}
                         >
+                          {a.meet_link && (
+                            <a
+                              href={a.meet_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                borderRadius: 4,
+                                background: "#F0FDFA",
+                                color: "#0D9488",
+                                textDecoration: "none",
+                                fontWeight: 600,
+                              }}
+                            >
+                              🎥 Rejoindre
+                            </a>
+                          )}
+
+                          {a.document_url && (
+                            <a
+                              href={a.document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                borderRadius: 4,
+                                background: "#FED7AA",
+                                color: "#92400E",
+                                textDecoration: "none",
+                                fontWeight: 600,
+                              }}
+                            >
+                              📎 Document
+                            </a>
+                          )}
+
                           {a.deals && (
                             <Link
                               href={`/protected/dossiers/${a.deal_id}`}
