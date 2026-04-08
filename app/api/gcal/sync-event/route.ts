@@ -17,7 +17,6 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "401" }, { status: 401 });
 
   const { action, source_type, source_id, event } = await req.json();
-  console.log("[sync-event]", { user: user.id, action, source_type, source_id });
 
   const token = await getValidToken(user.id);
   if (!token) return NextResponse.json({ synced: false, reason: "not_connected" });

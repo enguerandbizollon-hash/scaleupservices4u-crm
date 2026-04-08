@@ -6,7 +6,6 @@ import { getValidToken } from "./gcal-client";
  */
 export async function generateMeetLink(userId: string): Promise<string | null> {
   const token = await getValidToken(userId);
-  console.log("[Meet] token:", token ? "OK" : "NULL");
   if (!token) return null;
 
   const res = await fetch(
@@ -31,11 +30,7 @@ export async function generateMeetLink(userId: string): Promise<string | null> {
     }
   );
 
-  const bodyText = await res.text();
-  console.log("[Meet] response status:", res.status);
-  console.log("[Meet] response body:", bodyText);
-
   if (!res.ok) return null;
-  const json = JSON.parse(bodyText);
+  const json = await res.json();
   return json.conferenceData?.entryPoints?.[0]?.uri ?? null;
 }
