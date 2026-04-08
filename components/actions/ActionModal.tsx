@@ -146,10 +146,15 @@ export default function ActionModal({
       setStatus(editingAction.status || "open");
       setPriority(editingAction.priority || "medium");
       setDescription(editingAction.description || "");
-      setDueDate(editingAction.due_date || todayStr());
-      setDueTime(editingAction.due_time || "10:00");
+      // En édition : pas de fallback vers "aujourd'hui" / "10:00" pour
+      // ne pas écraser silencieusement la valeur réelle stockée en DB.
+      setDueDate(editingAction.due_date ?? "");
+      setDueTime(editingAction.due_time ?? "");
       setIsAllDay(editingAction.is_all_day);
-      setStartDatetime(editingAction.start_datetime || "");
+      // <input type="datetime-local"> attend YYYY-MM-DDTHH:mm (16 chars).
+      // Si la DB renvoie un ISO avec secondes ou timezone, le navigateur
+      // rejette la valeur et le champ apparaît vide à l'ouverture.
+      setStartDatetime(editingAction.start_datetime ? editingAction.start_datetime.slice(0, 16) : "");
       setDurationMinutes(editingAction.duration_minutes || 60);
       setLocation(editingAction.location || "");
       setMeetLink(editingAction.meet_link || "");
