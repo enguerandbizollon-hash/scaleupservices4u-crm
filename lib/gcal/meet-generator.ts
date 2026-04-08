@@ -9,6 +9,7 @@ export async function generateMeetLink(
   userId: string,
   startDatetime?: string,    // ISO string
   durationMinutes?: number,  // défaut 60
+  title?: string,            // titre de l'action (sinon fallback générique)
 ): Promise<string | null> {
   const token = await getValidToken(userId);
   if (!token) return null;
@@ -25,7 +26,7 @@ export async function generateMeetLink(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        summary: "Meet — ScaleUp CRM",
+        summary: title ?? "Meeting — ScaleUp CRM",
         start: { dateTime: start.toISOString() },
         end:   { dateTime: end.toISOString() },
         conferenceData: {

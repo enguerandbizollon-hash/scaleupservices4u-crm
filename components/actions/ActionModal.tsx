@@ -252,12 +252,13 @@ export default function ActionModal({
 
   async function handleGenerateMeet() {
     setGeneratingMeet(true);
-    // Passer la date et durée du meeting en cours pour que l'événement
-    // GCal temporaire (qui sert à récupérer le lien Meet) soit posé
-    // au bon moment plutôt qu'à "maintenant".
+    // Passer la date, la durée et le titre du meeting en cours pour
+    // que l'événement GCal temporaire (qui sert à récupérer le lien
+    // Meet) soit posé au bon moment et porte le bon nom.
     const res = await generateMeetLinkAction(
       startDatetime || undefined,
       durationMinutes,
+      title.trim() || undefined,
     );
     if (res.success && res.meet_link) setMeetLink(res.meet_link);
     else setError(res.error || "Erreur Meet");
