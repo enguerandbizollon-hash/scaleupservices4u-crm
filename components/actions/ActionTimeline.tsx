@@ -143,6 +143,20 @@ function renderAction(action: ActionRow, ctx: {
           </div>
         )}
 
+        {/* Phone — action de type call, affiché depuis le premier participant ou action.phone_number */}
+        {action.type === "call" && (() => {
+          const contactPhone = action.action_contacts?.[0]?.contacts?.phone;
+          const displayPhone = action.phone_number || contactPhone;
+          return displayPhone ? (
+            <a
+              href={`tel:${displayPhone}`}
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: 12, color: "var(--su-500)", textDecoration: "none", marginBottom: 3, display: "inline-block" }}>
+              📞 {displayPhone}
+            </a>
+          ) : null;
+        })()}
+
         {orgName && (
           <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 3 }}>
             {orgName}

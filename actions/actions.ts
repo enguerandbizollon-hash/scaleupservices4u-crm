@@ -73,8 +73,8 @@ export interface ActionRow {
   // Joined
   deals?: { id: string; name: string; deal_type: string } | null;
   organizations?: { id: string; name: string } | null;
-  contacts?: { id: string; first_name: string; last_name: string }[];
-  action_contacts?: { contact_id: string; role: string | null; attended: boolean; contacts: { id: string; first_name: string; last_name: string } }[];
+  contacts?: { id: string; first_name: string; last_name: string; phone: string | null }[];
+  action_contacts?: { contact_id: string; role: string | null; attended: boolean; contacts: { id: string; first_name: string; last_name: string; phone: string | null } }[];
   action_organizations?: { organization_id: string; role: string | null; organizations: { id: string; name: string } }[];
 }
 
@@ -100,7 +100,7 @@ export async function getActions(filters?: {
       *,
       deals:deal_id(id, name, deal_type),
       organizations:organization_id(id, name),
-      action_contacts(contact_id, role, attended, contacts:contact_id(id, first_name, last_name)),
+      action_contacts(contact_id, role, attended, contacts:contact_id(id, first_name, last_name, phone)),
       action_organizations(organization_id, role, organizations:organization_id(id, name))
     `)
     .eq("user_id", user.id)
