@@ -214,6 +214,8 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
         }));
     }
 
+    // Deadline = toujours événement all-day (sémantique : jalon, pas créneau horaire)
+    const isDeadline = input.type === "deadline";
     syncToGCal({
       action: "create", source_type: "activity", source_id: action.id,
       event: {
@@ -221,7 +223,7 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
         description: descParts.join("\n\n") || undefined,
         start: input.start_datetime ?? input.due_date ?? "",
         end: input.end_datetime ?? input.start_datetime ?? input.due_date ?? "",
-        allDay: input.is_all_day ?? !input.start_datetime,
+        allDay: isDeadline ? true : (input.is_all_day ?? !input.start_datetime),
         sourceUrl: input.deal_id ? `${baseUrl}/protected/dossiers/${input.deal_id}` : `${baseUrl}/protected/agenda`,
         attendees,
         meetLink: input.meet_link || undefined,
@@ -300,12 +302,14 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
         displayName: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || undefined,
       }));
 
+    // Deadline = toujours événement all-day
+    const isDeadlineUpd = input.type === "deadline";
     syncToGCal({
       action: "update", source_type: "activity", source_id: id,
       event: {
         summary: (input.title as string) ?? "",
         start: effectiveDate, end: (input.end_datetime ?? effectiveDate) as string,
-        allDay: (input.is_all_day as boolean) ?? !input.start_datetime,
+        allDay: isDeadlineUpd ? true : ((input.is_all_day as boolean) ?? !input.start_datetime),
         attendees,
         meetLink: (input.meet_link as string | null | undefined) || undefined,
       },
