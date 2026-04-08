@@ -353,12 +353,15 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
 
 // ── Google Meet ───────────────────────────────────────────────────────────────
 
-export async function generateMeetLinkAction(): Promise<{ success: boolean; meet_link?: string; error?: string }> {
+export async function generateMeetLinkAction(
+  startDatetime?: string,
+  durationMinutes?: number,
+): Promise<{ success: boolean; meet_link?: string; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
 
-  const link = await generateMeetLink(user.id);
+  const link = await generateMeetLink(user.id, startDatetime, durationMinutes);
   if (!link) return { success: false, error: "Impossible de générer le lien Meet. Vérifiez la connexion Google Calendar." };
   return { success: true, meet_link: link };
 }

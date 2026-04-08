@@ -2,11 +2,19 @@ import { getValidToken } from "./gcal-client";
 
 /**
  * Génère un lien Google Meet via l'API GCal (conferenceData).
- * Crée un événement temporaire avec conferenceDataVersion=1.
+ * Crée un événement avec conferenceDataVersion=1 à la date fournie
+ * (ou maintenant par défaut si aucun paramètre).
  */
-export async function generateMeetLink(userId: string): Promise<string | null> {
+export async function generateMeetLink(
+  userId: string,
+  startDatetime?: string,    // ISO string
+  durationMinutes?: number,  // défaut 60
+): Promise<string | null> {
   const token = await getValidToken(userId);
   if (!token) return null;
+
+  const start = startDatetime ? new Date(startDatetime) : new Date();
+  const end = new Date(start.getTime() + (durationMinutes ?? 60) * 60000);
 
   const res = await fetch(
     "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
@@ -18,8 +26,8 @@ export async function generateMeetLink(userId: string): Promise<string | null> {
       },
       body: JSON.stringify({
         summary: "Meet — ScaleUp CRM",
-        start: { dateTime: new Date().toISOString() },
-        end: { dateTime: new Date(Date.now() + 3600000).toISOString() },
+        start: { dateTime: start.toISOString() },
+        end:   { dateTime: end.toISOString() },
         conferenceData: {
           createRequest: {
             requestId: crypto.randomUUID(),
