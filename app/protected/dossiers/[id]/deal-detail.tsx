@@ -23,6 +23,7 @@ import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, ChevronDown, ChevronUp,
@@ -685,7 +686,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                             </div>
                             <div>
                               <label style={{ display:"block", fontSize:11, fontWeight:600, color:"var(--text-4)", marginBottom:3 }}>LOCALISATION</label>
-                              <input value={orgCreateLocation} onChange={e=>setOrgCreateLocation(e.target.value)} placeholder="Paris, Genève..." style={{ width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:6, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface)", color:"var(--text-1)", boxSizing:"border-box" }}/>
+                              <GeoSelect mode="single" value={orgCreateLocation || null} onChange={v => setOrgCreateLocation(v ?? "")} placeholder="— Non renseignée —" />
                             </div>
                           </div>
                           <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
