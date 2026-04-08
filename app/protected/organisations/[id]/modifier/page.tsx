@@ -18,7 +18,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       founded_year, employee_count, company_stage, revenue_range,
       sale_readiness, partial_sale_ok,
       acquisition_rationale, target_sectors, excluded_sectors,
-      target_geographies, target_revenue_min, target_revenue_max
+      target_geographies, target_revenue_min, target_revenue_max,
+      acquirer_type, acquisition_motivations,
+      target_ebitda_min, target_ebitda_max, acquisition_history
     `)
     .eq("id", id)
     .maybeSingle();
@@ -61,6 +63,12 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
         target_geographies:   (o.target_geographies as string[]) ?? [],
         target_revenue_min:   (o.target_revenue_min as number) ?? null,
         target_revenue_max:   (o.target_revenue_max as number) ?? null,
+        // Acquirer profile — fix: étaient absents du select et de l'initial
+        acquirer_type:           (o.acquirer_type as string) ?? null,
+        acquisition_motivations: (o.acquisition_motivations as string[]) ?? [],
+        target_ebitda_min:       (o.target_ebitda_min as number) ?? null,
+        target_ebitda_max:       (o.target_ebitda_max as number) ?? null,
+        acquisition_history:     (o.acquisition_history as string) ?? null,
       }}
     />
   );
