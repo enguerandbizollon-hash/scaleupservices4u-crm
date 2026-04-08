@@ -1013,13 +1013,13 @@ Pas de migration SQL sur données existantes requise.
   (organisations, dossiers, contacts, deals)
 - Confirmer que la sync GCal fonctionne sur meeting et deadline
 
-#### 2. Import financier — mapper colonnes
-- 12 colonnes ignorées lors de l'import CSV (dont sector,
-  other_opex, financial_charges, intangible_assets,
-  tangible_assets, net_income_bs, debt_lt, debt_st,
-  accounts_payable)
-- Fix : priorité exact match avant fuzzy matching
-- Fix : dédoublonnage colonnes (payroll mappé 4×, revenue 3×)
+#### ✅ 2. Import financier CSV : mapper colonnes — TERMINÉ
+Corrigé et validé en test réel (commits 0f41b4b / 16bf8a9)
+- Priorité exact match avant fuzzy matching
+- Dédoublonnage colonnes (payroll mappé 4×, revenue 3×)
+- 12 colonnes auparavant ignorées (sector, other_opex,
+  financial_charges, intangible_assets, tangible_assets,
+  net_income_bs, debt_lt, debt_st, accounts_payable…)
 
 ---
 
