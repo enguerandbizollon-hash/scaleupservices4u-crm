@@ -430,3 +430,20 @@ export async function deleteReportAction(formData: FormData) {
   redirect(`/protected/candidats/${candidate_id}`);
 }
 
+// ── getAllCandidatesSimple — autocomplete ActionModal ────────────────
+
+export async function getAllCandidatesSimple(): Promise<
+  { id: string; first_name: string; last_name: string; email: string | null }[]
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("candidates")
+    .select("id, first_name, last_name, email")
+    .eq("user_id", user.id)
+    .order("last_name", { ascending: true });
+
+  return (data ?? []) as { id: string; first_name: string; last_name: string; email: string | null }[];
+}
