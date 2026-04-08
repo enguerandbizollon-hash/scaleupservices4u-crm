@@ -1,14 +1,9 @@
 "use client";
 import { SECTORS } from "@/lib/crm/matching-maps";
-import { GeoSelect } from "@/components/ui/GeoSelect";
 
 export interface MaBuyerData {
   acquisition_rationale: string;
-  target_sectors:        string[];
   excluded_sectors:      string[];
-  target_geographies:    string[];
-  target_revenue_min:    number | null;
-  target_revenue_max:    number | null;
 }
 
 interface Props {
@@ -24,18 +19,15 @@ const inp: React.CSSProperties = {
 const lbl: React.CSSProperties = {
   display: "block", fontSize: 12.5, fontWeight: 600, color: "#374151", marginBottom: 5,
 };
-const grid2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 };
 
 function SectorPills({
   selected,
-  excluded = [],
   onChange,
   label,
-  accent = "#1a56db",
-  accentBg = "#eff6ff",
+  accent = "#dc2626",
+  accentBg = "#fef2f2",
 }: {
   selected:  string[];
-  excluded?: string[];
   onChange:  (s: string[]) => void;
   label:     string;
   accent?:   string;
@@ -50,7 +42,7 @@ function SectorPills({
     <div>
       <label style={lbl}>{label}</label>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {SECTORS.filter(s => s !== "Généraliste" && !excluded.includes(s)).map(s => {
+        {SECTORS.filter(s => s !== "Généraliste").map(s => {
           const active = selected.includes(s);
           return (
             <button
@@ -89,13 +81,6 @@ export function MaBuyerFields({ data, onChange }: Props) {
     onChange({ ...data, [key]: val });
   }
 
-  function toggleGeo(geo: string) {
-    const cur = data.target_geographies;
-    cur.includes(geo)
-      ? set("target_geographies", cur.filter(g => g !== geo))
-      : set("target_geographies", [...cur, geo]);
-  }
-
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 14 }}>
@@ -114,60 +99,15 @@ export function MaBuyerFields({ data, onChange }: Props) {
         />
       </div>
 
-      {/* Fourchette de CA cible */}
-      <div style={{ ...grid2, marginBottom: 14 }}>
-        <div>
-          <label style={lbl}>CA cible min (€)</label>
-          <input
-            type="number"
-            min={0}
-            style={inp}
-            placeholder="ex : 2000000"
-            value={data.target_revenue_min ?? ""}
-            onChange={e => set("target_revenue_min", e.target.value ? parseFloat(e.target.value) : null)}
-          />
-        </div>
-        <div>
-          <label style={lbl}>CA cible max (€)</label>
-          <input
-            type="number"
-            min={0}
-            style={inp}
-            placeholder="ex : 20000000"
-            value={data.target_revenue_max ?? ""}
-            onChange={e => set("target_revenue_max", e.target.value ? parseFloat(e.target.value) : null)}
-          />
-        </div>
-      </div>
-
-      {/* Secteurs cibles */}
-      <div style={{ marginBottom: 14 }}>
-        <SectorPills
-          label="Secteurs cibles"
-          selected={data.target_sectors}
-          excluded={data.excluded_sectors}
-          onChange={v => set("target_sectors", v)}
-          accent="#1a56db"
-          accentBg="#eff6ff"
-        />
-      </div>
-
-      {/* Secteurs exclus */}
-      <div style={{ marginBottom: 14 }}>
+      {/* Secteurs exclus — deal breakers */}
+      <div>
         <SectorPills
           label="Secteurs exclus (deal breakers)"
           selected={data.excluded_sectors}
-          excluded={data.target_sectors}
           onChange={v => set("excluded_sectors", v)}
           accent="#dc2626"
           accentBg="#fef2f2"
         />
-      </div>
-
-      {/* Géographies cibles */}
-      <div>
-        <label style={lbl}>Géographies cibles</label>
-        <GeoSelect mode="multi" value={data.target_geographies} onChange={v => set("target_geographies", v)} />
       </div>
     </div>
   );

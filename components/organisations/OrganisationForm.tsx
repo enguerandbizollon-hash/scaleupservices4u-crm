@@ -131,14 +131,11 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     partial_sale_ok: initialData.partial_sale_ok ?? true,
   });
 
-  // M&A buyer (type = buyer)
+  // M&A buyer (type = buyer) — rationale + excluded_sectors uniquement
+  // target_sectors / target_geographies / target_revenue sont gérés par AcquirerProfileFields
   const [maBuyerData, setMaBuyerData] = useState<MaBuyerData>({
     acquisition_rationale: initialData.acquisition_rationale ?? "",
-    target_sectors:        initialData.target_sectors ?? [],
     excluded_sectors:      initialData.excluded_sectors ?? [],
-    target_geographies:    initialData.target_geographies ?? [],
-    target_revenue_min:    initialData.target_revenue_min ?? null,
-    target_revenue_max:    initialData.target_revenue_max ?? null,
   });
 
   // Acquirer profile (type = buyer, corporate, private_equity)
@@ -206,14 +203,15 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       // M&A seller
       sale_readiness:  isMaTarget ? maSellerData.sale_readiness : null,
       partial_sale_ok: isMaTarget ? maSellerData.partial_sale_ok : true,
-      // M&A buyer
+      // M&A buyer — rationale + excluded_sectors uniquement
       acquisition_rationale: isMaBuyer ? (maBuyerData.acquisition_rationale.trim() || null) : null,
-      target_sectors:        isMaBuyer ? maBuyerData.target_sectors : [],
       excluded_sectors:      isMaBuyer ? maBuyerData.excluded_sectors : [],
-      target_geographies:    isMaBuyer ? maBuyerData.target_geographies : [],
-      target_revenue_min:    (isMaBuyer || isAcquirerType) ? (acquirerData.target_revenue_min ?? maBuyerData.target_revenue_min) : null,
-      target_revenue_max:    (isMaBuyer || isAcquirerType) ? (acquirerData.target_revenue_max ?? maBuyerData.target_revenue_max) : null,
-      // Acquirer profile
+      // Acquirer profile — source unique pour target_sectors, target_geographies,
+      // target_revenue_*, target_ebitda_*, acquirer_type, motivations, history
+      target_sectors:          isAcquirerType ? acquirerData.target_sectors : [],
+      target_geographies:      isAcquirerType ? acquirerData.target_geographies : [],
+      target_revenue_min:      isAcquirerType ? acquirerData.target_revenue_min : null,
+      target_revenue_max:      isAcquirerType ? acquirerData.target_revenue_max : null,
       acquirer_type:           isAcquirerType ? (acquirerData.acquirer_type || null) : null,
       acquisition_motivations: isAcquirerType ? acquirerData.acquisition_motivations : [],
       target_ebitda_min:       isAcquirerType ? acquirerData.target_ebitda_min : null,
