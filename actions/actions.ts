@@ -193,7 +193,10 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
   const syncTypes = ["meeting", "call", "deadline", "task", "document_request"];
   if (syncTypes.includes(input.type) && (input.due_date || input.start_datetime)) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const descParts = [input.description, input.agenda_notes, input.meet_link ? `Meet : ${input.meet_link}` : ""].filter(Boolean);
+    // meet_link n'est plus injecté dans la description (il est attaché en
+    // conferenceData via event.meetLink, ce qui rend le bouton "Rejoindre"
+    // natif sur l'événement GCal).
+    const descParts = [input.description, input.agenda_notes].filter(Boolean);
 
     // Résoudre les emails des participants pour les inclure en tant qu'attendees GCal
     let attendees: { email: string; displayName?: string }[] = [];
@@ -221,6 +224,7 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
         allDay: input.is_all_day ?? !input.start_datetime,
         sourceUrl: input.deal_id ? `${baseUrl}/protected/dossiers/${input.deal_id}` : `${baseUrl}/protected/agenda`,
         attendees,
+        meetLink: input.meet_link || undefined,
       },
     });
   }
@@ -303,6 +307,7 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
         start: effectiveDate, end: (input.end_datetime ?? effectiveDate) as string,
         allDay: (input.is_all_day as boolean) ?? !input.start_datetime,
         attendees,
+        meetLink: (input.meet_link as string | null | undefined) || undefined,
       },
     });
   }

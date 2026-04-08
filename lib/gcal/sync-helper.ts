@@ -15,6 +15,7 @@ export function syncToGCal(payload: {
     allDay: boolean;
     sourceUrl?: string;
     attendees?: SyncAttendee[];
+    meetLink?: string;
   };
 }) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
