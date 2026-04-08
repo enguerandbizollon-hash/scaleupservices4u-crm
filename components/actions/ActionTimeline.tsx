@@ -41,11 +41,21 @@ const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }
   done:        { bg: "#dcfce7", color: "#166534", label: "Termine" },
   completed:   { bg: "#dcfce7", color: "#166534", label: "Termine" },
   met:         { bg: "#dcfce7", color: "#166534", label: "Atteint" },
+  missed:      { bg: "#fee2e2", color: "#991b1b", label: "Manque" },
   sent:        { bg: "#dcfce7", color: "#166534", label: "Envoye" },
+  received:    { bg: "#dcfce7", color: "#166534", label: "Recu" },
+  no_show:     { bg: "#fef3c7", color: "#92400e", label: "Absent" },
   open:        { bg: "#dbeafe", color: "#1e40af", label: "Ouvert" },
   in_progress: { bg: "#ffedd5", color: "#9a3412", label: "En cours" },
+  planned:     { bg: "#dbeafe", color: "#1e40af", label: "Prevu" },
+  upcoming:    { bg: "#dbeafe", color: "#1e40af", label: "A venir" },
+  draft:       { bg: "#f3f4f6", color: "#4b5563", label: "Brouillon" },
   cancelled:   { bg: "#f3f4f6", color: "#6b7280", label: "Annule" },
 };
+
+// Groupement des statuts pour sections en cours / terminées
+const ACTIVE_STATUSES = ["open", "in_progress", "planned", "upcoming", "draft"];
+const DONE_STATUSES   = ["done", "completed", "cancelled", "met", "missed", "sent", "received", "no_show"];
 
 function formatDate(dateStr: string | null, timeStr: string | null, allDay: boolean): string {
   if (!dateStr) return "";
@@ -79,6 +89,94 @@ function participantNames(action: ActionRow): string {
   return names.join(", ") + suffix;
 }
 
+// ── Render helper ────────────────────────────────────────────────────────────
+function renderAction(action: ActionRow, ctx: {
+  isDone: boolean;
+  itemBase: React.CSSProperties;
+  badge: (bg: string, color: string) => React.CSSProperties;
+  actionBtn: React.CSSProperties;
+  onComplete: (id: string) => void;
+  onEdit: (a: ActionRow) => void;
+  onDelete: (id: string) => void;
+}) {
+  const overdue = isOverdue(action.due_date, action.status);
+  const today = isToday(action.due_date);
+  const statusInfo = STATUS_COLORS[action.status] || STATUS_COLORS.open;
+  const participants = participantNames(action);
+  const orgName = action.organizations?.name;
+  const isDone = ctx.isDone;
+
+  let itemBg = "var(--surface)";
+  if (!isDone && overdue) itemBg = "#fef2f2";
+  else if (!isDone && today) itemBg = "#fffbeb";
+
+  return (
+    <div key={action.id} style={{ ...ctx.itemBase, background: itemBg, opacity: isDone ? 0.75 : 1 }}>
+      {/* Icon */}
+      <div style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, paddingTop: 2 }}>
+        {TYPE_ICONS[action.type] || "\uD83D\uDCCB"}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
+          <span style={{
+            fontSize: 13.5, fontWeight: 600, color: isDone ? "var(--text-4)" : "var(--text-1)",
+            textDecoration: isDone ? "line-through" : "none",
+          }}>
+            {action.title}
+          </span>
+          <span style={ctx.badge(statusInfo.bg, statusInfo.color)}>{statusInfo.label}</span>
+          {!isDone && overdue && <span style={ctx.badge("#fee2e2", "#b91c1c")}>En retard</span>}
+          {!isDone && today && <span style={ctx.badge("#fef3c7", "#92400e")}>Aujourd&apos;hui</span>}
+        </div>
+
+        {action.due_date && (
+          <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 3 }}>
+            {formatDate(action.due_date, action.due_time, action.is_all_day)}
+          </div>
+        )}
+
+        {participants && (
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 3 }}>
+            {participants}
+          </div>
+        )}
+
+        {orgName && (
+          <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 3 }}>
+            {orgName}
+          </div>
+        )}
+
+        {action.summary_ai && (
+          <div style={{
+            fontSize: 12, color: "var(--text-4)", marginTop: 4,
+            overflow: "hidden", display: "-webkit-box",
+            WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+          }}>
+            {action.summary_ai}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          {!isDone && (
+            <button type="button" onClick={() => ctx.onComplete(action.id)} style={ctx.actionBtn} title="Terminer">
+              ✓
+            </button>
+          )}
+          <button type="button" onClick={() => ctx.onEdit(action)} style={ctx.actionBtn} title="Modifier">
+            ✏️
+          </button>
+          <button type="button" onClick={() => ctx.onDelete(action.id)} style={{ ...ctx.actionBtn, color: "#b91c1c" }} title="Supprimer">
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ActionTimeline({
@@ -91,6 +189,8 @@ export default function ActionTimeline({
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<ActionRow | undefined>(undefined);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [showAllDone, setShowAllDone] = useState(false);
 
   const loadActions = useCallback(async () => {
     setLoading(true);
@@ -133,7 +233,15 @@ export default function ActionTimeline({
     loadActions();
   };
 
-  const displayed = compactMode ? actions.slice(0, 5) : actions;
+  // Séparer actif / terminé
+  const activeList = actions.filter(a => ACTIVE_STATUSES.includes(a.status));
+  const doneList = [...actions]
+    .filter(a => DONE_STATUSES.includes(a.status))
+    .sort((a, b) => (b.due_date ?? "").localeCompare(a.due_date ?? ""));
+
+  // Compact mode : uniquement les 5 premières actives
+  const displayedActive = compactMode ? activeList.slice(0, 5) : activeList;
+  const displayedDone = showAllDone ? doneList : doneList.slice(0, 10);
 
   // ── Styles ──────────────────────────────────────────────────────────────
   const pillBase: React.CSSProperties = {
@@ -205,92 +313,51 @@ export default function ActionTimeline({
         </div>
       )}
 
-      {/* Timeline items */}
-      {!loading && displayed.map(action => {
-        const overdue = isOverdue(action.due_date, action.status);
-        const today = isToday(action.due_date);
-        const doneStatuses = ["done", "completed", "met", "sent"];
-        const isDone = doneStatuses.includes(action.status);
-        const statusInfo = STATUS_COLORS[action.status] || STATUS_COLORS.open;
-        const participants = participantNames(action);
-        const orgName = action.organizations?.name;
+      {/* ═══ Section EN COURS ═══ */}
+      {!loading && displayedActive.map(action => renderAction(action, {
+        isDone: false, itemBase, badge, actionBtn,
+        onComplete: handleComplete, onEdit: handleEdit, onDelete: handleDelete,
+      }))}
 
-        let itemBg = "var(--surface)";
-        if (overdue) itemBg = "#fef2f2";
-        else if (today && !isDone) itemBg = "#fffbeb";
+      {/* Empty active state */}
+      {!loading && activeList.length === 0 && doneList.length > 0 && (
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-5)", fontSize: 12.5, fontStyle: "italic" }}>
+          Aucune action en cours
+        </div>
+      )}
 
-        return (
-          <div key={action.id} style={{ ...itemBase, background: itemBg }}>
-            {/* Icon */}
-            <div style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, paddingTop: 2 }}>
-              {TYPE_ICONS[action.type] || "\uD83D\uDCCB"}
+      {/* ═══ Séparateur + Section TERMINÉES (full mode seulement) ═══ */}
+      {!loading && !compactMode && doneList.length > 0 && (
+        <>
+          <button type="button" onClick={() => setDoneOpen(o => !o)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, width: "100%",
+              padding: "10px 12px", marginTop: 14, marginBottom: 8,
+              background: "none", border: "none", borderTop: "1px solid var(--border)",
+              cursor: "pointer", fontFamily: "inherit",
+              fontSize: 12, fontWeight: 700, color: "var(--text-4)",
+              textTransform: "uppercase", letterSpacing: ".05em",
+            }}>
+            <span style={{ fontSize: 14 }}>{doneOpen ? "▾" : "▸"}</span>
+            Terminees ({doneList.length})
+          </button>
+
+          {doneOpen && displayedDone.map(action => renderAction(action, {
+            isDone: true, itemBase, badge, actionBtn,
+            onComplete: handleComplete, onEdit: handleEdit, onDelete: handleDelete,
+          }))}
+
+          {doneOpen && doneList.length > 10 && !showAllDone && (
+            <div style={{ textAlign: "center", marginTop: 6 }}>
+              <button type="button" onClick={() => setShowAllDone(true)}
+                style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6,
+                  padding: "5px 14px", fontSize: 12, cursor: "pointer", color: "var(--text-3)", fontFamily: "inherit" }}>
+                Voir plus ({doneList.length - 10})
+              </button>
             </div>
-
-            {/* Content */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* Title line */}
-              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
-                <span style={{
-                  fontSize: 13.5, fontWeight: 600, color: isDone ? "var(--text-4)" : "var(--text-1)",
-                  textDecoration: isDone ? "line-through" : "none",
-                }}>
-                  {action.title}
-                </span>
-                <span style={badge(statusInfo.bg, statusInfo.color)}>{statusInfo.label}</span>
-                {overdue && <span style={badge("#fee2e2", "#b91c1c")}>En retard</span>}
-                {today && !isDone && <span style={badge("#fef3c7", "#92400e")}>Aujourd&apos;hui</span>}
-              </div>
-
-              {/* Date */}
-              {action.due_date && (
-                <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 3 }}>
-                  {formatDate(action.due_date, action.due_time, action.is_all_day)}
-                </div>
-              )}
-
-              {/* Participants */}
-              {participants && (
-                <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 3 }}>
-                  {participants}
-                </div>
-              )}
-
-              {/* Org name */}
-              {orgName && (
-                <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 3 }}>
-                  {orgName}
-                </div>
-              )}
-
-              {/* AI summary */}
-              {action.summary_ai && (
-                <div style={{
-                  fontSize: 12, color: "var(--text-4)", marginTop: 4,
-                  overflow: "hidden", display: "-webkit-box",
-                  WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-                }}>
-                  {action.summary_ai}
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                {!isDone && (
-                  <button type="button" onClick={() => handleComplete(action.id)} style={actionBtn} title="Terminer">
-                    ✓
-                  </button>
-                )}
-                <button type="button" onClick={() => handleEdit(action)} style={actionBtn} title="Modifier">
-                  ✏️
-                </button>
-                <button type="button" onClick={() => handleDelete(action.id)} style={{ ...actionBtn, color: "#b91c1c" }} title="Supprimer">
-                  🗑️
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+          )}
+        </>
+      )}
 
       {/* Compact mode: show more link */}
       {compactMode && actions.length > 5 && (
