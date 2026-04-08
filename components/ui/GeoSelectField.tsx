@@ -13,6 +13,7 @@ interface GeoSelectFieldProps {
   label?: string;
   placeholder?: string;
   style?: React.CSSProperties;
+  className?: string;
 }
 
 const inp: React.CSSProperties = {
@@ -21,14 +22,15 @@ const inp: React.CSSProperties = {
   background: "#fff", color: "#111", boxSizing: "border-box",
 };
 
-export function GeoSelectField({ name, defaultValue, placeholder, style }: GeoSelectFieldProps) {
+export function GeoSelectField({ name, defaultValue, placeholder, style, className }: GeoSelectFieldProps) {
   const [value, setValue] = useState(defaultValue ?? "");
 
   return (
     <>
       <input type="hidden" name={name} value={value} />
       <select
-        style={style ?? inp}
+        style={className ? style : (style ?? inp)}
+        className={className}
         value={value}
         onChange={e => setValue(e.target.value)}
       >

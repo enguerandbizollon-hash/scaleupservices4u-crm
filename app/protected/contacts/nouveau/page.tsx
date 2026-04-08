@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createContactAction } from "./actions";
+import { GeoSelectField } from "@/components/ui/GeoSelectField";
 
 const contactStatusOptions = [
   { value: "to_qualify", label: "À qualifier" },
@@ -93,8 +94,8 @@ async function Content() {
                 <input name="sector" className="w-full rounded-xl border border-[#E8E0D0] px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]" />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Pays</label>
-                <input name="country" className="w-full rounded-xl border border-[#E8E0D0] px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]" />
+                <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Géographie</label>
+                <GeoSelectField name="country" className="w-full rounded-xl border border-[#E8E0D0] px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]" />
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Ticket investissement</label>
@@ -153,8 +154,8 @@ async function Content() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Pays</label>
-                  <input name="new_org_country" className="w-full rounded-xl border border-[#E8E0D0] bg-white px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]" />
+                  <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Géographie</label>
+                  <GeoSelectField name="new_org_country" className="w-full rounded-xl border border-[#E8E0D0] bg-white px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]" />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Site web</label>

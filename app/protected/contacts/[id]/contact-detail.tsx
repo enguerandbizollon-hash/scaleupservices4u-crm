@@ -6,6 +6,7 @@ import { EnrichButton } from "../../components/enrich-button";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import { ContactOrgAssignmentWarning } from "../../components/contact-org-assignment-warning";
 import { TagInput } from "@/components/tags/TagInput";
+import { GEO_LABELS } from "@/lib/crm/matching-maps";
 
 const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
   active:     {bg:"var(--fund-bg)", tx:"var(--fund-tx)"},
@@ -72,7 +73,7 @@ export function ContactDetail({ contact, orgs }: { contact: any; orgs: any[] }) 
             <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 14px", fontSize:13, color:"var(--text-4)" }}>
               {contact.title && <span>{contact.title}</span>}
               {contact.sector && <span>{contact.sector}</span>}
-              {contact.country && <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11}/>{contact.country}</span>}
+              {contact.country && <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11}/>{GEO_LABELS[contact.country] ?? contact.country}</span>}
             </div>
 
             {contact.last_contact_date && (

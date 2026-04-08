@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateContactAction } from "./actions";
 import { deleteContactAction } from "@/app/protected/actions";
+import { GeoSelectField } from "@/components/ui/GeoSelectField";
 
 const contactStatusOptions = [
   { value: "to_qualify", label: "À qualifier" },
@@ -65,7 +66,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div><label className="mb-2 block text-sm font-medium text-slate-700">Téléphone</label><input name="phone" defaultValue={contact.phone ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
               <div><label className="mb-2 block text-sm font-medium text-slate-700">LinkedIn</label><input name="linkedin_url" defaultValue={contact.linkedin_url ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
               <div><label className="mb-2 block text-sm font-medium text-slate-700">Secteur</label><input name="sector" defaultValue={contact.sector ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
-              <div><label className="mb-2 block text-sm font-medium text-slate-700">Pays</label><input name="country" defaultValue={contact.country ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
+              <div><label className="mb-2 block text-sm font-medium text-slate-700">Géographie</label><GeoSelectField name="country" defaultValue={contact.country ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Ticket investissement</label>
                 <select name="investment_ticket_label" defaultValue={contact.investment_ticket_label ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500">
