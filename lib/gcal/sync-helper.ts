@@ -1,6 +1,8 @@
 // Helper pour déclencher la sync GCal depuis les server actions
 // Appel non-bloquant : fire-and-forget (silencieux si GCal non connecté)
 
+export type SyncAttendee = { email: string; displayName?: string };
+
 export function syncToGCal(payload: {
   action: "create" | "update" | "delete";
   source_type: string;
@@ -12,6 +14,7 @@ export function syncToGCal(payload: {
     end: string;
     allDay: boolean;
     sourceUrl?: string;
+    attendees?: SyncAttendee[];
   };
 }) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";

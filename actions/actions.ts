@@ -194,6 +194,23 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
   if (syncTypes.includes(input.type) && (input.due_date || input.start_datetime)) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const descParts = [input.description, input.agenda_notes, input.meet_link ? `Meet : ${input.meet_link}` : ""].filter(Boolean);
+
+    // Résoudre les emails des participants pour les inclure en tant qu'attendees GCal
+    let attendees: { email: string; displayName?: string }[] = [];
+    if (input.contact_ids?.length) {
+      const { data: contactsData } = await supabase
+        .from("contacts")
+        .select("id, email, first_name, last_name")
+        .in("id", input.contact_ids.map(c => c.id))
+        .eq("user_id", user.id);
+      attendees = (contactsData ?? [])
+        .filter(c => c.email)
+        .map(c => ({
+          email: c.email as string,
+          displayName: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || undefined,
+        }));
+    }
+
     syncToGCal({
       action: "create", source_type: "activity", source_id: action.id,
       event: {
@@ -203,6 +220,7 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
         end: input.end_datetime ?? input.start_datetime ?? input.due_date ?? "",
         allDay: input.is_all_day ?? !input.start_datetime,
         sourceUrl: input.deal_id ? `${baseUrl}/protected/dossiers/${input.deal_id}` : `${baseUrl}/protected/agenda`,
+        attendees,
       },
     });
   }
@@ -263,12 +281,28 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
   // Sync GCal update
   const effectiveDate = (input.start_datetime ?? input.due_date) as string | undefined;
   if (effectiveDate) {
+    // Récupérer les attendees actuels (post re-sync action_contacts) pour
+    // les transmettre à l'événement GCal mis à jour
+    const { data: contactRows } = await supabase
+      .from("action_contacts")
+      .select("contacts:contact_id(email, first_name, last_name)")
+      .eq("action_id", id);
+    type ContactJoin = { email: string | null; first_name: string | null; last_name: string | null };
+    const attendees = (contactRows ?? [])
+      .map(r => (r as unknown as { contacts: ContactJoin }).contacts)
+      .filter((c): c is ContactJoin => !!c?.email)
+      .map(c => ({
+        email: c.email as string,
+        displayName: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || undefined,
+      }));
+
     syncToGCal({
       action: "update", source_type: "activity", source_id: id,
       event: {
         summary: (input.title as string) ?? "",
         start: effectiveDate, end: (input.end_datetime ?? effectiveDate) as string,
         allDay: (input.is_all_day as boolean) ?? !input.start_datetime,
+        attendees,
       },
     });
   }

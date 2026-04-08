@@ -51,23 +51,40 @@ export async function getValidToken(userId: string): Promise<string | null> {
   return json.access_token;
 }
 
+export type GCalAttendee = { email: string; displayName?: string };
+
 export async function createGCalEvent(
   token: string,
-  event: { summary: string; description?: string; start: string; end: string; allDay: boolean; sourceUrl?: string },
+  event: {
+    summary: string;
+    description?: string;
+    start: string;
+    end: string;
+    allDay: boolean;
+    sourceUrl?: string;
+    attendees?: GCalAttendee[];
+  },
 ): Promise<string | null> {
   const desc = [event.description, event.sourceUrl ? `Voir dans le CRM : ${event.sourceUrl}` : ""].filter(Boolean).join("\n\n");
   const body = {
     summary: event.summary,
     description: desc || undefined,
     start: event.allDay ? { date: event.start.split("T")[0] } : { dateTime: event.start, timeZone: "Europe/Paris" },
-    end: event.allDay ? { date: event.end.split("T")[0] } : { dateTime: event.end, timeZone: "Europe/Paris" },
+    end:   event.allDay ? { date: event.end.split("T")[0] }   : { dateTime: event.end,   timeZone: "Europe/Paris" },
+    attendees: event.attendees ?? [],
+    guestsCanModifyEvent: false,
+    guestsCanInviteOthers: false,
   };
 
-  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  // sendUpdates=all fait que Google envoie les emails d'invitation aux participants
+  const res = await fetch(
+    "https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 
   if (!res.ok) return null;
   const json = await res.json();
@@ -77,7 +94,14 @@ export async function createGCalEvent(
 export async function updateGCalEvent(
   token: string,
   gcalEventId: string,
-  updates: Partial<{ summary: string; description: string; start: string; end: string; allDay: boolean }>,
+  updates: Partial<{
+    summary: string;
+    description: string;
+    start: string;
+    end: string;
+    allDay: boolean;
+    attendees: GCalAttendee[];
+  }>,
 ): Promise<void> {
   const body: Record<string, unknown> = {};
   if (updates.summary) body.summary = updates.summary;
@@ -88,12 +112,18 @@ export async function updateGCalEvent(
   if (updates.end) {
     body.end = updates.allDay ? { date: updates.end.split("T")[0] } : { dateTime: updates.end, timeZone: "Europe/Paris" };
   }
+  if (updates.attendees !== undefined) {
+    body.attendees = updates.attendees;
+  }
 
-  await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${gcalEventId}`, {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${gcalEventId}?sendUpdates=all`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export async function deleteGCalEvent(token: string, gcalEventId: string): Promise<void> {
