@@ -157,6 +157,18 @@ function renderAction(action: ActionRow, ctx: {
           ) : null;
         })()}
 
+        {/* Meet link — action de type meeting */}
+        {action.type === "meeting" && action.meet_link && (
+          <a
+            href={action.meet_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{ fontSize: 12, color: "var(--su-500)", textDecoration: "none", marginBottom: 3, display: "inline-block" }}>
+            🎥 Rejoindre Meet
+          </a>
+        )}
+
         {orgName && (
           <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 3 }}>
             {orgName}
