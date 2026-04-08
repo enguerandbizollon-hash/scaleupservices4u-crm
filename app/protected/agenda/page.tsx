@@ -289,12 +289,26 @@ export default function AgendaPage() {
           style={{
             background: "var(--surface-2)",
             borderRadius: 8,
-            height: 100,
+            minHeight: 130,
             border: "1px solid var(--border)",
           }}
         />
       );
     }
+
+    // Style commun pour les icônes cliquables d'un item calendrier.
+    const calIconLink: React.CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 16,
+      height: 16,
+      borderRadius: 3,
+      fontSize: 10,
+      textDecoration: "none",
+      background: "rgba(255,255,255,.55)",
+      lineHeight: 1,
+    };
 
     // Days in month
     for (let day = 1; day <= daysInMonth; day++) {
@@ -312,7 +326,7 @@ export default function AgendaPage() {
             border: "1px solid var(--border)",
             borderRadius: 8,
             padding: 8,
-            minHeight: 100,
+            minHeight: 130,
             display: "flex",
             flexDirection: "column",
           }}
@@ -337,31 +351,109 @@ export default function AgendaPage() {
               const colors =
                 ACTIVITY_TYPE_COLORS[a.activity_type] ||
                 ACTIVITY_TYPE_COLORS.other;
+              const hasIcons =
+                !!a.meet_link || !!a.document_url || !!a.deal_id ||
+                !!a.organization_id || !!a.contact_id;
               return (
-                <button
+                <div
                   key={a.id}
-                  onClick={() => {
-                    setSelectedActivity(a);
-                    setModalOpen(true);
-                  }}
                   style={{
                     background: colors.bg,
-                    border: "none",
                     borderRadius: 5,
                     padding: "4px 6px",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: colors.tx,
-                    textAlign: "left",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3,
                   }}
                   title={a.title}
                 >
-                  {a.title}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedActivity(a);
+                      setModalOpen(true);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: colors.tx,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      fontFamily: "inherit",
+                      width: "100%",
+                    }}
+                  >
+                    {a.title}
+                  </button>
+                  {hasIcons && (
+                    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                      {a.meet_link && (
+                        <a
+                          href={a.meet_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          style={calIconLink}
+                          title="Rejoindre Meet"
+                        >
+                          🎥
+                        </a>
+                      )}
+                      {a.document_url && (
+                        <a
+                          href={a.document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          style={calIconLink}
+                          title="Document"
+                        >
+                          📎
+                        </a>
+                      )}
+                      {a.deal_id && (
+                        <Link
+                          href={`/protected/dossiers/${a.deal_id}`}
+                          onClick={e => e.stopPropagation()}
+                          style={calIconLink}
+                          title={a.deals?.name ?? "Dossier lié"}
+                        >
+                          📋
+                        </Link>
+                      )}
+                      {a.organization_id && (
+                        <Link
+                          href={`/protected/organisations/${a.organization_id}`}
+                          onClick={e => e.stopPropagation()}
+                          style={calIconLink}
+                          title={a.organisations?.name ?? "Organisation liée"}
+                        >
+                          🏢
+                        </Link>
+                      )}
+                      {a.contact_id && (
+                        <Link
+                          href={`/protected/contacts/${a.contact_id}`}
+                          onClick={e => e.stopPropagation()}
+                          style={calIconLink}
+                          title={
+                            a.contacts
+                              ? `${a.contacts.first_name} ${a.contacts.last_name}`
+                              : "Contact lié"
+                          }
+                        >
+                          👤
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
             {dayActivities.length > 3 && (
