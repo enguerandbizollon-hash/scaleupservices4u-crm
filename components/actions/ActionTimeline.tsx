@@ -157,6 +157,16 @@ function renderAction(action: ActionRow, ctx: {
           ) : null;
         })()}
 
+        {/* Email destinataires — action de type email */}
+        {action.type === "email" && action.email_to && action.email_to.length > 0 && (
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 3 }}>
+            → {action.email_to.join(", ")}
+            {action.email_cc && action.email_cc.length > 0 && (
+              <span style={{ color: "var(--text-4)" }}> · cc {action.email_cc.join(", ")}</span>
+            )}
+          </div>
+        )}
+
         {/* Meet link — action de type meeting */}
         {action.type === "meeting" && action.meet_link && (
           <a

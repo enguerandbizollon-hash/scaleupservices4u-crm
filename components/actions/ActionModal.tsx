@@ -88,6 +88,11 @@ export default function ActionModal({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [emailDirection, setEmailDirection] = useState("sent");
   const [emailSubject, setEmailSubject] = useState("");
+  const [emailFrom, setEmailFrom] = useState("");
+  const [emailTo, setEmailTo] = useState<string[]>([]);
+  const [emailCc, setEmailCc] = useState<string[]>([]);
+  const [emailToInput, setEmailToInput] = useState("");
+  const [emailCcInput, setEmailCcInput] = useState("");
   const [gmailThreadId, setGmailThreadId] = useState("");
   const [agendaNotes, setAgendaNotes] = useState("");
   const [reminderDays, setReminderDays] = useState<number[]>([]);
@@ -161,6 +166,11 @@ export default function ActionModal({
       setPhoneNumber(editingAction.phone_number || "");
       setEmailDirection(editingAction.email_direction || "sent");
       setEmailSubject(editingAction.email_subject || "");
+      setEmailFrom(editingAction.email_from || "");
+      setEmailTo(editingAction.email_to ?? []);
+      setEmailCc(editingAction.email_cc ?? []);
+      setEmailToInput("");
+      setEmailCcInput("");
       setGmailThreadId(editingAction.gmail_thread_id || "");
       setAgendaNotes(editingAction.agenda_notes || "");
       setReminderDays([]); // reminder_days n'est pas dans ActionRow; reload à implémenter si besoin
@@ -201,6 +211,11 @@ export default function ActionModal({
       setPhoneNumber("");
       setEmailDirection("sent");
       setEmailSubject("");
+      setEmailFrom("");
+      setEmailTo([]);
+      setEmailCc([]);
+      setEmailToInput("");
+      setEmailCcInput("");
       setGmailThreadId("");
       setAgendaNotes("");
       setReminderDays([]);
@@ -294,6 +309,24 @@ export default function ActionModal({
     setReminderDays(prev => prev.includes(days) ? prev.filter(d => d !== days) : [...prev, days].sort((a, b) => a - b));
   }
 
+  // Tags-input pour destinataires email : ajoute le contenu courant
+  // au tableau quand l'utilisateur tape Entrée, virgule ou Tab.
+  function commitEmailTag(
+    raw: string,
+    list: string[],
+    setList: (v: string[]) => void,
+    setInput: (v: string) => void,
+  ) {
+    const value = raw.trim().replace(/[,;]+$/, "");
+    if (!value) { setInput(""); return; }
+    if (!list.includes(value)) setList([...list, value]);
+    setInput("");
+  }
+
+  function removeEmailTag(value: string, list: string[], setList: (v: string[]) => void) {
+    setList(list.filter(v => v !== value));
+  }
+
   const handleSave = async () => {
     if (!title.trim()) { setError("Le titre est requis"); return; }
     setSaving(true);
@@ -315,6 +348,9 @@ export default function ActionModal({
       phone_number: type === "call" ? phoneNumber || undefined : undefined,
       email_direction: type === "email" ? emailDirection : undefined,
       email_subject: type === "email" ? emailSubject || undefined : undefined,
+      email_from: type === "email" ? emailFrom.trim() || undefined : undefined,
+      email_to: type === "email" && emailTo.length > 0 ? emailTo : undefined,
+      email_cc: type === "email" && emailCc.length > 0 ? emailCc : undefined,
       gmail_thread_id: type === "email" ? gmailThreadId || undefined : undefined,
       agenda_notes: type === "meeting" ? agendaNotes || undefined : undefined,
       reminder_days: reminderDays.length > 0 ? reminderDays : undefined,
@@ -602,6 +638,67 @@ export default function ActionModal({
                       </button>
                     ))}
                   </div>
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>De / Expediteur</label>
+                  <input type="email" value={emailFrom} onChange={e => setEmailFrom(e.target.value)}
+                    placeholder="contact@example.com" style={inp} />
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>A (destinataires)</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: emailTo.length > 0 ? 6 : 0 }}>
+                    {emailTo.map(v => (
+                      <span key={v} style={chipStyle}>
+                        {v}
+                        <button type="button" onClick={() => removeEmailTag(v, emailTo, setEmailTo)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 13, padding: 0, marginLeft: 2 }}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <input type="email" value={emailToInput}
+                    onChange={e => setEmailToInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" || e.key === "," || e.key === ";" || e.key === "Tab") {
+                        if (emailToInput.trim()) {
+                          e.preventDefault();
+                          commitEmailTag(emailToInput, emailTo, setEmailTo, setEmailToInput);
+                        }
+                      } else if (e.key === "Backspace" && !emailToInput && emailTo.length > 0) {
+                        setEmailTo(emailTo.slice(0, -1));
+                      }
+                    }}
+                    onBlur={() => emailToInput.trim() && commitEmailTag(emailToInput, emailTo, setEmailTo, setEmailToInput)}
+                    placeholder="Ajouter un email puis Entree" style={inp} />
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>Cc (optionnel)</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: emailCc.length > 0 ? 6 : 0 }}>
+                    {emailCc.map(v => (
+                      <span key={v} style={chipStyle}>
+                        {v}
+                        <button type="button" onClick={() => removeEmailTag(v, emailCc, setEmailCc)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 13, padding: 0, marginLeft: 2 }}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <input type="email" value={emailCcInput}
+                    onChange={e => setEmailCcInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" || e.key === "," || e.key === ";" || e.key === "Tab") {
+                        if (emailCcInput.trim()) {
+                          e.preventDefault();
+                          commitEmailTag(emailCcInput, emailCc, setEmailCc, setEmailCcInput);
+                        }
+                      } else if (e.key === "Backspace" && !emailCcInput && emailCc.length > 0) {
+                        setEmailCc(emailCc.slice(0, -1));
+                      }
+                    }}
+                    onBlur={() => emailCcInput.trim() && commitEmailTag(emailCcInput, emailCc, setEmailCc, setEmailCcInput)}
+                    placeholder="Ajouter un email puis Entree" style={inp} />
                 </div>
                 <div style={mb14}>
                   <label style={lbl}>Objet</label>

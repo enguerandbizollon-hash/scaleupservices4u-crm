@@ -31,6 +31,9 @@ export interface ActionInput {
   gmail_message_id?: string | null;
   email_subject?: string | null;
   email_direction?: string | null;
+  email_from?: string | null;
+  email_to?: string[] | null;
+  email_cc?: string[] | null;
   document_url?: string | null;
   deal_id?: string | null;
   organization_id?: string | null;
@@ -63,6 +66,9 @@ export interface ActionRow {
   gmail_thread_id: string | null;
   email_subject: string | null;
   email_direction: string | null;
+  email_from: string | null;
+  email_to: string[] | null;
+  email_cc: string[] | null;
   document_url: string | null;
   deal_id: string | null;
   organization_id: string | null;
@@ -163,6 +169,9 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
     gmail_message_id: input.gmail_message_id ?? null,
     email_subject:    input.email_subject ?? null,
     email_direction:  input.email_direction ?? null,
+    email_from:       input.email_from ?? null,
+    email_to:         input.email_to ?? null,
+    email_cc:         input.email_cc ?? null,
     document_url:     input.document_url ?? null,
     deal_id:          input.deal_id ?? null,
     organization_id:  input.organization_id ?? null,
@@ -254,6 +263,7 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
     "duration_minutes", "hard_deadline", "reminder_days",
     "location", "meet_link", "phone_number", "agenda_notes",
     "gmail_thread_id", "gmail_message_id", "email_subject", "email_direction",
+    "email_from", "email_to", "email_cc",
     "document_url",
     "deal_id", "organization_id", "mandate_id",
   ];
