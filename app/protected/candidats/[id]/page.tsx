@@ -547,9 +547,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ cssText: lbl } as React.CSSProperties}>Nouveau statut</label>
-                <select name="new_status" style={{ cssText: inp } as React.CSSProperties}>
+                <select name="new_status" defaultValue={candidate.candidate_status ?? ""} style={{ cssText: inp } as React.CSSProperties}>
                   {CANDIDATE_STATUSES.map(s => (
-                    <option key={s.value} value={s.value} selected={s.value === candidate.candidate_status}>
+                    <option key={s.value} value={s.value}>
                       {s.label}
                     </option>
                   ))}
