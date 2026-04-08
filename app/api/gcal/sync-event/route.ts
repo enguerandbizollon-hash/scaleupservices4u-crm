@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getValidToken, createGCalEvent, updateGCalEvent, deleteGCalEvent } from "@/lib/gcal/gcal-client";
 
 const TABLE_MAP: Record<string, { table: string; col: string }> = {
-  activity:        { table: "activities",     col: "gcal_event_id" },
+  activity:        { table: "actions",        col: "gcal_event_id" },
   task:            { table: "tasks",          col: "gcal_event_id" },
   deal_relance:    { table: "deals",          col: "gcal_relance_event_id" },
   deal_closing:    { table: "deals",          col: "gcal_closing_event_id" },
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "401" }, { status: 401 });
 
   const { action, source_type, source_id, event } = await req.json();
+  console.log("[sync-event]", { user: user.id, action, source_type, source_id });
 
   const token = await getValidToken(user.id);
   if (!token) return NextResponse.json({ synced: false, reason: "not_connected" });
