@@ -86,6 +86,20 @@ export interface DocumentInput {
   note?: string | null;
 }
 
+// ── Simple list (autocomplete) ────────────────────────────────────────────────
+
+export async function getAllDealsSimple(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase
+    .from("deals")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as { id: string; name: string }[];
+}
+
 // ── Deals CRUD ────────────────────────────────────────────────────────────────
 
 export async function createDeal(data: DealInput): Promise<DealActionResult> {

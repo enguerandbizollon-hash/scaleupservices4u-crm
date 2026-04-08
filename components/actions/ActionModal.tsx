@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { createAction, updateAction, generateMeetLinkAction, generateActionSummaryAction, type ActionRow } from "@/actions/actions";
 import { getAllContactsSimple } from "@/actions/contacts";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
+import { getAllDealsSimple } from "@/actions/deals";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,12 +18,12 @@ interface ActionModalProps {
     deal_id?: string;
     organization_id?: string;
     contact_id?: string;
-    mandate_id?: string;
   };
 }
 
 type ContactOption = { id: string; first_name: string; last_name: string; email: string | null };
 type OrgOption = { id: string; name: string };
+type DealOption = { id: string; name: string };
 
 interface Participant { contact_id: string; name: string; role: string; attended: boolean }
 interface LinkedOrg { organization_id: string; name: string; role: string }
@@ -43,7 +44,17 @@ const PRIORITY_OPTIONS = [
   { value: "high", label: "Haute" },
 ];
 
+const STATUS_OPTIONS = [
+  { value: "open", label: "Ouvert" },
+  { value: "in_progress", label: "En cours" },
+  { value: "done", label: "Termine" },
+  { value: "cancelled", label: "Annule" },
+];
+
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
+
+// Reminders : options en jours avant échéance
+const REMINDER_DAY_OPTIONS = [0, 1, 3, 7, 14, 30];
 
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
@@ -64,6 +75,7 @@ export default function ActionModal({
   // Base fields
   const [type, setType] = useState(defaultType || "task");
   const [title, setTitle] = useState("");
+  const [status, setStatus] = useState("open");
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(todayStr());
@@ -76,10 +88,20 @@ export default function ActionModal({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [emailDirection, setEmailDirection] = useState("sent");
   const [emailSubject, setEmailSubject] = useState("");
+  const [gmailThreadId, setGmailThreadId] = useState("");
+  const [agendaNotes, setAgendaNotes] = useState("");
+  const [reminderDays, setReminderDays] = useState<number[]>([]);
   const [documentUrl, setDocumentUrl] = useState("");
   const [dealId, setDealId] = useState(context?.deal_id || "");
   const [organizationId, setOrganizationId] = useState(context?.organization_id || "");
-  const [mandateId, setMandateId] = useState(context?.mandate_id || "");
+
+  // Accordéon "Détails" — fermé par défaut
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Dossier (deal) autocomplete
+  const [dealOptions, setDealOptions] = useState<DealOption[]>([]);
+  const [dealSearch, setDealSearch] = useState("");
+  const [dealSearchFocused, setDealSearchFocused] = useState(false);
 
   // Participants (contacts liaison)
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -99,14 +121,16 @@ export default function ActionModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Load contacts + orgs lists
+  // Load contacts + orgs + deals lists
   const loadOptions = useCallback(async () => {
-    const [contacts, orgs] = await Promise.all([
+    const [contacts, orgs, deals] = await Promise.all([
       getAllContactsSimple(),
       getAllOrganisationsSimple(),
+      getAllDealsSimple(),
     ]);
     setContactOptions(contacts);
     setOrgOptions(orgs);
+    setDealOptions(deals);
   }, []);
 
   useEffect(() => {
@@ -119,6 +143,7 @@ export default function ActionModal({
     if (isEdit && editingAction) {
       setType(editingAction.type);
       setTitle(editingAction.title);
+      setStatus(editingAction.status || "open");
       setPriority(editingAction.priority || "medium");
       setDescription(editingAction.description || "");
       setDueDate(editingAction.due_date || todayStr());
@@ -131,10 +156,12 @@ export default function ActionModal({
       setPhoneNumber(editingAction.phone_number || "");
       setEmailDirection(editingAction.email_direction || "sent");
       setEmailSubject(editingAction.email_subject || "");
+      setGmailThreadId(editingAction.gmail_thread_id || "");
+      setAgendaNotes(editingAction.agenda_notes || "");
+      setReminderDays([]); // reminder_days n'est pas dans ActionRow; reload à implémenter si besoin
       setDocumentUrl(editingAction.document_url || "");
       setDealId(editingAction.deal_id || "");
       setOrganizationId(editingAction.organization_id || "");
-      setMandateId(editingAction.mandate_id || "");
       setSummaryAI(editingAction.summary_ai || null);
       // Load existing participants
       setParticipants(
@@ -156,6 +183,7 @@ export default function ActionModal({
     } else {
       setType(defaultType || "task");
       setTitle("");
+      setStatus("open");
       setPriority("medium");
       setDescription("");
       setDueDate(todayStr());
@@ -168,16 +196,21 @@ export default function ActionModal({
       setPhoneNumber("");
       setEmailDirection("sent");
       setEmailSubject("");
+      setGmailThreadId("");
+      setAgendaNotes("");
+      setReminderDays([]);
       setDocumentUrl("");
       setDealId(context?.deal_id || "");
       setOrganizationId(context?.organization_id || "");
-      setMandateId(context?.mandate_id || "");
       setParticipants([]);
       setLinkedOrgs([]);
       setSummaryAI(null);
     }
     setContactSearch("");
     setOrgSearch("");
+    setDealSearch("");
+    setDealSearchFocused(false);
+    setDetailsOpen(false);
     setError("");
   }, [open, isEdit, editingAction, defaultType, context]);
 
@@ -234,6 +267,21 @@ export default function ActionModal({
     setGeneratingAI(false);
   }
 
+  function selectDeal(d: DealOption) {
+    setDealId(d.id);
+    setDealSearch(d.name);
+    setDealSearchFocused(false);
+  }
+
+  function clearDeal() {
+    setDealId("");
+    setDealSearch("");
+  }
+
+  function toggleReminder(days: number) {
+    setReminderDays(prev => prev.includes(days) ? prev.filter(d => d !== days) : [...prev, days].sort((a, b) => a - b));
+  }
+
   const handleSave = async () => {
     if (!title.trim()) { setError("Le titre est requis"); return; }
     setSaving(true);
@@ -242,6 +290,7 @@ export default function ActionModal({
     const payload = {
       type,
       title: title.trim(),
+      status,
       priority,
       description: description || undefined,
       due_date: dueDate || undefined,
@@ -254,10 +303,12 @@ export default function ActionModal({
       phone_number: type === "call" ? phoneNumber || undefined : undefined,
       email_direction: type === "email" ? emailDirection : undefined,
       email_subject: type === "email" ? emailSubject || undefined : undefined,
+      gmail_thread_id: type === "email" ? gmailThreadId || undefined : undefined,
+      agenda_notes: type === "meeting" ? agendaNotes || undefined : undefined,
+      reminder_days: reminderDays.length > 0 ? reminderDays : undefined,
       document_url: documentUrl.trim() || undefined,
       deal_id: dealId || undefined,
       organization_id: organizationId || undefined,
-      mandate_id: mandateId || undefined,
       contact_ids: participants.map(p => ({ id: p.contact_id, role: p.role || undefined, attended: p.attended })),
       organization_ids: linkedOrgs.map(o => ({ id: o.organization_id, role: o.role || undefined })),
     };
@@ -335,6 +386,14 @@ export default function ActionModal({
     ? orgOptions.filter(o => o.name.toLowerCase().includes(orgSearch.toLowerCase())).slice(0, 8)
     : [];
 
+  const filteredDeals = dealSearch.trim()
+    ? dealOptions.filter(d => d.name.toLowerCase().includes(dealSearch.toLowerCase())).slice(0, 8)
+    : dealOptions.slice(0, 8);
+
+  const selectedDealName = dealId
+    ? (dealOptions.find(d => d.id === dealId)?.name ?? "")
+    : "";
+
   return (
     <div style={overlay} onClick={onClose}>
       <div style={card} onClick={e => e.stopPropagation()}>
@@ -361,34 +420,38 @@ export default function ActionModal({
           </div>
         </div>
 
-        {/* Section 2: Common fields */}
+        {/* ═══ NIVEAU 1 — champs essentiels ═══ */}
+
+        {/* Titre */}
         <div style={mb14}>
           <label style={lbl}>Titre *</label>
           <input type="text" value={title} onChange={e => setTitle(e.target.value)}
             placeholder="ex: Appel de suivi avec Jean Dupont" style={inp} autoFocus />
         </div>
 
-        <div style={mb14}>
-          <label style={lbl}>Priorite</label>
-          <select value={priority} onChange={e => setPriority(e.target.value)} style={inp}>
-            {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
+        {/* Statut + Priorité (2 colonnes) */}
+        <div style={{ ...mb14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={lbl}>Statut</label>
+            <select value={status} onChange={e => setStatus(e.target.value)} style={inp}>
+              {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Priorite</label>
+            <select value={priority} onChange={e => setPriority(e.target.value)} style={inp}>
+              {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
         </div>
 
-        <div style={mb14}>
-          <label style={lbl}>Description</label>
-          <textarea value={description} onChange={e => setDescription(e.target.value)}
-            rows={3} placeholder="Details de l'action..." style={{ ...inp, resize: "vertical" }} />
-        </div>
-
-        {/* Section 3: Date fields — masqué pour meeting/call (qui ont start_datetime) */}
+        {/* Date/heure — selon type */}
         {!["meeting", "call"].includes(type) && (
           <>
             <div style={mb14}>
               <label style={lbl}>Date</label>
               <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inp} />
             </div>
-
             <div style={{ ...mb14, display: "flex", alignItems: "center", gap: 10 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-2)", cursor: "pointer" }}>
                 <input type="checkbox" checked={isAllDay} onChange={e => setIsAllDay(e.target.checked)}
@@ -402,7 +465,6 @@ export default function ActionModal({
           </>
         )}
 
-        {/* Meeting/Call specific */}
         {showMeetingFields && (
           <>
             <div style={mb14}>
@@ -419,164 +481,234 @@ export default function ActionModal({
           </>
         )}
 
-        {type === "meeting" && (
-          <>
-            <div style={mb14}>
-              <label style={lbl}>Lieu</label>
-              <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                placeholder="Bureau, restaurant..." style={inp} />
-            </div>
-            <div style={mb14}>
-              <label style={lbl}>Lien Meet / Zoom</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input type="url" value={meetLink} onChange={e => setMeetLink(e.target.value)}
-                  placeholder="https://meet.google.com/..." style={{ ...inp, flex: 1 }} />
-                <button type="button" onClick={handleGenerateMeet} disabled={generatingMeet}
-                  style={{ ...btnSmall, whiteSpace: "nowrap", opacity: generatingMeet ? 0.6 : 1 }}>
-                  {generatingMeet ? "..." : "\uD83D\uDD17 Meet"}
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {type === "call" && (
+        {/* Dossier lié (optionnel) — autocomplete */}
+        {!context?.deal_id && (
           <div style={mb14}>
-            <label style={lbl}>Numero de telephone</label>
-            <input type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
-              placeholder="+33 6 ..." style={inp} />
-          </div>
-        )}
-
-        {type === "email" && (
-          <>
-            <div style={mb14}>
-              <label style={lbl}>Direction</label>
-              <div style={{ display: "flex", gap: 6 }}>
-                {[{ v: "sent", l: "Envoye" }, { v: "received", l: "Recu" }].map(d => (
-                  <button key={d.v} type="button" onClick={() => setEmailDirection(d.v)}
-                    style={emailDirection === d.v ? pillActive : pillBase}>
-                    {d.l}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={mb14}>
-              <label style={lbl}>Objet</label>
-              <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
-                placeholder="Objet de l'email" style={inp} />
-            </div>
-          </>
-        )}
-
-        {/* Section 4: Participants (contacts) — for meeting & call */}
-        {showParticipants && (
-          <div style={{ ...mb14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-            <label style={lbl}>Participants</label>
-            {participants.map(p => (
-              <div key={p.contact_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={chipStyle}>{p.name}</span>
-                <input type="text" placeholder="Role (vendeur, avocat...)" value={p.role}
-                  onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, role: e.target.value } : pp))}
-                  style={{ ...inp, width: 150, padding: "4px 8px", fontSize: 12 }} />
-                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--text-4)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={p.attended}
-                    onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, attended: e.target.checked } : pp))}
-                    style={{ accentColor: "var(--su-500)" }} />
-                  Present
-                </label>
-                <button type="button" onClick={() => removeParticipant(p.contact_id)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
-                  ×
+            <label style={lbl}>Dossier lie (optionnel)</label>
+            {dealId && selectedDealName ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ ...chipStyle, flex: 1 }}>{selectedDealName}</span>
+                <button type="button" onClick={clearDeal}
+                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "var(--text-4)", fontSize: 12, fontFamily: "inherit" }}>
+                  Retirer
                 </button>
               </div>
-            ))}
-            <div style={{ position: "relative" }}>
-              <input type="text" value={contactSearch} onChange={e => setContactSearch(e.target.value)}
-                placeholder="+ Ajouter un participant..." style={{ ...inp, fontSize: 12.5 }} />
-              {filteredContacts.length > 0 && (
-                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
-                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-                  maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
-                  {filteredContacts.map(c => (
-                    <button key={c.id} type="button" onClick={() => addParticipant(c)}
-                      style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
-                        border: "none", background: "transparent", cursor: "pointer",
-                        fontSize: 13, color: "var(--text-2)", fontFamily: "inherit" }}
-                      onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                      {c.first_name} {c.last_name}{c.email ? ` — ${c.email}` : ""}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Section 4b: Linked organizations */}
-        <div style={{ ...mb14, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-          <label style={lbl}>Organisations</label>
-          {linkedOrgs.map(o => (
-            <div key={o.organization_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <span style={chipStyle}>{o.name}</span>
-              <input type="text" placeholder="Role (banque, acquéreur...)" value={o.role}
-                onChange={e => setLinkedOrgs(prev => prev.map(oo => oo.organization_id === o.organization_id ? { ...oo, role: e.target.value } : oo))}
-                style={{ ...inp, width: 160, padding: "4px 8px", fontSize: 12 }} />
-              <button type="button" onClick={() => removeLinkedOrg(o.organization_id)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
-                ×
-              </button>
-            </div>
-          ))}
-          <div style={{ position: "relative" }}>
-            <input type="text" value={orgSearch} onChange={e => setOrgSearch(e.target.value)}
-              placeholder="+ Ajouter une organisation..." style={{ ...inp, fontSize: 12.5 }} />
-            {filteredOrgs.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
-                background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-                maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
-                {filteredOrgs.map(o => (
-                  <button key={o.id} type="button" onClick={() => addLinkedOrg(o)}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
-                      border: "none", background: "transparent", cursor: "pointer",
-                      fontSize: 13, color: "var(--text-2)", fontFamily: "inherit" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    {o.name}
-                  </button>
-                ))}
+            ) : (
+              <div style={{ position: "relative" }}>
+                <input type="text" value={dealSearch}
+                  onChange={e => { setDealSearch(e.target.value); setDealSearchFocused(true); }}
+                  onFocus={() => setDealSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setDealSearchFocused(false), 150)}
+                  placeholder="— Action libre, sans dossier —" style={inp} />
+                {dealSearchFocused && filteredDeals.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                    background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+                    maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
+                    {filteredDeals.map(d => (
+                      <button key={d.id} type="button" onClick={() => selectDeal(d)}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
+                          border: "none", background: "transparent", cursor: "pointer",
+                          fontSize: 13, color: "var(--text-2)", fontFamily: "inherit" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
-
-        {/* Section 4c: Lien / Document (tous types) */}
-        <div style={mb14}>
-          <label style={lbl}>Lien / Document (optionnel)</label>
-          <input
-            type="url"
-            value={documentUrl}
-            onChange={e => setDocumentUrl(e.target.value)}
-            placeholder="https://drive.google.com/... ou lien externe"
-            style={inp}
-          />
-        </div>
-
-        {/* Section 5: Context links */}
-        {!context?.deal_id && (
-          <div style={mb14}>
-            <label style={lbl}>Dossier (ID)</label>
-            <input type="text" value={dealId} onChange={e => setDealId(e.target.value)}
-              placeholder="UUID du dossier" style={inp} />
-          </div>
         )}
-        {!context?.mandate_id && (
-          <div style={mb14}>
-            <label style={lbl}>Mandat (ID)</label>
-            <input type="text" value={mandateId} onChange={e => setMandateId(e.target.value)}
-              placeholder="UUID du mandat" style={inp} />
-          </div>
+
+        {/* ═══ NIVEAU 2 — Accordéon "Détails" ═══ */}
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 4, marginBottom: 14, paddingTop: 10 }}>
+          <button type="button" onClick={() => setDetailsOpen(o => !o)}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none",
+              cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
+              color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em", padding: 0 }}>
+            <span style={{ fontSize: 14 }}>{detailsOpen ? "▾" : "▸"}</span>
+            Details
+          </button>
+        </div>
+
+        {detailsOpen && (
+          <>
+            {/* Description */}
+            <div style={mb14}>
+              <label style={lbl}>Description / Notes</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
+                rows={3} placeholder="Details de l'action..." style={{ ...inp, resize: "vertical" }} />
+            </div>
+
+            {/* Champs spécifiques meeting */}
+            {type === "meeting" && (
+              <>
+                <div style={mb14}>
+                  <label style={lbl}>Lieu</label>
+                  <input type="text" value={location} onChange={e => setLocation(e.target.value)}
+                    placeholder="Bureau, restaurant..." style={inp} />
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>Lien Meet / Zoom</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input type="url" value={meetLink} onChange={e => setMeetLink(e.target.value)}
+                      placeholder="https://meet.google.com/..." style={{ ...inp, flex: 1 }} />
+                    <button type="button" onClick={handleGenerateMeet} disabled={generatingMeet}
+                      style={{ ...btnSmall, whiteSpace: "nowrap", opacity: generatingMeet ? 0.6 : 1 }}>
+                      {generatingMeet ? "..." : "\uD83D\uDD17 Meet"}
+                    </button>
+                  </div>
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>Ordre du jour</label>
+                  <textarea value={agendaNotes} onChange={e => setAgendaNotes(e.target.value)}
+                    rows={2} placeholder="Sujets a aborder..." style={{ ...inp, resize: "vertical" }} />
+                </div>
+              </>
+            )}
+
+            {/* Champs spécifiques call */}
+            {type === "call" && (
+              <div style={mb14}>
+                <label style={lbl}>Numero de telephone</label>
+                <input type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
+                  placeholder="+33 6 ..." style={inp} />
+              </div>
+            )}
+
+            {/* Champs spécifiques email */}
+            {type === "email" && (
+              <>
+                <div style={mb14}>
+                  <label style={lbl}>Direction</label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[{ v: "sent", l: "Envoye" }, { v: "received", l: "Recu" }].map(d => (
+                      <button key={d.v} type="button" onClick={() => setEmailDirection(d.v)}
+                        style={emailDirection === d.v ? pillActive : pillBase}>
+                        {d.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>Objet</label>
+                  <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
+                    placeholder="Objet de l'email" style={inp} />
+                </div>
+                <div style={mb14}>
+                  <label style={lbl}>Thread Gmail (ID)</label>
+                  <input type="text" value={gmailThreadId} onChange={e => setGmailThreadId(e.target.value)}
+                    placeholder="Optionnel — ID du thread Gmail" style={inp} />
+                </div>
+              </>
+            )}
+
+            {/* Participants (meeting/call) */}
+            {showParticipants && (
+              <div style={mb14}>
+                <label style={lbl}>Participants</label>
+                {participants.map(p => (
+                  <div key={p.contact_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={chipStyle}>{p.name}</span>
+                    <input type="text" placeholder="Role (vendeur, avocat...)" value={p.role}
+                      onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, role: e.target.value } : pp))}
+                      style={{ ...inp, width: 150, padding: "4px 8px", fontSize: 12 }} />
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--text-4)", cursor: "pointer" }}>
+                      <input type="checkbox" checked={p.attended}
+                        onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, attended: e.target.checked } : pp))}
+                        style={{ accentColor: "var(--su-500)" }} />
+                      Present
+                    </label>
+                    <button type="button" onClick={() => removeParticipant(p.contact_id)}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <div style={{ position: "relative" }}>
+                  <input type="text" value={contactSearch} onChange={e => setContactSearch(e.target.value)}
+                    placeholder="+ Ajouter un participant..." style={{ ...inp, fontSize: 12.5 }} />
+                  {filteredContacts.length > 0 && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+                      maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
+                      {filteredContacts.map(c => (
+                        <button key={c.id} type="button" onClick={() => addParticipant(c)}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
+                            border: "none", background: "transparent", cursor: "pointer",
+                            fontSize: 13, color: "var(--text-2)", fontFamily: "inherit" }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                          {c.first_name} {c.last_name}{c.email ? ` — ${c.email}` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Organisations liées */}
+            <div style={mb14}>
+              <label style={lbl}>Organisations liees</label>
+              {linkedOrgs.map(o => (
+                <div key={o.organization_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={chipStyle}>{o.name}</span>
+                  <input type="text" placeholder="Role (banque, acquéreur...)" value={o.role}
+                    onChange={e => setLinkedOrgs(prev => prev.map(oo => oo.organization_id === o.organization_id ? { ...oo, role: e.target.value } : oo))}
+                    style={{ ...inp, width: 160, padding: "4px 8px", fontSize: 12 }} />
+                  <button type="button" onClick={() => removeLinkedOrg(o.organization_id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div style={{ position: "relative" }}>
+                <input type="text" value={orgSearch} onChange={e => setOrgSearch(e.target.value)}
+                  placeholder="+ Ajouter une organisation..." style={{ ...inp, fontSize: 12.5 }} />
+                {filteredOrgs.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                    background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+                    maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
+                    {filteredOrgs.map(o => (
+                      <button key={o.id} type="button" onClick={() => addLinkedOrg(o)}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
+                          border: "none", background: "transparent", cursor: "pointer",
+                          fontSize: 13, color: "var(--text-2)", fontFamily: "inherit" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                        {o.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Lien / Document */}
+            <div style={mb14}>
+              <label style={lbl}>Lien / Document (optionnel)</label>
+              <input type="url" value={documentUrl} onChange={e => setDocumentUrl(e.target.value)}
+                placeholder="https://drive.google.com/... ou lien externe" style={inp} />
+            </div>
+
+            {/* Rappels (reminder_days) */}
+            <div style={mb14}>
+              <label style={lbl}>Rappels (jours avant l'echeance)</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {REMINDER_DAY_OPTIONS.map(d => {
+                  const active = reminderDays.includes(d);
+                  return (
+                    <button key={d} type="button" onClick={() => toggleReminder(d)}
+                      style={active ? pillActive : pillBase}>
+                      {d === 0 ? "Le jour J" : `J-${d}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
         )}
 
         {/* AI Summary — for completed meeting/call */}
