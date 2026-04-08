@@ -5,6 +5,7 @@ import { createAction, updateAction, generateMeetLinkAction, generateActionSumma
 import { getAllContactsSimple } from "@/actions/contacts";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { getAllDealsSimple } from "@/actions/deals";
+import { getAllCandidatesSimple } from "@/actions/candidates";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,12 +19,14 @@ interface ActionModalProps {
     deal_id?: string;
     organization_id?: string;
     contact_id?: string;
+    candidate_id?: string;
   };
 }
 
 type ContactOption = { id: string; first_name: string; last_name: string; email: string | null };
 type OrgOption = { id: string; name: string };
 type DealOption = { id: string; name: string };
+type CandidateOption = { id: string; first_name: string; last_name: string; email: string | null };
 
 interface Participant { contact_id: string; name: string; role: string; attended: boolean }
 interface LinkedOrg { organization_id: string; name: string; role: string }
@@ -32,6 +35,8 @@ const ACTION_TYPES = [
   { value: "task", label: "Tache", icon: "\uD83D\uDCCB" },
   { value: "call", label: "Appel", icon: "\uD83D\uDCDE" },
   { value: "meeting", label: "Meeting", icon: "\uD83E\uDD1D" },
+  { value: "interview", label: "Entretien", icon: "\uD83D\uDC65" },
+  { value: "technical_test", label: "Test technique", icon: "\uD83E\uDDEA" },
   { value: "email", label: "Email", icon: "\u2709\uFE0F" },
   { value: "note", label: "Note", icon: "\uD83D\uDCDD" },
   { value: "deadline", label: "Deadline", icon: "\uD83D\uDD34" },
@@ -99,6 +104,7 @@ export default function ActionModal({
   const [documentUrl, setDocumentUrl] = useState("");
   const [dealId, setDealId] = useState(context?.deal_id || "");
   const [organizationId, setOrganizationId] = useState(context?.organization_id || "");
+  const [candidateId, setCandidateId] = useState(context?.candidate_id || "");
 
   // Accordéon "Détails" — fermé par défaut
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -107,6 +113,11 @@ export default function ActionModal({
   const [dealOptions, setDealOptions] = useState<DealOption[]>([]);
   const [dealSearch, setDealSearch] = useState("");
   const [dealSearchFocused, setDealSearchFocused] = useState(false);
+
+  // Candidat autocomplete
+  const [candidateOptions, setCandidateOptions] = useState<CandidateOption[]>([]);
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [candidateSearchFocused, setCandidateSearchFocused] = useState(false);
 
   // Participants (contacts liaison)
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -126,16 +137,18 @@ export default function ActionModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Load contacts + orgs + deals lists
+  // Load contacts + orgs + deals + candidates lists
   const loadOptions = useCallback(async () => {
-    const [contacts, orgs, deals] = await Promise.all([
+    const [contacts, orgs, deals, candidates] = await Promise.all([
       getAllContactsSimple(),
       getAllOrganisationsSimple(),
       getAllDealsSimple(),
+      getAllCandidatesSimple(),
     ]);
     setContactOptions(contacts);
     setOrgOptions(orgs);
     setDealOptions(deals);
+    setCandidateOptions(candidates);
   }, []);
 
   useEffect(() => {
@@ -177,6 +190,7 @@ export default function ActionModal({
       setDocumentUrl(editingAction.document_url || "");
       setDealId(editingAction.deal_id || "");
       setOrganizationId(editingAction.organization_id || "");
+      setCandidateId(editingAction.candidate_id || "");
       setSummaryAI(editingAction.summary_ai || null);
       // Load existing participants
       setParticipants(
@@ -222,6 +236,7 @@ export default function ActionModal({
       setDocumentUrl("");
       setDealId(context?.deal_id || "");
       setOrganizationId(context?.organization_id || "");
+      setCandidateId(context?.candidate_id || "");
       setParticipants([]);
       setLinkedOrgs([]);
       setSummaryAI(null);
@@ -230,6 +245,8 @@ export default function ActionModal({
     setOrgSearch("");
     setDealSearch("");
     setDealSearchFocused(false);
+    setCandidateSearch("");
+    setCandidateSearchFocused(false);
     setDetailsOpen(false);
     setError("");
   }, [open, isEdit, editingAction, defaultType, context]);
@@ -305,6 +322,17 @@ export default function ActionModal({
     setDealSearch("");
   }
 
+  function selectCandidate(c: CandidateOption) {
+    setCandidateId(c.id);
+    setCandidateSearch(`${c.first_name} ${c.last_name}`);
+    setCandidateSearchFocused(false);
+  }
+
+  function clearCandidate() {
+    setCandidateId("");
+    setCandidateSearch("");
+  }
+
   function toggleReminder(days: number) {
     setReminderDays(prev => prev.includes(days) ? prev.filter(d => d !== days) : [...prev, days].sort((a, b) => a - b));
   }
@@ -341,10 +369,10 @@ export default function ActionModal({
       due_date: dueDate || undefined,
       due_time: !isAllDay ? dueTime : undefined,
       is_all_day: isAllDay,
-      start_datetime: (type === "meeting" || type === "call") && startDatetime ? startDatetime : undefined,
-      duration_minutes: (type === "meeting" || type === "call") ? durationMinutes : undefined,
-      location: type === "meeting" ? location || undefined : undefined,
-      meet_link: type === "meeting" ? meetLink || undefined : undefined,
+      start_datetime: isScheduledType && startDatetime ? startDatetime : undefined,
+      duration_minutes: isScheduledType ? durationMinutes : undefined,
+      location: (type === "meeting" || type === "interview" || type === "technical_test") ? location || undefined : undefined,
+      meet_link: (type === "meeting" || type === "interview" || type === "technical_test") ? meetLink || undefined : undefined,
       phone_number: type === "call" ? phoneNumber || undefined : undefined,
       email_direction: type === "email" ? emailDirection : undefined,
       email_subject: type === "email" ? emailSubject || undefined : undefined,
@@ -352,11 +380,12 @@ export default function ActionModal({
       email_to: type === "email" && emailTo.length > 0 ? emailTo : undefined,
       email_cc: type === "email" && emailCc.length > 0 ? emailCc : undefined,
       gmail_thread_id: type === "email" ? gmailThreadId || undefined : undefined,
-      agenda_notes: type === "meeting" ? agendaNotes || undefined : undefined,
+      agenda_notes: (type === "meeting" || type === "interview" || type === "technical_test") ? agendaNotes || undefined : undefined,
       reminder_days: reminderDays.length > 0 ? reminderDays : undefined,
       document_url: documentUrl.trim() || undefined,
       deal_id: dealId || undefined,
       organization_id: organizationId || undefined,
+      candidate_id: candidateId || undefined,
       contact_ids: participants.map(p => ({ id: p.contact_id, role: p.role || undefined, attended: p.attended })),
       organization_ids: linkedOrgs.map(o => ({ id: o.organization_id, role: o.role || undefined })),
     };
@@ -418,8 +447,15 @@ export default function ActionModal({
     borderRadius: 8, background: "var(--surface-3)", fontSize: 12.5, color: "var(--text-2)",
   };
 
-  const showMeetingFields = type === "meeting" || type === "call";
-  const showParticipants = type === "meeting" || type === "call";
+  const isScheduledType = type === "meeting" || type === "call" || type === "interview" || type === "technical_test";
+  const showMeetingFields = isScheduledType;
+  const showParticipants = isScheduledType;
+  // Le sélecteur candidat n'apparaît que pour les types liés au recrutement
+  // (interview, technical_test, call). Toujours visible si un candidat
+  // est déjà rattaché en édition ou via context.
+  const showCandidatePicker =
+    type === "interview" || type === "technical_test" || type === "call" ||
+    !!candidateId;
 
   // Filtered contact options
   const filteredContacts = contactSearch.trim()
@@ -438,8 +474,23 @@ export default function ActionModal({
     ? dealOptions.filter(d => d.name.toLowerCase().includes(dealSearch.toLowerCase())).slice(0, 8)
     : dealOptions.slice(0, 8);
 
+  const filteredCandidates = candidateSearch.trim()
+    ? candidateOptions.filter(c => {
+        const q = candidateSearch.toLowerCase();
+        return `${c.first_name} ${c.last_name}`.toLowerCase().includes(q)
+          || (c.email ?? "").toLowerCase().includes(q);
+      }).slice(0, 8)
+    : candidateOptions.slice(0, 8);
+
   const selectedDealName = dealId
     ? (dealOptions.find(d => d.id === dealId)?.name ?? "")
+    : "";
+
+  const selectedCandidate = candidateId
+    ? candidateOptions.find(c => c.id === candidateId)
+    : undefined;
+  const selectedCandidateName = selectedCandidate
+    ? `${selectedCandidate.first_name} ${selectedCandidate.last_name}`
     : "";
 
   return (
@@ -529,6 +580,46 @@ export default function ActionModal({
           </>
         )}
 
+        {/* Candidat lié — autocomplete (interview / technical_test / call recrutement) */}
+        {!context?.candidate_id && showCandidatePicker && (
+          <div style={mb14}>
+            <label style={lbl}>Candidat lie</label>
+            {candidateId && selectedCandidateName ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ ...chipStyle, flex: 1 }}>{selectedCandidateName}</span>
+                <button type="button" onClick={clearCandidate}
+                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "var(--text-4)", fontSize: 12, fontFamily: "inherit" }}>
+                  Retirer
+                </button>
+              </div>
+            ) : (
+              <div style={{ position: "relative" }}>
+                <input type="text" value={candidateSearch}
+                  onChange={e => { setCandidateSearch(e.target.value); setCandidateSearchFocused(true); }}
+                  onFocus={() => setCandidateSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setCandidateSearchFocused(false), 150)}
+                  placeholder="Rechercher un candidat..." style={inp} />
+                {candidateSearchFocused && filteredCandidates.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                    background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+                    maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
+                    {filteredCandidates.map(c => (
+                      <button key={c.id} type="button" onClick={() => selectCandidate(c)}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
+                          border: "none", background: "transparent", cursor: "pointer",
+                          fontSize: 13, color: "var(--text-2)", fontFamily: "inherit" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                        {c.first_name} {c.last_name}{c.email ? ` — ${c.email}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Dossier lié (optionnel) — autocomplete */}
         {!context?.deal_id && (
           <div style={mb14}>
@@ -589,13 +680,13 @@ export default function ActionModal({
                 rows={3} placeholder="Details de l'action..." style={{ ...inp, resize: "vertical" }} />
             </div>
 
-            {/* Champs spécifiques meeting */}
-            {type === "meeting" && (
+            {/* Champs spécifiques meeting / interview / technical_test */}
+            {(type === "meeting" || type === "interview" || type === "technical_test") && (
               <>
                 <div style={mb14}>
                   <label style={lbl}>Lieu</label>
                   <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                    placeholder="Bureau, restaurant..." style={inp} />
+                    placeholder={type === "technical_test" ? "Bureau, plateforme en ligne..." : "Bureau, restaurant..."} style={inp} />
                 </div>
                 <div style={mb14}>
                   <label style={lbl}>Lien Meet / Zoom</label>
@@ -609,9 +700,9 @@ export default function ActionModal({
                   </div>
                 </div>
                 <div style={mb14}>
-                  <label style={lbl}>Ordre du jour</label>
+                  <label style={lbl}>{type === "technical_test" ? "Consignes / Sujet" : "Ordre du jour"}</label>
                   <textarea value={agendaNotes} onChange={e => setAgendaNotes(e.target.value)}
-                    rows={2} placeholder="Sujets a aborder..." style={{ ...inp, resize: "vertical" }} />
+                    rows={2} placeholder={type === "technical_test" ? "Exercice, livrables attendus..." : "Sujets a aborder..."} style={{ ...inp, resize: "vertical" }} />
                 </div>
               </>
             )}
@@ -821,7 +912,7 @@ export default function ActionModal({
         )}
 
         {/* AI Summary — for completed meeting/call */}
-        {isEdit && (type === "meeting" || type === "call") && (
+        {isEdit && (type === "meeting" || type === "call" || type === "interview" || type === "technical_test") && (
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <label style={{ ...lbl, marginBottom: 0 }}>Resume IA</label>
