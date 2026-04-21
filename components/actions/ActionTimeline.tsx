@@ -11,17 +11,20 @@ interface ActionTimelineProps {
     deal_id?: string;
     organization_id?: string;
     contact_id?: string;
+    candidate_id?: string;
   };
   showCreateButton?: boolean;
   compactMode?: boolean;
 }
 
-type FilterType = "all" | "task" | "meeting" | "call" | "email" | "note" | "deadline";
+type FilterType = "all" | "task" | "meeting" | "call" | "email" | "note" | "deadline" | "interview" | "technical_test";
 
 const TYPE_ICONS: Record<string, string> = {
   task: "\uD83D\uDCCB",
   call: "\uD83D\uDCDE",
   meeting: "\uD83E\uDD1D",
+  interview: "\uD83D\uDC65",
+  technical_test: "\uD83E\uDDEA",
   email: "\u2709\uFE0F",
   note: "\uD83D\uDCDD",
   deadline: "\uD83D\uDD34",
@@ -31,6 +34,8 @@ const FILTER_PILLS: { value: FilterType; label: string }[] = [
   { value: "all", label: "Tout" },
   { value: "task", label: "Taches" },
   { value: "meeting", label: "Meetings" },
+  { value: "interview", label: "Entretiens" },
+  { value: "technical_test", label: "Tests" },
   { value: "call", label: "Appels" },
   { value: "email", label: "Emails" },
   { value: "note", label: "Notes" },
@@ -235,11 +240,12 @@ export default function ActionTimeline({
       deal_id: filters.deal_id,
       organization_id: filters.organization_id,
       contact_id: filters.contact_id,
+      candidate_id: filters.candidate_id,
       type: typeFilter,
     });
     setActions(data);
     setLoading(false);
-  }, [filters.deal_id, filters.organization_id, filters.contact_id, activeFilter]);
+  }, [filters.deal_id, filters.organization_id, filters.contact_id, filters.candidate_id, activeFilter]);
 
   useEffect(() => { loadActions(); }, [loadActions]);
 
@@ -417,6 +423,7 @@ export default function ActionTimeline({
           deal_id:         filters.deal_id,
           organization_id: filters.organization_id,
           contact_id:      filters.contact_id,
+          candidate_id:    filters.candidate_id,
         }}
       />
     </div>

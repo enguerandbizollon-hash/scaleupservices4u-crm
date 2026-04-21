@@ -15,6 +15,7 @@ import {
 import { DriveDocumentPicker } from "@/components/candidates/DriveDocumentPicker";
 import { ReportGenerator } from "@/components/candidates/ReportGenerator";
 import { TagInput } from "@/components/tags/TagInput";
+import ActionTimeline from "@/components/actions/ActionTimeline";
 import { dealTypeLabels, dealStatusLabels } from "@/lib/crm/labels";
 import { getMatchingDeals } from "@/actions/recruitment-matching";
 import { scoreColor } from "@/lib/crm/recruitment-scoring";
@@ -599,6 +600,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── ACTIONS (entretiens, tests, appels, tâches) ───────────────── */}
+        <div style={{ cssText: section } as React.CSSProperties}>
+          <ActionTimeline filters={{ candidate_id: id }} />
         </div>
 
         {/* Métadonnées */}
