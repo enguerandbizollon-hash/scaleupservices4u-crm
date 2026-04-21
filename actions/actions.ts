@@ -6,6 +6,8 @@ import { syncToGCal } from "@/lib/gcal/sync-helper";
 import { generateMeetLink } from "@/lib/gcal/meet-generator";
 import { generateActionSummary } from "@/lib/ai/action-summary";
 
+const GCAL_SYNC_TYPES = ["meeting", "call", "deadline", "task", "document_request", "interview", "technical_test"];
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface ActionInput {
@@ -206,8 +208,7 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
   }
 
   // Sync GCal (meeting, call, deadline, task, interview, technical_test — pas note ni email)
-  const syncTypes = ["meeting", "call", "deadline", "task", "document_request", "interview", "technical_test"];
-  if (syncTypes.includes(input.type) && (input.due_date || input.start_datetime)) {
+  if (GCAL_SYNC_TYPES.includes(input.type) && (input.due_date || input.start_datetime)) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     // meet_link n'est plus injecté dans la description (il est attaché en
     // conferenceData via event.meetLink, ce qui rend le bouton "Rejoindre"
@@ -326,7 +327,22 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
 
   // Sync GCal update
   const effectiveDate = (input.start_datetime ?? input.due_date) as string | undefined;
-  if (effectiveDate) {
+  // Type et candidate_id : si absents du payload (Partial), les relire en DB
+  // pour conserver la même logique que createAction (note/email jamais sync GCal).
+  let effectiveType = input.type;
+  let candidateIdForSync = input.candidate_id as string | null | undefined;
+  if (effectiveDate && (effectiveType === undefined || candidateIdForSync === undefined)) {
+    const { data: existingAction } = await supabase
+      .from("actions")
+      .select("type, candidate_id")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (effectiveType === undefined) effectiveType = existingAction?.type ?? undefined;
+    if (candidateIdForSync === undefined) candidateIdForSync = existingAction?.candidate_id ?? null;
+  }
+
+  if (effectiveDate && effectiveType && GCAL_SYNC_TYPES.includes(effectiveType)) {
     // Récupérer les attendees actuels (post re-sync action_contacts) pour
     // les transmettre à l'événement GCal mis à jour
     const { data: contactRows } = await supabase
@@ -342,18 +358,6 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
         displayName: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || undefined,
       }));
 
-    // Si l'action est liée à un candidat (soit via le payload, soit via
-    // l'action existante en DB), ajouter son email aux attendees.
-    let candidateIdForSync = input.candidate_id as string | null | undefined;
-    if (candidateIdForSync === undefined) {
-      const { data: existingAction } = await supabase
-        .from("actions")
-        .select("candidate_id")
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      candidateIdForSync = existingAction?.candidate_id ?? null;
-    }
     if (candidateIdForSync) {
       const { data: candidateData } = await supabase
         .from("candidates")
@@ -369,8 +373,9 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
       }
     }
 
-    // Deadline = toujours événement all-day
-    const isDeadlineUpd = input.type === "deadline";
+    // Deadline = toujours événement all-day (lit effectiveType pour couvrir
+    // le cas d'un Partial<ActionInput> sans `type`).
+    const isDeadlineUpd = effectiveType === "deadline";
     syncToGCal({
       action: "update", source_type: "activity", source_id: id,
       event: {
