@@ -925,20 +925,23 @@ Séniorité RH : junior | mid | senior | lead | director | c-level
 ### Livrés ✅
 Dashboard · Dossiers CRUD · Contacts CRUD · Organisations CRUD ·
 Agenda · Sidebar · RLS toutes tables · Assistant IA · ActivityModal unifié
-
-### En cours de fix 🔧
-Matching investisseurs :
-  Score artificiellement élevé → pénalité profil incomplet
-  Affichage barres → texte critères colorés vert/orange/rouge/gris
-  Scope requête → toutes organisations investisseurs
-  Source de vérité → matching-maps.ts
+Matching investisseurs (scoring + pénalité profil incomplet + UI
+critères colorés + source matching-maps.ts)
+Matching M&A bidirectionnel (deal breakers + score stratégique +
+score IA financier + score combiné — actions/ma-matching.ts +
+lib/crm/ma-scoring.ts + ma-matching-tab.tsx)
+Module dossier : Dirigeant structuré + création organisation inline +
+role_in_dossier (v36 — DirigeantSection.tsx + deal-detail.tsx)
+Module recrutement : ActionModal types interview/technical_test +
+filtre candidate_id sur ActionTimeline + bloc actions sur fiche
+candidat (v39)
+Auth via middleware.ts Next.js (renommé depuis proxy.ts)
+Sync GCal : exclusion propre note/email dans updateAction
 
 ### Roadmap 📋
 
-Immédiat
-  Fix matching investisseurs · Harmonisation formulaires organisations
-
-Module RH — 6 modules séquentiels M1→M6
+Module RH — M4 à M6 (M1-M3 livrés, M4 matching bidirel. candidats
+ouvert en P3)
 
 Données financières — transversal
   Table financial_data unifiée · Import multi-canaux
@@ -948,9 +951,6 @@ Mandats et honoraires
   Tables mandates + fee_milestones · Calcul fees par deal_type
   Dashboard fees cabinet
 
-Module M&A matching
-  Deal breakers · scoring · IA financière · matching bidirel.
-
 Données transversales
   Tags · Déduplication · Versioning documents
   Multi-devise · RGPD log · Statistiques cabinet
@@ -958,8 +958,9 @@ Données transversales
 Portail client
 
 Transversal
-  Import CSV global · Recherche/filtre global
-  Automatisation relances · Déploiement Vercel
+  Pipeline kanban · Notifications/rappels automatiques · Export PDF
+  Connecteurs Harmonic/Apollo sur organisations investisseurs
+  Recherche globale · Enrichissement Pappers/INSEE · Déploiement Vercel
 
 ---
 
@@ -993,75 +994,95 @@ Transversal
 - Si quelque chose est mauvais → le dire et proposer mieux
 - Si une décision bloque la vision plateforme → le signaler
 
-## ROADMAP ET BACKLOG — État au 2 avril 2026
+## ROADMAP ET BACKLOG — État au 21 avril 2026
 
 ### ÉTAT DU PROJET
-Version : V35
+Version : V39
 Zero erreur TypeScript confirmé.
 DB de test — sera vidée et reremplie proprement au passage en prod.
 Pas de migration SQL sur données existantes requise.
 
 ---
 
-### P0 — AVANT TOUTE UTILISATION CLIENT
+### RÉCEMMENT LIVRÉS ✅
 
-#### 1. Validation ActionModal + GeoSelect
-- Tester ActionModal en conditions réelles sur chaque type
-  (task, call, meeting, email, note, deadline, document_request)
-- Confirmer que GeoSelect remplace bien tous les champs
-  localisation texte libre sur toutes les fiches
-  (organisations, dossiers, contacts, deals)
-- Confirmer que la sync GCal fonctionne sur meeting et deadline
+#### Module dossier — 3 problèmes fermés (v36)
+- Dirigeant structuré : colonnes dirigeant_id (FK contacts) +
+  dirigeant_nom/email/telephone/titre. UI complète dans
+  components/dossiers/DirigeantSection.tsx (search, create inline,
+  edit, display). Server Action updateDealDirigeant.
+- Création organisation inline : bouton "Créer cette organisation"
+  dans le sélecteur d'org de deal-detail.tsx (lignes ~659-725).
+  Préremplit nom depuis la recherche. createOrganisationAction
+  puis linkOrganisationToDeal enchaînés.
+- role_in_dossier sur deal_organizations (v36) : badge coloré +
+  dropdown éditable dans deal-detail.tsx (lignes ~745-753).
+  10 rôles (client, banque, repreneur, investisseur, avocat,
+  expert-comptable, conseil, cible, acquéreur, autre).
 
-#### ✅ 2. Import financier CSV : mapper colonnes — TERMINÉ
-Corrigé et validé en test réel (commits 0f41b4b / 16bf8a9)
+#### Matching M&A bidirectionnel
+- actions/ma-matching.ts : getMaBuyerMatches (sell_to_buyer) et
+  getMaTargetMatches (buy_to_target)
+- lib/crm/ma-scoring.ts : deal breakers + scoring stratégique
+  (secteur 30, taille 25, géo 15, profil 20, timing 10) + scoring
+  IA financier (croissance, marge, bilan, comparables) + score
+  combiné (0.65 strat + 0.35 fin)
+- UI : app/protected/dossiers/[id]/ma-matching-tab.tsx
+
+#### Recrutement — liaison actions/candidats (v39)
+- Colonne actions.candidate_id + index
+- ActionModal : types interview (👥) et technical_test (🧪)
+- ActionTimeline : filtre candidate_id + pills interview/test
+- Bloc ActionTimeline sur fiche candidat
+- Sync GCal : email candidat en attendee automatique
+
+#### Sync GCal — fix note/email
+- updateAction ne déclenche plus la sync pour les types hors
+  GCAL_SYNC_TYPES (évite création d'events orphelins via le
+  fallback update→create de la route sync-event)
+
+#### Auth — middleware Next.js 16
+- Renommage proxy.ts → middleware.ts (le framework n'invoque
+  que middleware.ts, proxy.ts n'était jamais exécuté)
+- getClaims() → getUser() (validation Supabase SSR-safe)
+- publicPaths explicites + redirect auth→/protected pour users
+  connectés
+
+#### Import financier CSV — TERMINÉ (commits 0f41b4b / 16bf8a9)
 - Priorité exact match avant fuzzy matching
 - Dédoublonnage colonnes (payroll mappé 4×, revenue 3×)
-- 12 colonnes auparavant ignorées (sector, other_opex,
-  financial_charges, intangible_assets, tangible_assets,
-  net_income_bs, debt_lt, debt_st, accounts_payable…)
+- 12 colonnes auparavant ignorées
 
 ---
 
-### P1 — FONCTIONNEL MAIS INCOMPLET
+### P0 — AVANT TOUTE UTILISATION CLIENT
 
-#### 3. Module dossier — 3 problèmes ouverts
-- Dirigeant : champ structuré manquant (nom, email, téléphone,
-  titre). Doit être un contact lié avec création inline.
-- Création organisation inline : si org non trouvée dans
-  le sélecteur → bouton "Créer cette organisation" ouvre
-  une modale légère (nom, type, website) sans quitter le dossier
-- Type organisation dans le contexte dossier : badge visible
-  indiquant le rôle de l'org dans ce dossier spécifiquement
-  (Banque, Repreneur, Investisseur, Avocat, Expert-comptable)
-  Distinct du organization_type de la fiche org.
-  Table de liaison : dossier_organizations(dossier_id,
-  organization_id, role_in_dossier)
-
-#### 4. Matching M&A buy-side
-- Le matching investisseurs est refait et fonctionnel.
-- Le matching M&A (acquéreurs vs cibles) n'existe pas.
-- Logique : dossier cession → scorer les acquéreurs potentiels
-  selon secteur, taille, géographie, type d'opération.
-- Critères éliminatoires : géographie, secteur (même logique
-  que matching investisseurs)
-- Critères pondérés : taille cible vs capacité acquéreur,
-  type opération (build-up, diversification, financier),
-  historique d'acquisitions
-- Score 0-100, éliminatoires en premier
-
-#### 5. Connecteurs Harmonic/Apollo — validation
-- Vérifier que les connecteurs remplissent bien les colonnes
-  structurées : investor_sectors[], investor_stages[],
-  investor_geographies[], investor_ticket_min/max
-- Si non → adapter le mapping dans les connecteurs
-- Ne pas supprimer resolveInvestorFields() avant confirmation
+#### 1. Validation ActionModal (test manuel end-to-end)
+Audit statique fait (21/04) : GeoSelect couvre bien les 4 fiches
+ciblées · ActionModal supporte 9 types · fix sync GCal livré.
+Reste à tester main :
+- Création / édition de chaque type d'action en UX réelle
+- Vérifier qu'un event GCal est créé sur meeting/call/deadline/task/
+  interview/technical_test/document_request, et aucun sur note/email
+- Vérifier que la sync prend bien le titre + date/heure + attendees
 
 ---
 
-### P2 — VALEUR AJOUTÉE FORTE
+### P1 — PROCHAIN BLOC STRUCTURANT
 
-#### 6. Pipeline kanban dossiers
+#### 2. Notifications et rappels automatiques
+- reminder_days[] est en base sur la table actions mais jamais
+  déclenché
+- Implémenter via Vercel Cron (toutes les heures)
+- Pour chaque action avec reminder_days et due_date :
+  si (due_date - today) IN reminder_days → créer une
+  notification in-app (table notifications) + email si activé
+- Afficher badge de notification dans la sidebar
+- Brique réutilisable pour : alertes RGPD (rgpd_expiry_date),
+  alertes fees en retard (fee_milestones.due_date + 30j),
+  relances tâches
+
+#### 3. Pipeline kanban dossiers
 - Vue kanban par stade en complément de la vue liste
 - Colonnes : Kickoff → Préparation → Outreach →
   Management Meetings → DD → Négociation → Closing
@@ -1069,51 +1090,56 @@ Corrigé et validé en test réel (commits 0f41b4b / 16bf8a9)
 - Carte : nom dossier, type, montant cible, prochaine action
 - Filtre par type de mission (M&A sell, M&A buy, Fundraising)
 
-#### 7. Notifications et rappels automatiques
-- reminder_days[] est en base sur la table actions
-  mais jamais déclenché
-- Implémenter via Vercel Cron (toutes les heures)
-- Pour chaque action avec reminder_days et due_date :
-  si (due_date - today) IN reminder_days → créer une
-  notification in-app (table notifications) + email si activé
-- Afficher badge de notification dans la sidebar
+#### 4. Connecteurs Harmonic/Apollo sur organisations
+- État actuel : Apollo présent uniquement sur enrichissement
+  contact (app/api/enrich/contact/route.ts). Aucun lib/connectors/.
+  Harmonic absent.
+- Construire lib/connectors/apollo.ts et lib/connectors/harmonic.ts
+  suivant le pattern ConnectorRecord (source + external_id + upsert)
+- Cibler les colonnes investor_* des organisations : sectors[],
+  stages[], geographies[], ticket_min/max
+- Bouton "Enrichir" sur fiche organisation
 
-#### 8. Export PDF / Word
+---
+
+### P2 — VALEUR AJOUTÉE FORTE
+
+#### 5. Export PDF / Word
 - Liste investisseurs avec scores et statuts de contact
 - Synthèse dossier (informations clés + données financières)
 - Rapport d'avancement client (pipeline + interactions)
 - Utiliser la skill docx disponible dans le projet
 
----
-
-### P3 — BACKLOG MOYEN TERME
-
-#### 9. Module RH M4 — Matching bidirectionnel candidats
-- Architecture validée, non implémentée
-- Scorer candidat → poste ET poste → candidat
-- Critères : compétences, séniorité, secteur, géographie,
-  prétentions salariales
-- Intégrer dans le pipeline RH existant (M3)
-
-#### 10. Dashboard amélioré
+#### 6. Dashboard amélioré
 - Deals par stade avec montants
 - Investisseurs contactés par dossier (taux de couverture)
 - Taux de conversion par type de mission
 - Top 5 dossiers actifs avec prochaine action
 - Honoraires pipeline vs encaissé (graphe mensuel)
 
-#### 11. Enrichissement automatique organisations
+#### 7. Recherche globale
+- Barre de recherche transversale (Cmd+K)
+- Résultats : dossiers, organisations, contacts, actions
+- Recherche full-text sur nom, description, notes
+- Navigation directe vers la fiche
+
+---
+
+### P3 — BACKLOG MOYEN TERME
+
+#### 8. Module RH M4 — Matching bidirectionnel candidats
+- Architecture validée, non implémentée
+- Scorer candidat → poste ET poste → candidat
+- Critères : compétences, séniorité, secteur, géographie,
+  prétentions salariales
+- Intégrer dans le pipeline RH existant (M3)
+
+#### 9. Enrichissement automatique organisations (légal)
 - Intégration Pappers API (données légales françaises)
 - Fallback INSEE/SIRENE (gratuit)
 - Bouton "Enrichir" sur fiche organisation
 - Peupler : SIREN, forme juridique, dirigeant légal,
   CA, effectifs, adresse
-
-#### 12. Recherche globale
-- Barre de recherche transversale (Cmd+K)
-- Résultats : dossiers, organisations, contacts, actions
-- Recherche full-text sur nom, description, notes
-- Navigation directe vers la fiche
 
 ---
 
