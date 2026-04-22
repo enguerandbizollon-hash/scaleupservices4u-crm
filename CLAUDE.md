@@ -1166,6 +1166,20 @@ Zéro erreur avant tout commit.
 CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS,
 DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$
 
+Chaque migration supabase_migration_vN.sql doit :
+1. Être idempotente (peut être rejouée sans erreur)
+2. Se terminer impérativement par :
+     INSERT INTO _crm_migrations_applied (version)
+       VALUES ('vN') ON CONFLICT (version) DO NOTHING;
+3. Être appliquée dans Supabase SQL Editor AVANT tout push
+
+Le script scripts/check-migrations.mjs tourne au prebuild (npm run
+build l'exécute en préambule) et échoue si un fichier local n'est
+pas enregistré dans la table _crm_migrations_applied. Impossible
+de déployer sur Vercel avec une migration non appliquée.
+
+Commande locale : `npm run check:migrations`
+
 **GCal** : toujours isolé par userId.
 Jamais de token partagé entre utilisateurs.
 
