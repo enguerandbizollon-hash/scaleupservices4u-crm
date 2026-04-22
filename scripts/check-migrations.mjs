@@ -12,13 +12,29 @@
 //   - table absente → exit 1 (v40 non appliquée)
 //   - écart versions → exit 1 avec la liste des manquantes
 
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
+
+// Charge .env.local si présent (contexte local). Sur Vercel, les vars
+// sont déjà dans process.env — on ne touche pas aux existantes.
+const envPath = resolve(repoRoot, ".env.local");
+if (existsSync(envPath)) {
+  const raw = readFileSync(envPath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (!m) continue;
+    const [, k, v] = m;
+    if (process.env[k] === undefined) {
+      // Enlève guillemets simples/doubles si présents
+      process.env[k] = v.replace(/^(['"])(.*)\1$/, "$2");
+    }
+  }
+}
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
