@@ -462,3 +462,27 @@ export async function unlinkOrganisationFromDeal(dealId: string, organisationId:
   revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true };
 }
+
+/**
+ * Server Action dédiée au kanban : déplace un dossier d'un stage à un autre.
+ * Pas de side-effect GCal (le stage ne génère pas d'événement).
+ */
+export async function updateDealStageAction(
+  dealId: string,
+  newStage: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase.from("deals")
+    .update({ deal_stage: newStage, updated_at: new Date().toISOString() })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/protected/dossiers");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true };
+}

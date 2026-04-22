@@ -342,6 +342,31 @@ export const CURRENCIES = [
 
 export type Currency = (typeof CURRENCIES)[number]["value"];
 
+// ── Deal stages (pipeline kanban) ────────────────────────────────────────────
+
+export const DEAL_STAGES = [
+  { value: "kickoff",             label: "Kickoff" },
+  { value: "preparation",         label: "Préparation" },
+  { value: "outreach",            label: "Outreach" },
+  { value: "management_meetings", label: "Mgmt meetings" },
+  { value: "dd",                  label: "Due Diligence" },
+  { value: "negotiation",         label: "Négociation" },
+  { value: "closing",             label: "Closing" },
+  { value: "post_closing",        label: "Post-closing" },
+  { value: "ongoing_support",     label: "Suivi" },
+  { value: "search",              label: "Recherche" },
+] as const;
+
+export type DealStage = (typeof DEAL_STAGES)[number]["value"];
+
+// Stages affichés par défaut dans le kanban actif.
+// post_closing, ongoing_support, search sont masqués si colonne vide
+// (cf. logique UI dans deals-kanban.tsx).
+export const DEAL_STAGES_MAIN: readonly DealStage[] = [
+  "kickoff", "preparation", "outreach", "management_meetings",
+  "dd", "negotiation", "closing",
+] as const;
+
 /**
  * Compatibilité remote poste → préférence candidat (scoring M4)
  */

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Plus, AlertTriangle, CheckSquare, CalendarDays, Activity } from "lucide-react";
+import { DealsKanban } from "./_components/deals-kanban";
 
 export const revalidate = 60;
 
@@ -147,9 +148,14 @@ async function Content() {
             {lost.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-5)", fontWeight:600 }}>{lost.length} perdu{lost.length !== 1 ? "s" : ""}</span>}
           </div>
         </div>
-        <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-          <Plus size={14}/> Nouveau dossier
-        </Link>
+        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          <Link href="/protected/dossiers?view=kanban" style={{ fontSize:12.5, padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", textDecoration:"none" }}>
+            Vue kanban
+          </Link>
+          <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+            <Plus size={14}/> Nouveau dossier
+          </Link>
+        </div>
       </div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:28, marginTop:24 }}>
@@ -293,10 +299,24 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount }: {
   );
 }
 
-export default function DossiersPage() {
+async function KanbanContent() {
+  const supabase = await createClient();
+  const { data: deals } = await supabase
+    .from("deals")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date")
+    .order("priority_level");
+  return <DealsKanban deals={deals ?? []} />;
+}
+
+export default async function DossiersPage({ searchParams }: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view } = await searchParams;
+  const isKanban = view === "kanban";
+
   return (
     <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
-      <Content/>
+      {isKanban ? <KanbanContent/> : <Content/>}
     </Suspense>
   );
 }
