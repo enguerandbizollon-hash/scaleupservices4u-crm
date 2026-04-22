@@ -306,6 +306,42 @@ export const REMOTE_OPTIONS = [
 
 export type RemoteOption = (typeof REMOTE_OPTIONS)[number]["value"];
 
+// ── Round types (Fundraising) ────────────────────────────────────────────────
+
+export const ROUND_TYPES = [
+  { value: "seed",         label: "Seed" },
+  { value: "pre-series-a", label: "Pre-Series A" },
+  { value: "series-a",     label: "Series A" },
+  { value: "series-b",     label: "Series B" },
+  { value: "growth",       label: "Growth" },
+  { value: "bridge",       label: "Bridge" },
+  { value: "convertible",  label: "Convertible" },
+] as const;
+
+export type RoundType = (typeof ROUND_TYPES)[number]["value"];
+
+// ── Deal timing (M&A) ────────────────────────────────────────────────────────
+
+export const DEAL_TIMING_OPTIONS = [
+  { value: "now",      label: "Immédiat" },
+  { value: "6months",  label: "Sous 6 mois" },
+  { value: "1year",    label: "Sous 1 an" },
+  { value: "2years+",  label: "Plus de 2 ans" },
+] as const;
+
+export type DealTiming = (typeof DEAL_TIMING_OPTIONS)[number]["value"];
+
+// ── Devises (multi-devise cabinet) ───────────────────────────────────────────
+
+export const CURRENCIES = [
+  { value: "EUR", label: "EUR (€)", symbol: "€" },
+  { value: "CHF", label: "CHF",     symbol: "CHF" },
+  { value: "USD", label: "USD ($)", symbol: "$" },
+  { value: "GBP", label: "GBP (£)", symbol: "£" },
+] as const;
+
+export type Currency = (typeof CURRENCIES)[number]["value"];
+
 /**
  * Compatibilité remote poste → préférence candidat (scoring M4)
  */

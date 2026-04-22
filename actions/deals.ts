@@ -35,7 +35,7 @@ export interface DealInput {
   post_money_valuation?: number | null;
   use_of_funds?: string | null;
   runway_months?: number | null;
-  current_investors?: string | null;
+  current_investors?: string[] | null;
   round_type?: string | null;
   // M&A Sell-side
   asking_price_min?: number | null;
