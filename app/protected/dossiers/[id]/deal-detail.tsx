@@ -22,13 +22,13 @@ import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
-import { COMPANY_STAGES, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { COMPANY_STAGES, GEOGRAPHIES, ROUND_TYPES, DEAL_TIMING_OPTIONS, SENIORITY_OPTIONS, REMOTE_OPTIONS, GEO_LABELS } from "@/lib/crm/matching-maps";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, ChevronDown, ChevronUp,
   Mail, Phone, Linkedin, Users, User, Building2, TrendingUp,
-  FileText, ExternalLink, AlertTriangle, CalendarDays
+  FileText, ExternalLink, AlertTriangle, CalendarDays, Briefcase
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 
@@ -120,14 +120,16 @@ function BtnPrimary({ onClick, loading, children }: { onClick:()=>void; loading?
 
 // ── Section header réutilisable ──────────────────────────────
 function SectionHeader({ icon:Icon, title, count, expanded, onToggle, onAdd, addLabel }:{
-  icon:any; title:string; count:number; expanded:boolean; onToggle:()=>void; onAdd?:()=>void; addLabel?:string;
+  icon:any; title:string; count?:number; expanded:boolean; onToggle:()=>void; onAdd?:()=>void; addLabel?:string;
 }) {
   return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", cursor:"pointer" }} onClick={onToggle}>
       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
         <Icon size={14} color="var(--text-4)"/>
         <span style={{ fontSize:13, fontWeight:700, color:"var(--text-2)", textTransform:"uppercase", letterSpacing:".06em" }}>{title}</span>
-        <span style={{ fontSize:11.5, background:"var(--surface-3)", color:"var(--text-4)", borderRadius:20, padding:"1px 7px", fontWeight:600 }}>{count}</span>
+        {count !== undefined && (
+          <span style={{ fontSize:11.5, background:"var(--surface-3)", color:"var(--text-4)", borderRadius:20, padding:"1px 7px", fontWeight:600 }}>{count}</span>
+        )}
       </div>
       <div style={{ display:"flex", gap:6, alignItems:"center" }}>
         {onAdd && (
@@ -324,6 +326,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [expOrg, setExpOrg] = useState<Record<string,boolean>>({});
   const [expPipeline, setExpPipeline] = useState(true);
   const [expDocs, setExpDocs] = useState(true);
+  const [expSpecs, setExpSpecs] = useState(true);
 
   // Modals
   const [modal, setModal] = useState<string|null>(null);
@@ -810,6 +813,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               )}
             </div>
 
+            {/* SPÉCIFICITÉS MISSION — dépend du deal_type, saisies au wizard */}
+            <SpecificsCard deal={deal} expanded={expSpecs} onToggle={()=>setExpSpecs(p=>!p)}/>
+
             {/* PIPELINE FINANCIER */}
             {isFundraising && (
               <div style={cardStyle}>
@@ -1164,3 +1170,285 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     </div>
   );
 }
+
+// ─── SpecificsCard — affichage read-only des champs spécifiques par deal_type ──
+// Contenu saisi via le wizard de création (V44). Read-only ici.
+// L'édition repasse aujourd'hui par /modifier (refactor à venir — wizard edit).
+
+type SpecDeal = {
+  deal_type: string;
+  currency: string | null;
+  target_amount: number | null;
+  // Fundraising
+  target_raise_amount: number | null;
+  pre_money_valuation: number | null;
+  post_money_valuation: number | null;
+  round_type: string | null;
+  runway_months: number | null;
+  use_of_funds: string | null;
+  current_investors: string[] | null;
+  // M&A Sell
+  asking_price_min: number | null;
+  asking_price_max: number | null;
+  partial_sale_ok: boolean | null;
+  management_retention: boolean | null;
+  management_retention_notes: string | null;
+  deal_timing: string | null;
+  // M&A Buy
+  target_sectors: string[] | null;
+  excluded_sectors: string[] | null;
+  target_geographies: string[] | null;
+  excluded_geographies: string[] | null;
+  target_revenue_min: number | null;
+  target_revenue_max: number | null;
+  target_ev_min: number | null;
+  target_ev_max: number | null;
+  target_stage: string | null;
+  acquisition_budget_min: number | null;
+  acquisition_budget_max: number | null;
+  full_acquisition_required: boolean | null;
+  strategic_rationale: string | null;
+  // Recruitment
+  job_title: string | null;
+  required_seniority: string | null;
+  required_location: string | null;
+  required_remote: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+};
+
+function hasAnySpec(deal: SpecDeal): boolean {
+  switch (deal.deal_type) {
+    case "fundraising":
+      return !!(deal.target_raise_amount || deal.pre_money_valuation || deal.post_money_valuation
+        || deal.round_type || deal.runway_months || deal.use_of_funds
+        || (deal.current_investors && deal.current_investors.length > 0));
+    case "ma_sell":
+      return !!(deal.target_amount || deal.asking_price_min || deal.asking_price_max
+        || deal.management_retention_notes || deal.deal_timing
+        || deal.management_retention !== null || deal.partial_sale_ok !== null);
+    case "ma_buy":
+      return !!((deal.target_sectors && deal.target_sectors.length > 0)
+        || (deal.excluded_sectors && deal.excluded_sectors.length > 0)
+        || (deal.target_geographies && deal.target_geographies.length > 0)
+        || (deal.excluded_geographies && deal.excluded_geographies.length > 0)
+        || deal.target_revenue_min || deal.target_revenue_max
+        || deal.target_ev_min || deal.target_ev_max || deal.target_stage
+        || deal.acquisition_budget_min || deal.acquisition_budget_max
+        || deal.full_acquisition_required || deal.strategic_rationale || deal.deal_timing);
+    case "recruitment":
+      return !!(deal.job_title || deal.required_seniority || deal.required_location
+        || deal.required_remote || deal.salary_min || deal.salary_max);
+    default:
+      return false;
+  }
+}
+
+function SpecificsCard({ deal, expanded, onToggle }: {
+  deal: SpecDeal; expanded: boolean; onToggle: () => void;
+}) {
+  if (!hasAnySpec(deal)) return null;
+
+  const title =
+    deal.deal_type === "fundraising" ? "Spécificités levée" :
+    deal.deal_type === "ma_sell" ? "Spécificités cession" :
+    deal.deal_type === "ma_buy" ? "Critères acquisition" :
+    deal.deal_type === "recruitment" ? "Fiche de poste" :
+    "Spécificités";
+
+  const cardStyle: React.CSSProperties = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", marginBottom:10 };
+
+  return (
+    <div style={cardStyle}>
+      <SectionHeader icon={Briefcase} title={title} expanded={expanded} onToggle={onToggle} />
+      {expanded && (
+        <div style={{ padding:"12px 16px", borderTop:"1px solid var(--border)", display:"flex", flexDirection:"column", gap:10 }}>
+          {deal.deal_type === "fundraising" && <FundraisingSpecs deal={deal} />}
+          {deal.deal_type === "ma_sell" && <MaSellSpecs deal={deal} />}
+          {deal.deal_type === "ma_buy" && <MaBuySpecs deal={deal} />}
+          {deal.deal_type === "recruitment" && <RecruitmentSpecs deal={deal} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Helpers rendu ─────────────────────────────────────────────────────────────
+
+function SpecRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"140px 1fr", gap:12, alignItems:"baseline" }}>
+      <div style={{ fontSize:11, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".04em" }}>{label}</div>
+      <div style={{ fontSize:13, color:"var(--text-1)" }}>{children}</div>
+    </div>
+  );
+}
+
+function Chips({ values }: { values: string[] }) {
+  if (!values || values.length === 0) return <span style={{ color:"var(--text-5)" }}>—</span>;
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+      {values.map(v => (
+        <span key={v} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-2)", fontWeight:500 }}>
+          {v}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function GeoChips({ values }: { values: string[] }) {
+  if (!values || values.length === 0) return <span style={{ color:"var(--text-5)" }}>—</span>;
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+      {values.map(v => (
+        <span key={v} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-2)", fontWeight:500 }}>
+          {GEO_LABELS[v] ?? v}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function rangeFmt(min: number | null, max: number | null, currency: string | null): string | null {
+  if (!min && !max) return null;
+  const c = currency ?? "EUR";
+  const fm = (n: number) => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k` : `${n}`;
+  if (min && max) return `${fm(min)} – ${fm(max)} ${c}`;
+  if (min) return `≥ ${fm(min)} ${c}`;
+  if (max) return `≤ ${fm(max)} ${c}`;
+  return null;
+}
+
+// ── Specs par type ────────────────────────────────────────────────────────────
+
+function FundraisingSpecs({ deal }: { deal: SpecDeal }) {
+  const c = deal.currency ?? "EUR";
+  const fm = (n: number) => n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c}` : `${n} ${c}`;
+  return (
+    <>
+      {deal.target_raise_amount !== null && (
+        <SpecRow label="Montant cible">{fm(deal.target_raise_amount)}</SpecRow>
+      )}
+      {deal.round_type && (
+        <SpecRow label="Type de round">{ROUND_TYPES.find(r => r.value === deal.round_type)?.label ?? deal.round_type}</SpecRow>
+      )}
+      {(deal.pre_money_valuation !== null || deal.post_money_valuation !== null) && (
+        <SpecRow label="Valorisation">
+          {deal.pre_money_valuation !== null && <span>Pre : <strong>{fm(deal.pre_money_valuation)}</strong></span>}
+          {deal.pre_money_valuation !== null && deal.post_money_valuation !== null && <span style={{ margin:"0 8px" }}>·</span>}
+          {deal.post_money_valuation !== null && <span>Post : <strong>{fm(deal.post_money_valuation)}</strong></span>}
+        </SpecRow>
+      )}
+      {deal.runway_months !== null && (
+        <SpecRow label="Runway">{deal.runway_months} mois</SpecRow>
+      )}
+      {deal.use_of_funds && (
+        <SpecRow label="Utilisation">{deal.use_of_funds}</SpecRow>
+      )}
+      {deal.current_investors && deal.current_investors.length > 0 && (
+        <SpecRow label="Investisseurs actuels"><Chips values={deal.current_investors} /></SpecRow>
+      )}
+    </>
+  );
+}
+
+function MaSellSpecs({ deal }: { deal: SpecDeal }) {
+  const c = deal.currency ?? "EUR";
+  const fm = (n: number) => n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c}` : `${n} ${c}`;
+  const askingRange = rangeFmt(deal.asking_price_min, deal.asking_price_max, deal.currency);
+  return (
+    <>
+      {deal.target_amount !== null && (
+        <SpecRow label="Valorisation cible">{fm(deal.target_amount)}</SpecRow>
+      )}
+      {askingRange && (
+        <SpecRow label="Asking price">{askingRange}</SpecRow>
+      )}
+      {deal.deal_timing && (
+        <SpecRow label="Timing">{DEAL_TIMING_OPTIONS.find(t => t.value === deal.deal_timing)?.label ?? deal.deal_timing}</SpecRow>
+      )}
+      {deal.partial_sale_ok !== null && (
+        <SpecRow label="Cession partielle">{deal.partial_sale_ok ? "Acceptée" : "Refusée"}</SpecRow>
+      )}
+      {deal.management_retention !== null && (
+        <SpecRow label="Rétention management">{deal.management_retention ? "Le management reste" : "Le management part"}</SpecRow>
+      )}
+      {deal.management_retention_notes && (
+        <SpecRow label="Conditions / earn-out">{deal.management_retention_notes}</SpecRow>
+      )}
+    </>
+  );
+}
+
+function MaBuySpecs({ deal }: { deal: SpecDeal }) {
+  const revRange = rangeFmt(deal.target_revenue_min, deal.target_revenue_max, deal.currency);
+  const evRange = rangeFmt(deal.target_ev_min, deal.target_ev_max, deal.currency);
+  const budgetRange = rangeFmt(deal.acquisition_budget_min, deal.acquisition_budget_max, deal.currency);
+  return (
+    <>
+      {deal.target_sectors && deal.target_sectors.length > 0 && (
+        <SpecRow label="Secteurs cibles"><Chips values={deal.target_sectors} /></SpecRow>
+      )}
+      {deal.excluded_sectors && deal.excluded_sectors.length > 0 && (
+        <SpecRow label="Secteurs exclus"><Chips values={deal.excluded_sectors} /></SpecRow>
+      )}
+      {deal.target_geographies && deal.target_geographies.length > 0 && (
+        <SpecRow label="Géos cibles"><GeoChips values={deal.target_geographies} /></SpecRow>
+      )}
+      {deal.excluded_geographies && deal.excluded_geographies.length > 0 && (
+        <SpecRow label="Géos exclues"><GeoChips values={deal.excluded_geographies} /></SpecRow>
+      )}
+      {revRange && (
+        <SpecRow label="Revenue cible">{revRange}</SpecRow>
+      )}
+      {evRange && (
+        <SpecRow label="EV cible">{evRange}</SpecRow>
+      )}
+      {budgetRange && (
+        <SpecRow label="Budget acquisition">{budgetRange}</SpecRow>
+      )}
+      {deal.target_stage && (
+        <SpecRow label="Stade cible">{COMPANY_STAGES.find(s => s.value === deal.target_stage)?.label ?? deal.target_stage}</SpecRow>
+      )}
+      {deal.deal_timing && (
+        <SpecRow label="Timing">{DEAL_TIMING_OPTIONS.find(t => t.value === deal.deal_timing)?.label ?? deal.deal_timing}</SpecRow>
+      )}
+      {deal.full_acquisition_required !== null && deal.full_acquisition_required && (
+        <SpecRow label="Acquisition"><strong style={{ color:"var(--rec-tx)" }}>100% requis (deal breaker)</strong></SpecRow>
+      )}
+      {deal.strategic_rationale && (
+        <SpecRow label="Rationale">{deal.strategic_rationale}</SpecRow>
+      )}
+    </>
+  );
+}
+
+function RecruitmentSpecs({ deal }: { deal: SpecDeal }) {
+  const c = deal.currency ?? "EUR";
+  const salaryRange = (() => {
+    if (!deal.salary_min && !deal.salary_max) return null;
+    if (deal.salary_min && deal.salary_max) return `${deal.salary_min.toLocaleString("fr-FR")} – ${deal.salary_max.toLocaleString("fr-FR")} ${c}`;
+    if (deal.salary_min) return `≥ ${deal.salary_min.toLocaleString("fr-FR")} ${c}`;
+    if (deal.salary_max) return `≤ ${deal.salary_max.toLocaleString("fr-FR")} ${c}`;
+    return null;
+  })();
+  return (
+    <>
+      {deal.job_title && <SpecRow label="Poste">{deal.job_title}</SpecRow>}
+      {deal.required_seniority && (
+        <SpecRow label="Séniorité">{SENIORITY_OPTIONS.find(s => s.value === deal.required_seniority)?.label ?? deal.required_seniority}</SpecRow>
+      )}
+      {deal.required_remote && (
+        <SpecRow label="Remote">{REMOTE_OPTIONS.find(r => r.value === deal.required_remote)?.label ?? deal.required_remote}</SpecRow>
+      )}
+      {deal.required_location && (
+        <SpecRow label="Localisation">{GEO_LABELS[deal.required_location] ?? deal.required_location}</SpecRow>
+      )}
+      {salaryRange && (
+        <SpecRow label="Salaire">{salaryRange}</SpecRow>
+      )}
+    </>
+  );
+}
+
