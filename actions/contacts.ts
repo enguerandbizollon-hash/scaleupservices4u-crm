@@ -196,6 +196,60 @@ export async function linkContactToOrganisation(
   return { success: true };
 }
 
+/**
+ * Retourne les organisations liées à un contact (via organization_contacts).
+ * Utilisé par ActionModal pour auto-suggérer l'ajout des orgs d'un participant.
+ */
+export async function getOrgsForContact(
+  contactId: string,
+): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("organization_contacts")
+    .select("organizations(id, name)")
+    .eq("contact_id", contactId)
+    .eq("user_id", user.id);
+
+  const orgs: { id: string; name: string }[] = [];
+  for (const row of (data ?? []) as { organizations: { id: string; name: string } | { id: string; name: string }[] | null }[]) {
+    const o = row.organizations;
+    if (!o) continue;
+    if (Array.isArray(o)) orgs.push(...o);
+    else orgs.push(o);
+  }
+  return orgs;
+}
+
+/**
+ * Retourne les contacts liés à une organisation (via organization_contacts).
+ * Utilisé par ActionModal pour auto-suggérer l'ajout de participants d'une org.
+ */
+export async function getContactsForOrg(
+  organizationId: string,
+): Promise<{ id: string; first_name: string; last_name: string; email: string | null }[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("organization_contacts")
+    .select("contacts(id, first_name, last_name, email)")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id);
+
+  const contacts: { id: string; first_name: string; last_name: string; email: string | null }[] = [];
+  for (const row of (data ?? []) as { contacts: { id: string; first_name: string; last_name: string; email: string | null } | { id: string; first_name: string; last_name: string; email: string | null }[] | null }[]) {
+    const c = row.contacts;
+    if (!c) continue;
+    if (Array.isArray(c)) contacts.push(...c);
+    else contacts.push(c);
+  }
+  return contacts;
+}
+
 export async function unlinkContactFromOrganisation(contactId: string, organisationId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { createAction, updateAction, generateMeetLinkAction, generateActionSummaryAction, type ActionRow } from "@/actions/actions";
-import { getAllContactsSimple } from "@/actions/contacts";
-import { getAllOrganisationsSimple } from "@/actions/organisations";
+import { getAllContactsSimple, getOrgsForContact, getContactsForOrg, upsertContact, linkContactToOrganisation } from "@/actions/contacts";
+import { getAllOrganisationsSimple, createOrganisationAction } from "@/actions/organisations";
 import { getAllDealsSimple } from "@/actions/deals";
 import { getAllCandidatesSimple } from "@/actions/candidates";
 
@@ -129,6 +129,29 @@ export default function ActionModal({
   const [orgOptions, setOrgOptions] = useState<OrgOption[]>([]);
   const [orgSearch, setOrgSearch] = useState("");
 
+  // Création d'organisation inline — ouvert quand la recherche ne matche rien
+  const [orgCreateOpen, setOrgCreateOpen] = useState(false);
+  const [orgCreateName, setOrgCreateName] = useState("");
+  const [orgCreateType, setOrgCreateType] = useState("other");
+  const [orgCreateWebsite, setOrgCreateWebsite] = useState("");
+  const [orgCreating, setOrgCreating] = useState(false);
+
+  // Création de contact inline — même pattern
+  const [contactCreateOpen, setContactCreateOpen] = useState(false);
+  const [contactCreateFirstName, setContactCreateFirstName] = useState("");
+  const [contactCreateLastName, setContactCreateLastName] = useState("");
+  const [contactCreateEmail, setContactCreateEmail] = useState("");
+  const [contactCreateTitle, setContactCreateTitle] = useState("");
+  const [contactCreateOrgId, setContactCreateOrgId] = useState<string>(""); // "" = pas de liaison
+  const [contactCreating, setContactCreating] = useState(false);
+
+  // Suggestions contextuelles : orgs d'un participant / contacts d'une org liée.
+  // Chargées à la demande via getOrgsForContact / getContactsForOrg.
+  const [orgSuggestForContact, setOrgSuggestForContact] = useState<Record<string, OrgOption[]>>({});
+  const [contactSuggestForOrg, setContactSuggestForOrg] = useState<Record<string, ContactOption[]>>({});
+  const [suggestOpenContact, setSuggestOpenContact] = useState<string | null>(null);
+  const [suggestOpenOrg, setSuggestOpenOrg] = useState<string | null>(null);
+
   // Meet & AI
   const [generatingMeet, setGeneratingMeet] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
@@ -193,22 +216,23 @@ export default function ActionModal({
       setCandidateId(editingAction.candidate_id || "");
       setSummaryAI(editingAction.summary_ai || null);
       // Load existing participants
-      setParticipants(
-        (editingAction.action_contacts ?? []).map(ac => ({
-          contact_id: ac.contact_id,
-          name: `${ac.contacts.first_name} ${ac.contacts.last_name}`,
-          role: ac.role ?? "",
-          attended: ac.attended,
-        }))
-      );
+      const existingParticipants = (editingAction.action_contacts ?? []).map(ac => ({
+        contact_id: ac.contact_id,
+        name: `${ac.contacts.first_name} ${ac.contacts.last_name}`,
+        role: ac.role ?? "",
+        attended: ac.attended,
+      }));
+      setParticipants(existingParticipants);
       // Load existing linked orgs
-      setLinkedOrgs(
-        (editingAction.action_organizations ?? []).map(ao => ({
-          organization_id: ao.organization_id,
-          name: ao.organizations.name,
-          role: ao.role ?? "",
-        }))
-      );
+      const existingOrgs = (editingAction.action_organizations ?? []).map(ao => ({
+        organization_id: ao.organization_id,
+        name: ao.organizations.name,
+        role: ao.role ?? "",
+      }));
+      setLinkedOrgs(existingOrgs);
+      // Précharge les suggestions pour chaque participant/org déjà présent
+      for (const p of existingParticipants) void loadOrgSuggestionsForContact(p.contact_id);
+      for (const o of existingOrgs) void loadContactSuggestionsForOrg(o.organization_id);
     } else {
       setType(defaultType || "task");
       setTitle("");
@@ -271,20 +295,146 @@ export default function ActionModal({
     if (participants.some(p => p.contact_id === c.id)) return;
     setParticipants(prev => [...prev, { contact_id: c.id, name: `${c.first_name} ${c.last_name}`, role: "", attended: true }]);
     setContactSearch("");
+    // Précharge ses orgs en arrière-plan pour le bouton "🔗 org"
+    void loadOrgSuggestionsForContact(c.id);
   }
 
   function removeParticipant(contactId: string) {
     setParticipants(prev => prev.filter(p => p.contact_id !== contactId));
+    if (suggestOpenContact === contactId) setSuggestOpenContact(null);
   }
 
   function addLinkedOrg(o: OrgOption) {
     if (linkedOrgs.some(lo => lo.organization_id === o.id)) return;
     setLinkedOrgs(prev => [...prev, { organization_id: o.id, name: o.name, role: "" }]);
     setOrgSearch("");
+    void loadContactSuggestionsForOrg(o.id);
   }
 
   function removeLinkedOrg(orgId: string) {
     setLinkedOrgs(prev => prev.filter(lo => lo.organization_id !== orgId));
+    if (suggestOpenOrg === orgId) setSuggestOpenOrg(null);
+  }
+
+  async function loadOrgSuggestionsForContact(contactId: string) {
+    if (orgSuggestForContact[contactId]) return;
+    const orgs = await getOrgsForContact(contactId);
+    setOrgSuggestForContact(prev => ({ ...prev, [contactId]: orgs }));
+  }
+
+  async function loadContactSuggestionsForOrg(orgId: string) {
+    if (contactSuggestForOrg[orgId]) return;
+    const contacts = await getContactsForOrg(orgId);
+    setContactSuggestForOrg(prev => ({ ...prev, [orgId]: contacts }));
+  }
+
+  async function createContactInline() {
+    const first = contactCreateFirstName.trim();
+    const last = contactCreateLastName.trim();
+    if (!first || !last || contactCreating) return;
+    setContactCreating(true);
+    setError("");
+    const res = await upsertContact({
+      first_name: first,
+      last_name: last,
+      email: contactCreateEmail.trim() || null,
+      title: contactCreateTitle.trim() || null,
+      phone: null,
+      sector: null,
+      linkedin_url: null,
+      base_status: "to_qualify",
+    });
+    if (!res.success) {
+      setContactCreating(false);
+      setError(res.error);
+      return;
+    }
+    // Liaison org si demandée (soit org existante sélectionnée, soit via linkedOrgs)
+    if (contactCreateOrgId) {
+      const linkRes = await linkContactToOrganisation(res.id, contactCreateOrgId);
+      if (!linkRes.success) {
+        setContactCreating(false);
+        setError(linkRes.error ?? "Erreur liaison organisation");
+        return;
+      }
+      // Ajouter l'org aux linkedOrgs si pas déjà présente
+      const org = orgOptions.find(o => o.id === contactCreateOrgId);
+      if (org && !linkedOrgs.some(lo => lo.organization_id === org.id)) {
+        setLinkedOrgs(prev => [...prev, { organization_id: org.id, name: org.name, role: "" }]);
+        void loadContactSuggestionsForOrg(org.id);
+      }
+      // Mettre à jour les suggestions pour que le nouveau contact remonte sur l'org
+      setContactSuggestForOrg(prev => {
+        const existing = prev[contactCreateOrgId] ?? [];
+        const newContact: ContactOption = {
+          id: res.id, first_name: first, last_name: last,
+          email: contactCreateEmail.trim() || null,
+        };
+        return { ...prev, [contactCreateOrgId]: [...existing, newContact] };
+      });
+    }
+    setContactCreating(false);
+    const newContact: ContactOption = {
+      id: res.id, first_name: first, last_name: last,
+      email: contactCreateEmail.trim() || null,
+    };
+    setContactOptions(prev => [...prev, newContact]);
+    addParticipant(newContact);
+    setContactCreateOpen(false);
+    setContactCreateFirstName("");
+    setContactCreateLastName("");
+    setContactCreateEmail("");
+    setContactCreateTitle("");
+    setContactCreateOrgId("");
+    setContactSearch("");
+  }
+
+  async function createOrgInline() {
+    const name = orgCreateName.trim();
+    if (!name || orgCreating) return;
+    setOrgCreating(true);
+    const res = await createOrganisationAction({
+      name,
+      organization_type: orgCreateType,
+      base_status: "to_qualify",
+      location: null,
+      website: orgCreateWebsite.trim() || null,
+      linkedin_url: null,
+      description: null,
+      notes: null,
+      investor_ticket_min: null,
+      investor_ticket_max: null,
+      investor_sectors: [],
+      investor_stages: [],
+      investor_geographies: [],
+      investor_thesis: null,
+      sector: null,
+      founded_year: null,
+      employee_count: null,
+      company_stage: null,
+      revenue_range: null,
+      sale_readiness: null,
+      partial_sale_ok: true,
+      acquisition_rationale: null,
+      target_sectors: [],
+      excluded_sectors: [],
+      target_geographies: [],
+      target_revenue_min: null,
+      target_revenue_max: null,
+    });
+    setOrgCreating(false);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    const newOrg: OrgOption = { id: res.id, name };
+    setOrgOptions(prev => [...prev, newOrg]);
+    setLinkedOrgs(prev => [...prev, { organization_id: res.id, name, role: "" }]);
+    setOrgCreateOpen(false);
+    setOrgCreateName("");
+    setOrgCreateType("other");
+    setOrgCreateWebsite("");
+    setOrgSearch("");
   }
 
   async function handleGenerateMeet() {
@@ -808,31 +958,57 @@ export default function ActionModal({
             {showParticipants && (
               <div style={mb14}>
                 <label style={lbl}>Participants</label>
-                {participants.map(p => (
-                  <div key={p.contact_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={chipStyle}>{p.name}</span>
-                    <input type="text" placeholder="Role (vendeur, avocat...)" value={p.role}
-                      onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, role: e.target.value } : pp))}
-                      style={{ ...inp, width: 150, padding: "4px 8px", fontSize: 12 }} />
-                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--text-4)", cursor: "pointer" }}>
-                      <input type="checkbox" checked={p.attended}
-                        onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, attended: e.target.checked } : pp))}
-                        style={{ accentColor: "var(--su-500)" }} />
-                      Present
-                    </label>
-                    <button type="button" onClick={() => removeParticipant(p.contact_id)}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
-                      ×
-                    </button>
-                  </div>
-                ))}
+                {participants.map(p => {
+                  const availableOrgs = (orgSuggestForContact[p.contact_id] ?? [])
+                    .filter(o => !linkedOrgs.some(lo => lo.organization_id === o.id));
+                  const showSuggest = suggestOpenContact === p.contact_id && availableOrgs.length > 0;
+                  return (
+                    <div key={p.contact_id} style={{ marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={chipStyle}>{p.name}</span>
+                        <input type="text" placeholder="Role (vendeur, avocat...)" value={p.role}
+                          onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, role: e.target.value } : pp))}
+                          style={{ ...inp, width: 150, padding: "4px 8px", fontSize: 12 }} />
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--text-4)", cursor: "pointer" }}>
+                          <input type="checkbox" checked={p.attended}
+                            onChange={e => setParticipants(prev => prev.map(pp => pp.contact_id === p.contact_id ? { ...pp, attended: e.target.checked } : pp))}
+                            style={{ accentColor: "var(--su-500)" }} />
+                          Present
+                        </label>
+                        {availableOrgs.length > 0 && (
+                          <button type="button"
+                            onClick={() => setSuggestOpenContact(prev => prev === p.contact_id ? null : p.contact_id)}
+                            title="Ajouter une organisation liée à ce contact"
+                            style={{ padding: "3px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: showSuggest ? "var(--surface-3)" : "var(--surface-2)", color: "var(--text-3)", cursor: "pointer", fontFamily: "inherit" }}>
+                            + org ({availableOrgs.length})
+                          </button>
+                        )}
+                        <button type="button" onClick={() => removeParticipant(p.contact_id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
+                          ×
+                        </button>
+                      </div>
+                      {showSuggest && (
+                        <div style={{ marginTop: 5, marginLeft: 16, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          {availableOrgs.map(o => (
+                            <button key={o.id} type="button"
+                              onClick={() => { addLinkedOrg(o); setSuggestOpenContact(null); }}
+                              style={{ padding: "3px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", color: "var(--text-2)", cursor: "pointer", fontFamily: "inherit" }}>
+                              + {o.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 <div style={{ position: "relative" }}>
                   <input type="text" value={contactSearch} onChange={e => setContactSearch(e.target.value)}
                     placeholder="+ Ajouter un participant..." style={{ ...inp, fontSize: 12.5 }} />
-                  {filteredContacts.length > 0 && (
+                  {contactSearch.trim().length >= 2 && (
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
                       background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-                      maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
+                      maxHeight: 260, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
                       {filteredContacts.map(c => (
                         <button key={c.id} type="button" onClick={() => addParticipant(c)}
                           style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
@@ -843,34 +1019,145 @@ export default function ActionModal({
                           {c.first_name} {c.last_name}{c.email ? ` — ${c.email}` : ""}
                         </button>
                       ))}
+                      {/* Bouton Créer toujours affiché (même si des contacts matchent) */}
+                      <div style={{ padding: "8px 12px", borderTop: filteredContacts.length > 0 ? "1px solid var(--border)" : "none", background: "var(--surface-2)" }}>
+                        {filteredContacts.length === 0 && (
+                          <div style={{ fontSize: 12.5, color: "var(--text-5)", marginBottom: 6 }}>
+                            Aucun contact trouvé pour &quot;{contactSearch}&quot;
+                          </div>
+                        )}
+                        <button type="button" onClick={() => {
+                          const parts = contactSearch.trim().split(/\s+/);
+                          const firstGuess = parts[0] ?? "";
+                          const lastGuess = parts.slice(1).join(" ");
+                          setContactCreateOpen(true);
+                          setContactCreateFirstName(firstGuess);
+                          setContactCreateLastName(lastGuess);
+                          setContactCreateEmail("");
+                          setContactCreateTitle("");
+                          // Préremplir l'org si une seule org est déjà liée
+                          setContactCreateOrgId(linkedOrgs.length === 1 ? linkedOrgs[0].organization_id : "");
+                        }} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 12px", border: "1px solid var(--border)", borderRadius: 7, background: "var(--surface)", color: "var(--su-500, #1a56db)", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                          + Créer un nouveau contact{contactSearch.trim() ? ` "${contactSearch}"` : ""}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
+                {contactCreateOpen && (
+                  <div style={{ marginTop: 8, border: "1px solid var(--border)", borderRadius: 8, padding: 12, background: "var(--surface-2)" }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-2)", marginBottom: 8 }}>Nouveau contact</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>PRÉNOM *</label>
+                        <input value={contactCreateFirstName} onChange={e => setContactCreateFirstName(e.target.value)}
+                          style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>NOM *</label>
+                        <input value={contactCreateLastName} onChange={e => setContactCreateLastName(e.target.value)}
+                          style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>EMAIL</label>
+                        <input type="email" value={contactCreateEmail} onChange={e => setContactCreateEmail(e.target.value)} placeholder="optionnel"
+                          style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>FONCTION</label>
+                        <input value={contactCreateTitle} onChange={e => setContactCreateTitle(e.target.value)} placeholder="optionnel"
+                          style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }} />
+                      </div>
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>ORGANISATION (lier directement)</label>
+                        <select value={contactCreateOrgId} onChange={e => setContactCreateOrgId(e.target.value)}
+                          style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }}>
+                          <option value="">— Aucune liaison —</option>
+                          {linkedOrgs.length > 0 && (
+                            <optgroup label="Organisations de cette action">
+                              {linkedOrgs.map(lo => (
+                                <option key={lo.organization_id} value={lo.organization_id}>{lo.name}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label="Toutes les organisations">
+                            {orgOptions
+                              .filter(o => !linkedOrgs.some(lo => lo.organization_id === o.id))
+                              .map(o => (
+                                <option key={o.id} value={o.id}>{o.name}</option>
+                              ))}
+                          </optgroup>
+                        </select>
+                        {contactCreateOrgId && !linkedOrgs.some(lo => lo.organization_id === contactCreateOrgId) && (
+                          <div style={{ fontSize: 11, color: "var(--text-5)", marginTop: 3 }}>
+                            L&apos;organisation sera aussi liée à cette action.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <button type="button" onClick={() => { setContactCreateOpen(false); setContactCreateFirstName(""); setContactCreateLastName(""); setContactCreateEmail(""); setContactCreateTitle(""); setContactCreateOrgId(""); }}
+                        style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 12, color: "var(--text-3)", fontFamily: "inherit" }}>
+                        Annuler
+                      </button>
+                      <button type="button" disabled={!contactCreateFirstName.trim() || !contactCreateLastName.trim() || contactCreating} onClick={createContactInline}
+                        style={{ padding: "5px 12px", borderRadius: 7, border: "none", background: "var(--su-500, #1a56db)", color: "#fff", cursor: (!contactCreateFirstName.trim() || !contactCreateLastName.trim() || contactCreating) ? "default" : "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", opacity: contactCreating ? 0.6 : 1 }}>
+                        {contactCreating ? "..." : "Créer et ajouter"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Organisations liées */}
             <div style={mb14}>
               <label style={lbl}>Organisations liees</label>
-              {linkedOrgs.map(o => (
-                <div key={o.organization_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span style={chipStyle}>{o.name}</span>
-                  <input type="text" placeholder="Role (banque, acquéreur...)" value={o.role}
-                    onChange={e => setLinkedOrgs(prev => prev.map(oo => oo.organization_id === o.organization_id ? { ...oo, role: e.target.value } : oo))}
-                    style={{ ...inp, width: 160, padding: "4px 8px", fontSize: 12 }} />
-                  <button type="button" onClick={() => removeLinkedOrg(o.organization_id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
-                    ×
-                  </button>
-                </div>
-              ))}
+              {linkedOrgs.map(o => {
+                const availableContacts = (contactSuggestForOrg[o.organization_id] ?? [])
+                  .filter(c => !participants.some(p => p.contact_id === c.id));
+                const showSuggest = suggestOpenOrg === o.organization_id && availableContacts.length > 0;
+                return (
+                  <div key={o.organization_id} style={{ marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={chipStyle}>{o.name}</span>
+                      <input type="text" placeholder="Role (banque, acquéreur...)" value={o.role}
+                        onChange={e => setLinkedOrgs(prev => prev.map(oo => oo.organization_id === o.organization_id ? { ...oo, role: e.target.value } : oo))}
+                        style={{ ...inp, width: 160, padding: "4px 8px", fontSize: 12 }} />
+                      {availableContacts.length > 0 && (
+                        <button type="button"
+                          onClick={() => setSuggestOpenOrg(prev => prev === o.organization_id ? null : o.organization_id)}
+                          title="Ajouter des contacts de cette organisation"
+                          style={{ padding: "3px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: showSuggest ? "var(--surface-3)" : "var(--surface-2)", color: "var(--text-3)", cursor: "pointer", fontFamily: "inherit" }}>
+                          + contacts ({availableContacts.length})
+                        </button>
+                      )}
+                      <button type="button" onClick={() => removeLinkedOrg(o.organization_id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14 }}>
+                        ×
+                      </button>
+                    </div>
+                    {showSuggest && (
+                      <div style={{ marginTop: 5, marginLeft: 16, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {availableContacts.map(c => (
+                          <button key={c.id} type="button"
+                            onClick={() => { addParticipant(c); setSuggestOpenOrg(null); }}
+                            style={{ padding: "3px 8px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", color: "var(--text-2)", cursor: "pointer", fontFamily: "inherit" }}>
+                            + {c.first_name} {c.last_name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <div style={{ position: "relative" }}>
                 <input type="text" value={orgSearch} onChange={e => setOrgSearch(e.target.value)}
                   placeholder="+ Ajouter une organisation..." style={{ ...inp, fontSize: 12.5 }} />
-                {filteredOrgs.length > 0 && (
+                {orgSearch.trim().length >= 2 && (
                   <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
                     background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-                    maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
+                    maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
                     {filteredOrgs.map(o => (
                       <button key={o.id} type="button" onClick={() => addLinkedOrg(o)}
                         style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
@@ -881,9 +1168,68 @@ export default function ActionModal({
                         {o.name}
                       </button>
                     ))}
+                    {filteredOrgs.length === 0 && (
+                      <div style={{ padding: "10px 12px" }}>
+                        <div style={{ fontSize: 12.5, color: "var(--text-5)", marginBottom: 6 }}>
+                          Aucun résultat pour &quot;{orgSearch}&quot;
+                        </div>
+                        <button type="button" onClick={() => {
+                          setOrgCreateOpen(true);
+                          setOrgCreateName(orgSearch);
+                          setOrgCreateType("other");
+                          setOrgCreateWebsite("");
+                        }} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 12px", border: "1px solid var(--border)", borderRadius: 7, background: "var(--surface-2)", color: "var(--su-500, #1a56db)", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                          + Créer &quot;{orgSearch}&quot;
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+              {orgCreateOpen && (
+                <div style={{ marginTop: 8, border: "1px solid var(--border)", borderRadius: 8, padding: 12, background: "var(--surface-2)" }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-2)", marginBottom: 8 }}>Nouvelle organisation</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>NOM *</label>
+                      <input value={orgCreateName} onChange={e => setOrgCreateName(e.target.value)}
+                        style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>TYPE *</label>
+                      <select value={orgCreateType} onChange={e => setOrgCreateType(e.target.value)}
+                        style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }}>
+                        <option value="investor">Investisseur</option>
+                        <option value="business_angel">Business Angel</option>
+                        <option value="family_office">Family Office</option>
+                        <option value="corporate">Corporate / CVC</option>
+                        <option value="bank">Banque</option>
+                        <option value="client">Client</option>
+                        <option value="buyer">Repreneur</option>
+                        <option value="law_firm">Cabinet juridique</option>
+                        <option value="accounting_firm">Cabinet comptable</option>
+                        <option value="consulting_firm">Conseil</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>SITE WEB</label>
+                      <input value={orgCreateWebsite} onChange={e => setOrgCreateWebsite(e.target.value)} placeholder="https://..."
+                        style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <button type="button" onClick={() => { setOrgCreateOpen(false); setOrgCreateName(""); }}
+                      style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 12, color: "var(--text-3)", fontFamily: "inherit" }}>
+                      Annuler
+                    </button>
+                    <button type="button" disabled={!orgCreateName.trim() || orgCreating} onClick={createOrgInline}
+                      style={{ padding: "5px 12px", borderRadius: 7, border: "none", background: "var(--su-500, #1a56db)", color: "#fff", cursor: (!orgCreateName.trim() || orgCreating) ? "default" : "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", opacity: orgCreating ? 0.6 : 1 }}>
+                      {orgCreating ? "..." : "Créer et lier"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Lien / Document */}

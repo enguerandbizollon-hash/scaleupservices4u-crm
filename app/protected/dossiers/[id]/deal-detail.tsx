@@ -578,8 +578,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           />
         )}
 
-        {/* Layout 2 colonnes */}
-        {((!isFundraising && !isRecruitment) || activeTab === "dossier") && activeTab !== "mandat" && (
+        {/* Layout 2 colonnes — strictement sur l'onglet Dossier pour tous les types.
+            Les autres onglets (Mandat, Matching*, Pipeline RH, Financier) sont
+            full-width autonomes, sans sidebar Dirigeant/Orgs/Actions/Docs. */}
+        {activeTab === "dossier" && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
 
           {/* ── Colonne gauche ── */}
