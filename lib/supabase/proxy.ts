@@ -13,6 +13,13 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // Routes cron Vercel : auth propre par Bearer CRON_SECRET dans la route
+  // elle-même. Ne pas passer par la session Supabase (la requête vient de
+  // Vercel Cron, pas d'un navigateur connecté).
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) {
+    return supabaseResponse;
+  }
+
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
   const supabase = createServerClient(

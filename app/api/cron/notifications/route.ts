@@ -1,0 +1,111 @@
+// Cron horaire Vercel : génère les notifications de rappel d'actions.
+//
+// Déclencheur : vercel.json → "schedule": "0 * * * *"
+// Authentification : header Authorization: Bearer <CRON_SECRET>
+// Vercel Cron injecte automatiquement ce header si CRON_SECRET est défini.
+//
+// Principe :
+//   Pour chaque action avec status='open', due_date NOT NULL,
+//   reminder_days NOT NULL :
+//     Si (due_date - today) ∈ reminder_days → enqueueNotification().
+//   L'upsert avec ignoreDuplicates + contrainte unique garantit qu'un
+//   passage répété du cron ne crée pas de doublon.
+
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { enqueueNotification } from "@/lib/crm/notifications";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface ActionForReminder {
+  id: string;
+  user_id: string;
+  title: string;
+  type: string;
+  due_date: string;
+  reminder_days: number[];
+  deal_id: string | null;
+  candidate_id: string | null;
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysBetween(fromISO: string, toISO: string): number {
+  const from = new Date(fromISO + "T00:00:00Z").getTime();
+  const to = new Date(toISO + "T00:00:00Z").getTime();
+  return Math.round((to - from) / 86_400_000);
+}
+
+function buildLink(a: ActionForReminder): string | null {
+  if (a.deal_id) return `/protected/dossiers/${a.deal_id}#action-${a.id}`;
+  if (a.candidate_id) return `/protected/candidats/${a.candidate_id}`;
+  return null;
+}
+
+function buildBody(daysUntilDue: number, dueDate: string): string {
+  if (daysUntilDue === 0) return `À faire aujourd'hui (${dueDate}).`;
+  if (daysUntilDue === 1) return `À faire demain (${dueDate}).`;
+  if (daysUntilDue > 0) return `À faire dans ${daysUntilDue} jours (${dueDate}).`;
+  return `En retard de ${Math.abs(daysUntilDue)} jour(s) (${dueDate}).`;
+}
+
+export async function GET(req: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: "CRON_SECRET not set" }, { status: 500 });
+  }
+  const auth = req.headers.get("authorization") ?? "";
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createAdminClient();
+  const today = todayISO();
+
+  const { data, error } = await supabase
+    .from("actions")
+    .select("id, user_id, title, type, due_date, reminder_days, deal_id, candidate_id")
+    .eq("status", "open")
+    .not("due_date", "is", null)
+    .not("reminder_days", "is", null);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const actions = (data ?? []) as ActionForReminder[];
+  let scanned = 0;
+  let queued = 0;
+  const errors: string[] = [];
+
+  for (const a of actions) {
+    scanned++;
+    if (!a.reminder_days || a.reminder_days.length === 0) continue;
+    const delta = daysBetween(today, a.due_date);
+    if (!a.reminder_days.includes(delta)) continue;
+
+    const res = await enqueueNotification(supabase, {
+      user_id: a.user_id,
+      kind: "action_reminder",
+      title: `Rappel : ${a.title}`,
+      body: buildBody(delta, a.due_date),
+      link_url: buildLink(a),
+      source_type: "action",
+      source_id: a.id,
+      trigger_date: today,
+    });
+    if (res.error) errors.push(`${a.id}: ${res.error}`);
+    else queued++;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    scanned,
+    queued,
+    errors: errors.slice(0, 10),
+    today,
+  });
+}

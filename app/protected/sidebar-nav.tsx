@@ -1,5 +1,6 @@
 "use client";
 import { GlobalSearch } from "./components/global-search";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, UserSearch, FileCheck, BarChart2, CalendarDays } from "lucide-react";
@@ -24,6 +25,9 @@ export function SidebarNav() {
     <>
       {/* Recherche globale */}
       <div style={{ padding:"0 10px 8px 10px" }}><GlobalSearch/></div>
+
+      {/* Notifications */}
+      <NotificationBell/>
 
       <nav style={{ flex:1, overflowY:"auto", padding:"4px 10px" }}>
         <div style={{ fontSize:9, fontWeight:800, letterSpacing:".14em", color:"rgba(255,255,255,.2)", padding:"0 8px 10px", textTransform:"uppercase" }}>Navigation</div>
