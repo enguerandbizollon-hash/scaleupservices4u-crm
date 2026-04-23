@@ -90,4 +90,5 @@ export interface UpdateDocumentMetaInput {
   document_status?: DocumentStatus;
   is_confidential?: boolean;
   fiscal_year?: number | null;
+  file_name?: string;
 }

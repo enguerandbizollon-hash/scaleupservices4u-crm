@@ -190,6 +190,12 @@ export function DocumentsTab({ dealId, dealName }: Props) {
     await loadDocs();
   }
 
+  async function handleRename(docId: string, newName: string) {
+    const res = await updateDealDocumentMeta({ doc_id: docId, file_name: newName });
+    if (!res.success) { setError(res.error); return; }
+    await loadDocs();
+  }
+
   // ── Groupement par catégorie ──────────────────────────────────────────────
   const { entreprise, operation } = useMemo(() => {
     const e: DealDocumentRow[] = [];
@@ -271,6 +277,7 @@ export function DocumentsTab({ dealId, dealName }: Props) {
             onUpdateType={handleUpdateType}
             onUpdateStatus={handleUpdateStatus}
             onToggleConfidential={handleToggleConfidential}
+            onRename={handleRename}
           />
           <CategorySection title={CATEGORY_LABELS.operation} docs={operation}
             onDownload={handleDownload} onDelete={handleDelete}
@@ -278,6 +285,7 @@ export function DocumentsTab({ dealId, dealName }: Props) {
             onUpdateType={handleUpdateType}
             onUpdateStatus={handleUpdateStatus}
             onToggleConfidential={handleToggleConfidential}
+            onRename={handleRename}
           />
         </>
       )}
@@ -288,7 +296,7 @@ export function DocumentsTab({ dealId, dealName }: Props) {
 // ── Sous-composant : section par catégorie ─────────────────────────────────
 
 function CategorySection({
-  title, docs, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential,
+  title, docs, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential, onRename,
 }: {
   title: string;
   docs: DealDocumentRow[];
@@ -298,6 +306,7 @@ function CategorySection({
   onUpdateType: (id: string, newType: DocumentType) => void;
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
   onToggleConfidential: (id: string, current: boolean) => void;
+  onRename: (id: string, newName: string) => void;
 }) {
   return (
     <div style={{ marginBottom: 24 }}>
@@ -315,6 +324,7 @@ function CategorySection({
               onDownload={onDownload} onDelete={onDelete} onReplace={onReplace}
               onUpdateType={onUpdateType} onUpdateStatus={onUpdateStatus}
               onToggleConfidential={onToggleConfidential}
+              onRename={onRename}
             />
           ))}
         </div>
@@ -326,7 +336,7 @@ function CategorySection({
 // ── Sous-composant : ligne document ─────────────────────────────────────────
 
 function DocRow({
-  doc, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential,
+  doc, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential, onRename,
 }: {
   doc: DealDocumentRow;
   onDownload: (path: string | null) => void;
@@ -335,11 +345,23 @@ function DocRow({
   onUpdateType: (id: string, newType: DocumentType) => void;
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
   onToggleConfidential: (id: string, current: boolean) => void;
+  onRename: (id: string, newName: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const typeLabel = doc.document_type
-    ? (DOCUMENT_TYPE_LABELS[doc.document_type as DocumentType] ?? doc.document_type)
-    : "—";
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(doc.file_name ?? "");
+
+  function commitRename() {
+    const trimmed = draftName.trim();
+    if (trimmed.length > 0 && trimmed !== doc.file_name) {
+      onRename(doc.id, trimmed);
+    }
+    setRenaming(false);
+  }
+
+  function cancelRename() {
+    setDraftName(doc.file_name ?? "");
+    setRenaming(false);
+  }
 
   return (
     <div style={{
@@ -349,26 +371,41 @@ function DocRow({
     }}>
       <FileText size={16} color="var(--text-4)" />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {doc.file_name ?? "Sans nom"}
-          {doc.current_version_number > 1 && (
-            <span style={{ marginLeft: 6, fontSize: 10.5, padding: "1px 6px", borderRadius: 4, background: "var(--surface-3)", color: "var(--text-5)", fontWeight: 600 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)", display: "flex", alignItems: "center", gap: 6 }}>
+          {renaming ? (
+            <input
+              type="text"
+              autoFocus
+              value={draftName}
+              onChange={e => setDraftName(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={e => {
+                if (e.key === "Enter") commitRename();
+                else if (e.key === "Escape") cancelRename();
+              }}
+              style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, padding: "3px 6px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", color: "var(--text-1)", fontFamily: "inherit", outline: "none" }}
+            />
+          ) : (
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {doc.file_name ?? "Sans nom"}
+            </span>
+          )}
+          {doc.current_version_number > 1 && !renaming && (
+            <span style={{ fontSize: 10.5, padding: "1px 6px", borderRadius: 4, background: "var(--surface-3)", color: "var(--text-5)", fontWeight: 600, flexShrink: 0 }}>
               v{doc.current_version_number}
             </span>
           )}
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 1, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {editing ? (
-            <select value={doc.document_type ?? ""} onChange={e => { onUpdateType(doc.id, e.target.value as DocumentType); setEditing(false); }}
-              style={{ fontSize: 11, padding: "1px 4px", border: "1px solid var(--border)", borderRadius: 4, fontFamily: "inherit" }}>
-              {DOCUMENT_TYPES.map(t => <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>)}
-            </select>
-          ) : (
-            <span>{typeLabel}</span>
-          )}
+        <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={doc.document_type ?? "autre"} onChange={e => onUpdateType(doc.id, e.target.value as DocumentType)}
+            title="Type de document"
+            style={{ fontSize: 11, padding: "1px 4px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "pointer" }}>
+            {DOCUMENT_TYPES.map(t => <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>)}
+          </select>
           <span>·</span>
           <select value={doc.document_status ?? "final"} onChange={e => onUpdateStatus(doc.id, e.target.value as DocumentStatus)}
-            style={{ fontSize: 11, padding: "0 2px", border: "none", background: "transparent", color: "var(--text-4)", fontFamily: "inherit", cursor: "pointer" }}>
+            title="Statut"
+            style={{ fontSize: 11, padding: "1px 4px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "pointer" }}>
             <option value="draft">{STATUS_LABELS.draft}</option>
             <option value="review">{STATUS_LABELS.review}</option>
             <option value="final">{STATUS_LABELS.final}</option>
@@ -385,7 +422,8 @@ function DocRow({
           style={{ padding: 4, border: "1px solid var(--border)", borderRadius: 6, background: doc.is_confidential ? "var(--surface-2)" : "#D1FAE5", color: doc.is_confidential ? "var(--text-5)" : "#065F46", cursor: "pointer", display: "flex", alignItems: "center" }}>
           {doc.is_confidential ? <EyeOff size={12} /> : <Eye size={12} />}
         </button>
-        <button type="button" onClick={() => setEditing(e => !e)} title="Modifier le type"
+        <button type="button" onClick={() => { setDraftName(doc.file_name ?? ""); setRenaming(true); }}
+          title="Renommer"
           style={{ padding: 4, border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", color: "var(--text-5)", cursor: "pointer", display: "flex", alignItems: "center" }}>
           <Pencil size={12} />
         </button>

@@ -169,6 +169,11 @@ export async function updateDealDocumentMeta(
   if (input.document_status !== undefined) patch.document_status = input.document_status;
   if (input.is_confidential !== undefined) patch.is_confidential = input.is_confidential;
   if (input.fiscal_year !== undefined) patch.fiscal_year = input.fiscal_year;
+  if (input.file_name !== undefined) {
+    const trimmed = input.file_name.trim();
+    if (trimmed.length === 0) return { success: false, error: "Le nom ne peut pas être vide" };
+    patch.file_name = trimmed;
+  }
 
   const { data: doc, error } = await supabase
     .from("ma_documents")
