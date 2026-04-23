@@ -1,6 +1,11 @@
 "use client";
 import { useState, useRef } from "react";
-import { Upload, AlertTriangle, Check, X } from "lucide-react";
+import { Upload, AlertTriangle, Check, X, Download } from "lucide-react";
+import {
+  generateFinancialTemplate,
+  parseFinancialTemplate,
+  type TemplateParsedRow,
+} from "@/lib/import/financial-template";
 
 // Tous les noms de champs BDD valides (priorité 1 : exact match sur le nom BDD)
 const DB_FIELDS = new Set([
@@ -65,13 +70,10 @@ const ALIAS_MAP: Record<string, string> = {
 /** Résout un header CSV vers un champ BDD. Priorité : exact BDD name → alias → null */
 function resolveHeader(header: string): string | null {
   const lower = header.toLowerCase().trim();
-  // Priorité 1 : correspondance exacte sur le nom de champ BDD
   if (DB_FIELDS.has(lower)) return lower;
-  // Priorité 2 : alias manuels (insensible casse + accents)
   if (ALIAS_MAP[lower]) return ALIAS_MAP[lower];
-  const normalized = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\-]/g, " ");
+  const normalized = lower.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[_\-]/g, " ");
   if (ALIAS_MAP[normalized]) return ALIAS_MAP[normalized];
-  // Meta spéciaux
   if (lower === "type") return "_type";
   return null;
 }
@@ -87,25 +89,74 @@ interface FinancialImportProps {
 export function FinancialImport({ dealId, organizationId, onImported }: FinancialImportProps) {
   const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
   const [rows, setRows] = useState<MappedRow[]>([]);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [ignored, setIgnored] = useState<string[]>([]);
+  const [fields, setFields] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [sourceLabel, setSourceLabel] = useState<string>("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Téléchargement du modèle ──────────────────────────────────────────────
+  async function handleDownloadTemplate() {
+    const currentYear = new Date().getFullYear();
+    const years = [currentYear - 2, currentYear - 1, currentYear];
+    const bytes = await generateFinancialTemplate({ years });
+    const blob = new Blob([new Uint8Array(bytes)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `modele-financier-${years.join("-")}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Lecture du fichier ────────────────────────────────────────────────────
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const XLSX = (await import("xlsx")).default ?? await import("xlsx");
     const buf = await file.arrayBuffer();
+    const isXlsx = /\.xlsx?$/i.test(file.name);
+
+    // Tentative parser template multi-onglets en priorité sur xlsx
+    if (isXlsx) {
+      const tpl = await parseFinancialTemplate(buf);
+      if (tpl.recognized && tpl.rows.length > 0) {
+        applyTemplateResult(tpl.rows, tpl.warnings);
+        return;
+      }
+    }
+
+    // Fallback : parser flat (CSV / xlsx simple)
+    await parseFlat(buf, file.name);
+  }
+
+  function applyTemplateResult(parsed: TemplateParsedRow[], warn: string[]) {
+    const allFields = new Set<string>();
+    const mapped: MappedRow[] = parsed.map(p => {
+      const row: MappedRow = { fiscal_year: p.fiscal_year };
+      for (const [f, v] of Object.entries(p.fields)) {
+        row[f] = v;
+        allFields.add(f);
+      }
+      return row;
+    });
+    setFields(["fiscal_year", ...allFields]);
+    setRows(mapped);
+    setWarnings(warn);
+    setSourceLabel(`Modèle ScaleUp — ${parsed.length} exercice${parsed.length > 1 ? "s" : ""} détecté${parsed.length > 1 ? "s" : ""}`);
+    setStep("preview");
+  }
+
+  async function parseFlat(buf: ArrayBuffer, fileName: string) {
+    const XLSX = (await import("xlsx")).default ?? await import("xlsx");
     const wb = XLSX.read(buf, { type: "array" });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const raw: Record<string, string>[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
     if (raw.length === 0) return;
 
-    // Map headers — priorité : exact BDD name → alias → ignoré
     const headers = Object.keys(raw[0]);
     const map: Record<string, string> = {};
     const ign: string[] = [];
@@ -115,14 +166,11 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
       if (resolved && !usedFields.has(resolved)) {
         map[h] = resolved;
         usedFields.add(resolved);
-      } else if (resolved) {
-        ign.push(h); // Doublon : même champ déjà mappé
       } else {
         ign.push(h);
       }
     }
 
-    // Parse rows
     const parsed: MappedRow[] = raw.map(r => {
       const row: MappedRow = {};
       for (const [header, field] of Object.entries(map)) {
@@ -134,28 +182,29 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
           row[field] = isNaN(n) ? null : n;
         }
       }
-      // Detect year from filename if not in data
       if (!row.fiscal_year) {
-        const yearMatch = file.name.match(/20\d{2}/);
+        const yearMatch = fileName.match(/20\d{2}/);
         if (yearMatch) row.fiscal_year = yearMatch[0];
       }
-      // Detect forecast
       const typeVal = String(row._type ?? "").toLowerCase();
       row._is_forecast = (typeVal.includes("prévision") || typeVal.includes("budget") || typeVal.includes("forecast")) ? "true" : "false";
       return row;
     });
 
-    setMapping(map);
-    setIgnored(ign);
+    const detectedFields = [...new Set(Object.values(map))].filter(f => !f.startsWith("_"));
+    setFields(detectedFields);
     setRows(parsed);
+    setWarnings(ign.length > 0 ? [`Colonnes ignorées : ${ign.join(", ")}`] : []);
+    setSourceLabel(`Fichier flat — ${parsed.length} ligne${parsed.length > 1 ? "s" : ""}`);
     setStep("preview");
   }
 
+  // ── Import ────────────────────────────────────────────────────────────────
   async function handleImport() {
     setImporting(true);
     const { upsertFinancialData } = await import("@/actions/financial-data");
     const errors: string[] = [];
-    let created = 0, updated = 0;
+    let updated = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
@@ -169,12 +218,12 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
           fiscal_year: year,
           currency: String(r.currency || "EUR"),
           is_forecast: r._is_forecast === "true",
-          source: "csv",
+          source: "excel",
         };
 
-        for (const [, field] of Object.entries(mapping)) {
-          if (field.startsWith("_") || field === "fiscal_year" || field === "currency") continue;
-          if (r[field] != null) payload[field] = r[field];
+        for (const f of fields) {
+          if (f.startsWith("_") || f === "fiscal_year" || f === "currency") continue;
+          if (r[f] != null) payload[f] = r[f];
         }
 
         await upsertFinancialData(payload as unknown as Parameters<typeof upsertFinancialData>[0]);
@@ -184,7 +233,7 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
       }
     }
 
-    setResult({ created, updated, errors });
+    setResult({ created: 0, updated, errors });
     setStep("done");
     setImporting(false);
     if (errors.length === 0) onImported();
@@ -209,7 +258,7 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
             {result.errors.map((e, i) => <div key={i}>{e}</div>)}
           </div>
         )}
-        <button onClick={() => { setStep("upload"); setRows([]); setResult(null); }}
+        <button onClick={() => { setStep("upload"); setRows([]); setResult(null); setFields([]); setWarnings([]); }}
           style={{ fontSize: 12.5, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", fontFamily: "inherit", color: "var(--text-3)" }}>
           Nouvel import
         </button>
@@ -218,66 +267,72 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
   }
 
   if (step === "preview") {
+    const displayFields = fields.filter(f => !f.startsWith("_"));
     return (
       <div style={cardStyle}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", marginBottom: 12 }}>Aperçu import</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", marginBottom: 6 }}>Aperçu import</div>
+        <div style={{ fontSize: 11.5, color: "var(--text-5)", marginBottom: 12 }}>{sourceLabel}</div>
 
         <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>
-            <strong>{Object.keys(mapping).length}</strong> colonnes mappées
+            <strong>{displayFields.length}</strong> champ{displayFields.length > 1 ? "s" : ""} détecté{displayFields.length > 1 ? "s" : ""}
           </div>
-          {ignored.length > 0 && (
-            <div style={{ fontSize: 12.5, color: "#92400E", display: "flex", alignItems: "center", gap: 4 }}>
-              <AlertTriangle size={12} /> {ignored.length} ignorées : {ignored.join(", ")}
-            </div>
-          )}
           <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>
-            <strong>{rows.length}</strong> ligne{rows.length > 1 ? "s" : ""}
+            <strong>{rows.length}</strong> exercice{rows.length > 1 ? "s" : ""}
           </div>
         </div>
 
-        {/* Preview table (first 5 rows) — dédupliqué par champ cible */}
+        {warnings.length > 0 && (
+          <div style={{ padding: "8px 12px", borderRadius: 8, background: "#FEF3C7", color: "#92400E", fontSize: 12, marginBottom: 14, display: "flex", gap: 6, alignItems: "flex-start" }}>
+            <AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />
+            <div>
+              {warnings.slice(0, 5).map((w, i) => <div key={i}>{w}</div>)}
+              {warnings.length > 5 && <div>… et {warnings.length - 5} autre{warnings.length - 5 > 1 ? "s" : ""}</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Preview table : une colonne par exercice, une ligne par champ */}
         <div style={{ overflowX: "auto", marginBottom: 14 }}>
-          {(() => {
-            const seen = new Set<string>();
-            const uniqueEntries = Object.entries(mapping).filter(([, f]) => {
-              if (f.startsWith("_") || seen.has(f)) return false;
-              seen.add(f);
-              return true;
-            });
-            return (
-              <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
-                <thead>
-                  <tr style={{ background: "var(--surface-2)" }}>
-                    {uniqueEntries.map(([header, field]) => (
-                      <th key={header} style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600, color: "var(--text-4)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{field}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
+          <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
+            <thead>
+              <tr style={{ background: "var(--surface-2)" }}>
+                <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: "var(--text-4)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>Champ</th>
+                {rows.slice(0, 5).map((r, i) => (
+                  <th key={i} style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600, color: "var(--text-4)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                    {r.fiscal_year ?? `#${i + 1}`}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {displayFields.filter(f => f !== "fiscal_year").slice(0, 20).map(f => (
+                <tr key={f}>
+                  <td style={{ padding: "5px 10px", textAlign: "left", color: "var(--text-3)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 11 }}>{f}</td>
                   {rows.slice(0, 5).map((r, i) => (
-                    <tr key={i}>
-                      {uniqueEntries.map(([header, field]) => (
-                        <td key={header} style={{ padding: "5px 10px", textAlign: "right", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
-                          {r[field] != null ? String(r[field]) : "—"}
-                        </td>
-                      ))}
-                    </tr>
+                    <td key={i} style={{ padding: "5px 10px", textAlign: "right", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
+                      {r[f] != null ? String(r[f]) : "—"}
+                    </td>
                   ))}
-                </tbody>
-              </table>
-            );
-          })()}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {displayFields.length > 20 && (
+            <div style={{ fontSize: 11, color: "var(--text-5)", marginTop: 6, fontStyle: "italic" }}>
+              … {displayFields.length - 20} autre{displayFields.length - 20 > 1 ? "s" : ""} champ{displayFields.length - 20 > 1 ? "s" : ""} non affiché{displayFields.length - 20 > 1 ? "s" : ""}
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button onClick={() => { setStep("upload"); setRows([]); }}
+          <button onClick={() => { setStep("upload"); setRows([]); setFields([]); setWarnings([]); }}
             style={{ fontSize: 12.5, padding: "7px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", fontFamily: "inherit", color: "var(--text-3)" }}>
             <X size={12} /> Annuler
           </button>
           <button onClick={handleImport} disabled={importing}
             style={{ fontSize: 12.5, padding: "7px 18px", borderRadius: 8, background: "#1a56db", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: importing ? 0.6 : 1 }}>
-            {importing ? "Import en cours…" : `Confirmer l'import (${rows.length} lignes)`}
+            {importing ? "Import en cours…" : `Confirmer l'import (${rows.length})`}
           </button>
         </div>
       </div>
@@ -288,12 +343,20 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
   return (
     <div style={cardStyle}>
       <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", marginBottom: 8 }}>Importer des données financières</div>
-      <div style={{ fontSize: 12.5, color: "var(--text-5)", marginBottom: 14 }}>CSV ou Excel (.xlsx). Les colonnes sont mappées automatiquement.</div>
+      <div style={{ fontSize: 12.5, color: "var(--text-5)", marginBottom: 14 }}>
+        Téléchargez le modèle standard pour une reconnaissance automatique fiable (P&amp;L, Bilan, Dettes &amp; BFR, Ratios, Valorisation). Le parser accepte aussi un CSV ou Excel libre — les colonnes sont alors mappées par alias.
+      </div>
       <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
-      <button onClick={() => fileRef.current?.click()}
-        style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, border: "1px dashed var(--border)", background: "var(--surface-2)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--text-3)", fontWeight: 500 }}>
-        <Upload size={14} /> Choisir un fichier
-      </button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => void handleDownloadTemplate()}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--text-2)", fontWeight: 500 }}>
+          <Download size={14} /> Télécharger le modèle
+        </button>
+        <button onClick={() => fileRef.current?.click()}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 8, border: "1px dashed var(--border)", background: "var(--surface-2)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--text-3)", fontWeight: 500 }}>
+          <Upload size={14} /> Choisir un fichier
+        </button>
+      </div>
     </div>
   );
 }
