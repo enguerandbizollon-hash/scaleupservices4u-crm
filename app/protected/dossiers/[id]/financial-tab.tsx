@@ -1,10 +1,11 @@
 "use client";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2, Sparkles } from "lucide-react";
 import { computeFinancials, type FinancialInputs } from "@/lib/crm/financial-calcs";
 import { getBenchmark, getRatingColor } from "@/lib/crm/financial-benchmarks";
 import { upsertFinancialData, getFinancialDataByDeal, deleteFinancialData } from "@/actions/financial-data";
 import { FinancialImport } from "@/components/financials/FinancialImport";
+import { analyzeFinancialDataAction } from "@/actions/ai/financial";
 
 // ── Exported type ──────────────────────────────────────────────────────────────
 
@@ -103,11 +104,21 @@ export interface FinancialRow {
   revenue_per_employee?: number | null;
 }
 
+export interface InitialAiAnalysis {
+  ai_financial_score: number | null;
+  ai_valuation_low: number | null;
+  ai_valuation_high: number | null;
+  ai_financial_notes: string | null;
+  ai_analyzed_at: string | null;
+}
+
 interface Props {
   dealId?: string;
   organizationId?: string;
   dealType?: string;
+  currency?: string;
   initialData: FinancialRow[];
+  initialAi?: InitialAiAnalysis | null;
 }
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
@@ -381,7 +392,7 @@ const EDITABLE_FIELDS: (keyof FinancialRow)[] = [
   "headcount", "nrr", "grr",
 ];
 
-export function FinancialTab({ dealId, organizationId, dealType = "", initialData }: Props) {
+export function FinancialTab({ dealId, organizationId, dealType = "", currency = "EUR", initialData, initialAi }: Props) {
   const [rows, setRows] = useState<FinancialRow[]>(
     [...initialData].sort((a, b) => b.fiscal_year - a.fiscal_year),
   );
@@ -394,6 +405,12 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dcfOpen, setDcfOpen] = useState(false);
+
+  // Analyse IA financière (V50)
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiExpanded, setAiExpanded] = useState(true);
+  const [aiState, setAiState] = useState<InitialAiAnalysis | null>(initialAi ?? null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -491,6 +508,26 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
       });
     } catch { /* silent */ }
     setDeletingId(null);
+  }
+
+  async function handleAiAnalyze() {
+    if (!dealId) return;
+    setAiAnalyzing(true);
+    setAiError(null);
+    const res = await analyzeFinancialDataAction(dealId);
+    setAiAnalyzing(false);
+    if (!res.success) {
+      setAiError(res.error);
+      return;
+    }
+    setAiState({
+      ai_financial_score: res.result.score,
+      ai_valuation_low: res.result.valuation_low,
+      ai_valuation_high: res.result.valuation_high,
+      ai_financial_notes: res.result.notes,
+      ai_analyzed_at: res.result.analyzed_at,
+    });
+    setAiExpanded(true);
   }
 
   // ── Empty state ────────────────────────────────────────────────────────────
@@ -783,7 +820,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
 
   return (
     <div style={{ padding: "20px 0" }}>
-      {/* Header + saving indicator */}
+      {/* Header + saving indicator + bouton Analyser IA */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Donn\ées financi\ères</span>
@@ -793,7 +830,42 @@ export function FinancialTab({ dealId, organizationId, dealType = "", initialDat
             </span>
           )}
         </div>
+        {dealId && rows.length > 0 && (
+          <button
+            type="button"
+            onClick={handleAiAnalyze}
+            disabled={aiAnalyzing}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 14px", borderRadius: 9, border: "none",
+              background: aiAnalyzing ? "var(--surface-3)" : "linear-gradient(135deg, #1a56db, #5A8CD0)",
+              color: aiAnalyzing ? "var(--text-5)" : "#fff",
+              fontSize: 13, fontWeight: 600, cursor: aiAnalyzing ? "default" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {aiAnalyzing
+              ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Analyse en cours...</>
+              : <><Sparkles size={13} /> {aiState?.ai_analyzed_at ? "Re-analyser" : "Analyser avec l'IA"}</>
+            }
+          </button>
+        )}
       </div>
+
+      {/* Panel r\ésultat IA */}
+      {(aiState?.ai_financial_score !== null && aiState?.ai_financial_score !== undefined) && (
+        <AiAnalysisPanel
+          ai={aiState!}
+          currency={currency}
+          expanded={aiExpanded}
+          onToggle={() => setAiExpanded(e => !e)}
+        />
+      )}
+      {aiError && (
+        <div style={{ padding: "10px 14px", borderRadius: 8, background: "#fee2e2", color: "#b91c1c", fontSize: 13, marginBottom: 14 }}>
+          {aiError}
+        </div>
+      )}
 
       {/* Year pills */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
@@ -938,6 +1010,122 @@ function AddYearModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Panel d'analyse IA financière (V50) ───────────────────────────────────
+
+function AiAnalysisPanel({ ai, currency, expanded, onToggle }: {
+  ai: InitialAiAnalysis;
+  currency: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const score = ai.ai_financial_score ?? 0;
+  const scoreColor = score >= 70 ? "#15A348" : score >= 50 ? "#D97706" : "#B91C1C";
+
+  function fmtEvVal(n: number | null): string {
+    if (n === null || n === undefined) return "—";
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M ${currency}`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(0)}k ${currency}`;
+    return `${n} ${currency}`;
+  }
+
+  function fmtAnalyzedAt(iso: string | null): string {
+    if (!iso) return "—";
+    return new Intl.DateTimeFormat("fr-FR", {
+      day: "numeric", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    }).format(new Date(iso));
+  }
+
+  return (
+    <div style={{
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderLeft: `3px solid ${scoreColor}`,
+      borderRadius: 12,
+      marginBottom: 16,
+      overflow: "hidden",
+    }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 12,
+          padding: "12px 16px", background: "transparent", border: "none",
+          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+        }}
+      >
+        <Sparkles size={16} color={scoreColor} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>
+            Analyse IA financi\ère
+            <span style={{ marginLeft: 10, fontSize: 18, fontWeight: 800, color: scoreColor }}>
+              {score}/100
+            </span>
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 2 }}>
+            Analys\é le {fmtAnalyzedAt(ai.ai_analyzed_at)}
+          </div>
+        </div>
+        {expanded ? <ChevronDown size={16} color="var(--text-4)" /> : <ChevronRight size={16} color="var(--text-4)" />}
+      </button>
+
+      {expanded && (
+        <div style={{ padding: "0 16px 16px 16px", borderTop: "1px solid var(--border)" }}>
+          {/* Barre de score */}
+          <div style={{ marginTop: 12, marginBottom: 14 }}>
+            <div style={{ height: 8, background: "var(--surface-3)", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", width: `${Math.max(0, Math.min(100, score))}%`,
+                background: scoreColor, transition: "width .3s",
+              }} />
+            </div>
+          </div>
+
+          {/* Fourchette valorisation */}
+          {(ai.ai_valuation_low !== null || ai.ai_valuation_high !== null) && (
+            <div style={{
+              display: "flex", gap: 12, marginBottom: 12,
+              padding: "10px 12px", background: "var(--surface-2)", borderRadius: 8,
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-5)", textTransform: "uppercase", letterSpacing: ".05em" }}>
+                  Valorisation basse
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", marginTop: 2 }}>
+                  {fmtEvVal(ai.ai_valuation_low)}
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-5)", textTransform: "uppercase", letterSpacing: ".05em" }}>
+                  Valorisation haute
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", marginTop: 2 }}>
+                  {fmtEvVal(ai.ai_valuation_high)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes IA */}
+          {ai.ai_financial_notes && (
+            <div style={{
+              fontSize: 13, color: "var(--text-2)", lineHeight: 1.55,
+              padding: "10px 12px", background: "var(--surface-2)", borderRadius: 8,
+              whiteSpace: "pre-wrap",
+            }}>
+              {ai.ai_financial_notes}
+            </div>
+          )}
+
+          <div style={{ fontSize: 10.5, color: "var(--text-5)", marginTop: 10, fontStyle: "italic" }}>
+            G\én\ér\é par Claude · L'IA sugg\ère, l'\équipe valide.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -510,7 +510,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           <FinancialTab
             dealId={deal.id}
             dealType={deal.deal_type}
+            currency={deal.currency ?? "EUR"}
             initialData={initialFinancialData}
+            initialAi={{
+              ai_financial_score: deal.ai_financial_score ?? null,
+              ai_valuation_low: deal.ai_valuation_low ?? null,
+              ai_valuation_high: deal.ai_valuation_high ?? null,
+              ai_financial_notes: deal.ai_financial_notes ?? null,
+              ai_analyzed_at: deal.ai_analyzed_at ?? null,
+            }}
           />
         )}
 
