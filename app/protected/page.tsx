@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { DashboardClient } from "./dashboard-client";
+import { getFeesKpis } from "@/actions/fees";
+import { projectYearEndFromYtd } from "@/lib/crm/fee-calculator";
 
 // Les widgets lisent des données mutables (actions, deals, relances) :
 // on force le rendu dynamique pour que revalidatePath depuis les Server
@@ -76,6 +78,13 @@ async function Content() {
   const events     = upcomingEventsRes.data ?? [];
   const [cDeals, cContacts, cOrgs, cTasks] = await kpiRes;
 
+  // V52 — KPIs honoraires cabinet (pipeline / facturé / encaissé YTD / projection)
+  const feesRaw = await getFeesKpis();
+  const feesKpis = {
+    ...feesRaw,
+    projection: projectYearEndFromYtd(feesRaw.paid_ytd),
+  };
+
   // Mapping Action.type → clé historique pour ACT_ICON / EVT_COLOR
   // du DashboardClient (qui connaît email_sent, follow_up, etc.).
   const toLegacyType = (t: string, emailDir?: string | null) => {
@@ -111,6 +120,7 @@ async function Content() {
         { label:"Contacts",         val:cContacts.count??0, href:"/protected/contacts",      color:"#A8306A" },
         { label:"Tâches ouvertes",  val:cTasks.count??0,    href:"/protected/dossiers",      color:(cTasks.count??0)>0?"#DC2626":"#15A348" },
       ]}
+      feesKpis={feesKpis}
       deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.fundraising, stageLabel:STAGE[d.deal_stage]??d.deal_stage, prioColor:PRIO[d.priority_level]??PRIO.medium }))}
       relances={relances.map(c => { const org=(c.organization_contacts as any[])?.[0]?.organizations; return { id:c.id, firstName:c.first_name, lastName:c.last_name, days:daysSince(c.last_contact_date!), orgName:Array.isArray(org)?org[0]?.name:org?.name }; })}
       tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority ?? "medium", dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority ?? "medium"]??PRIO.medium }; })}

@@ -18,6 +18,7 @@ const EVT_COLOR: Record<string,string> = { follow_up:"#D97706", meeting:"#3468B0
 
 interface DashboardClientProps {
   kpis: { label:string; val:number; href:string; color:string }[];
+  feesKpis?: { pending:number; invoiced:number; paid_ytd:number; projection:number|null; currency:string };
   deals: { id:string; name:string; type:string; stage:string; priority:string; targetDate:string|null; dt:any; stageLabel:string; prioColor:string }[];
   relances: { id:string; firstName:string; lastName:string; days:number; orgName?:string }[];
   tasks: { id:string; title:string; priority:string; dueDate:string|null; dealId:string|null; dealName?:string; overdue:boolean; prioColor:string }[];
@@ -29,7 +30,14 @@ interface DashboardClientProps {
 function fmt(v:string|null){ if(!v)return"—"; return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}); }
 function fmtFull(v:string){ return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}); }
 
-export function DashboardClient({ kpis, deals, relances, tasks, activities, calendarItems, allContacts }: DashboardClientProps) {
+function fmtMoney(n: number, currency: string): string {
+  const cur = currency || "EUR";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M ${cur}`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)} k ${cur}`;
+  return `${Math.round(n)} ${cur}`;
+}
+
+export function DashboardClient({ kpis, feesKpis, deals, relances, tasks, activities, calendarItems, allContacts }: DashboardClientProps) {
   const router = useRouter();
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [actionModalDefaultType, setActionModalDefaultType] = useState<string | undefined>(undefined);
@@ -63,7 +71,7 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
       <div style={{ maxWidth:1200, margin:"0 auto" }}>
 
         {/* KPIs */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:12 }}>
           {kpis.map(k => (
             <Link key={k.label} href={k.href} style={{ textDecoration:"none" }}>
               <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" }}>
@@ -73,6 +81,32 @@ export function DashboardClient({ kpis, deals, relances, tasks, activities, cale
             </Link>
           ))}
         </div>
+
+        {/* Strip honoraires cabinet (V52) */}
+        {feesKpis && (
+          <Link href="/protected/statistiques" style={{ textDecoration:"none" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"12px 14px" }}>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".06em" }}>Pipeline fees</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#D97706", marginTop:2 }}>{fmtMoney(feesKpis.pending, feesKpis.currency)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".06em" }}>Facturé</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#3468B0", marginTop:2 }}>{fmtMoney(feesKpis.invoiced, feesKpis.currency)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".06em" }}>Encaissé YTD</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#15A348", marginTop:2 }}>{fmtMoney(feesKpis.paid_ytd, feesKpis.currency)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:"var(--text-5)", textTransform:"uppercase", letterSpacing:".06em" }}>Projection fin année</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"var(--text-2)", marginTop:2 }}>
+                  {feesKpis.projection !== null ? fmtMoney(feesKpis.projection, feesKpis.currency) : "—"}
+                </div>
+              </div>
+            </div>
+          </Link>
+        )}
 
         {/* Layout 3 colonnes */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr 1fr", gap:12 }}>

@@ -1,15 +1,16 @@
-// Cron horaire Vercel : génère les notifications de rappel d'actions.
+// Cron horaire Vercel : génère les notifications de rappel d'actions
+// et d'alertes jalons financiers en retard.
 //
 // Déclencheur : vercel.json → "schedule": "0 * * * *"
 // Authentification : header Authorization: Bearer <CRON_SECRET>
 // Vercel Cron injecte automatiquement ce header si CRON_SECRET est défini.
 //
-// Principe :
-//   Pour chaque action avec status='open', due_date NOT NULL,
-//   reminder_days NOT NULL :
-//     Si (due_date - today) ∈ reminder_days → enqueueNotification().
-//   L'upsert avec ignoreDuplicates + contrainte unique garantit qu'un
-//   passage répété du cron ne crée pas de doublon.
+// Jobs exécutés séquentiellement :
+//   1. Rappels d'actions (reminder_days) — historique V41.
+//   2. Jalons fee_milestones pending dépassant due_date de 30+ jours (V52).
+//
+// L'upsert avec ignoreDuplicates + contrainte unique garantit qu'un
+// passage répété du cron ne crée pas de doublon de notification.
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -17,6 +18,8 @@ import { enqueueNotification } from "@/lib/crm/notifications";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const OVERDUE_THRESHOLD_DAYS = 30;
 
 interface ActionForReminder {
   id: string;
@@ -27,6 +30,17 @@ interface ActionForReminder {
   reminder_days: number[];
   deal_id: string | null;
   candidate_id: string | null;
+}
+
+interface OverdueMilestone {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number | null;
+  currency: string | null;
+  due_date: string;
+  mandate_id: string;
+  mandates: { name: string | null } | { name: string | null }[] | null;
 }
 
 function todayISO(): string {
@@ -65,6 +79,7 @@ export async function GET(req: Request) {
   const supabase = createAdminClient();
   const today = todayISO();
 
+  // ── Job 1 : rappels d'actions ─────────────────────────────────────────────
   const { data, error } = await supabase
     .from("actions")
     .select("id, user_id, title, type, due_date, reminder_days, deal_id, candidate_id")
@@ -77,12 +92,12 @@ export async function GET(req: Request) {
   }
 
   const actions = (data ?? []) as ActionForReminder[];
-  let scanned = 0;
-  let queued = 0;
+  let scannedActions = 0;
+  let queuedActions = 0;
   const errors: string[] = [];
 
   for (const a of actions) {
-    scanned++;
+    scannedActions++;
     if (!a.reminder_days || a.reminder_days.length === 0) continue;
     const delta = daysBetween(today, a.due_date);
     if (!a.reminder_days.includes(delta)) continue;
@@ -97,15 +112,58 @@ export async function GET(req: Request) {
       source_id: a.id,
       trigger_date: today,
     });
-    if (res.error) errors.push(`${a.id}: ${res.error}`);
-    else queued++;
+    if (res.error) errors.push(`action ${a.id}: ${res.error}`);
+    else queuedActions++;
+  }
+
+  // ── Job 2 : jalons fee_milestones pending en retard (V52) ─────────────────
+  const overdueCutoff = new Date(Date.now() - OVERDUE_THRESHOLD_DAYS * 86_400_000)
+    .toISOString().slice(0, 10);
+
+  const { data: milestonesData, error: milestonesErr } = await supabase
+    .from("fee_milestones")
+    .select("id, user_id, name, amount, currency, due_date, mandate_id, mandates(name)")
+    .eq("status", "pending")
+    .not("due_date", "is", null)
+    .lt("due_date", overdueCutoff);
+
+  let scannedMilestones = 0;
+  let queuedMilestones = 0;
+
+  if (milestonesErr) {
+    errors.push(`milestones query: ${milestonesErr.message}`);
+  } else {
+    const milestones = (milestonesData ?? []) as OverdueMilestone[];
+    for (const m of milestones) {
+      scannedMilestones++;
+      const lateDays = Math.abs(daysBetween(today, m.due_date));
+      const mandateName = Array.isArray(m.mandates)
+        ? m.mandates[0]?.name ?? null
+        : m.mandates?.name ?? null;
+      const amountLabel = m.amount != null
+        ? ` (${m.amount} ${m.currency ?? "EUR"})`
+        : "";
+
+      const res = await enqueueNotification(supabase, {
+        user_id: m.user_id,
+        kind: "fee_overdue",
+        title: `Jalon en retard : ${m.name}${amountLabel}`,
+        body: `En retard de ${lateDays} jour(s) depuis ${m.due_date}${mandateName ? ` · Mandat : ${mandateName}` : ""}.`,
+        link_url: `/protected/mandats/${m.mandate_id}`,
+        source_type: "fee_milestone",
+        source_id: m.id,
+        trigger_date: today,
+      });
+      if (res.error) errors.push(`milestone ${m.id}: ${res.error}`);
+      else queuedMilestones++;
+    }
   }
 
   return NextResponse.json({
     ok: true,
-    scanned,
-    queued,
-    errors: errors.slice(0, 10),
     today,
+    actions: { scanned: scannedActions, queued: queuedActions },
+    milestones: { scanned: scannedMilestones, queued: queuedMilestones },
+    errors: errors.slice(0, 10),
   });
 }
