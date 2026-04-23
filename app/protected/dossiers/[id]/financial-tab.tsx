@@ -124,24 +124,24 @@ interface Props {
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
 function fmtM(v: number | null | undefined): string {
-  if (v == null) return "\—";
-  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)} M\u20AC`;
-  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)} k\u20AC`;
-  return `${Math.round(v)} \u20AC`;
+  if (v == null) return "—";
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)} M€`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)} k€`;
+  return `${Math.round(v)} €`;
 }
 function fmtPct(v: number | null | undefined): string {
-  if (v == null) return "\—";
+  if (v == null) return "—";
   return `${(v * 100).toFixed(1)}%`;
 }
 function fmtPctRaw(v: number | null | undefined): string {
-  if (v == null) return "\—";
+  if (v == null) return "—";
   return `${v.toFixed(1)}%`;
 }
 function fmtX(v: number | null | undefined): string {
-  return v == null ? "\—" : `${v.toFixed(1)}x`;
+  return v == null ? "—" : `${v.toFixed(1)}x`;
 }
 function fmtDays(v: number | null | undefined): string {
-  return v == null ? "\—" : `${Math.round(v)}j`;
+  return v == null ? "—" : `${Math.round(v)}j`;
 }
 
 function varDelta(
@@ -280,15 +280,15 @@ function calcVal(row: FinancialRow, key: string): number | null | undefined {
 // ── Row definitions per sub-tab ────────────────────────────────────────────────
 
 const PL_ROWS: RowDef[] = [
-  { key: "_s_cr", label: "", section: "COMPTE DE R\ÉSULTAT", field: undefined, fmt: fmtM },
+  { key: "_s_cr", label: "", section: "COMPTE DE RÉSULTAT", field: undefined, fmt: fmtM },
   { key: "revenue", label: "Chiffre d'affaires", field: "revenue", fmt: fmtM },
-  { key: "revenue_recurring", label: "  dont r\écurrent", field: "revenue_recurring", fmt: fmtM, indent: true },
-  { key: "revenue_non_recurring", label: "  dont non-r\écurrent", field: "revenue_non_recurring", fmt: fmtM, indent: true },
-  { key: "recurring_rate", label: "Taux de r\écurrence", calc: true, getValue: r => calcVal(r, "recurring_rate"), fmt: fmtPct, isMargin: true },
-  { key: "cogs", label: "Co\ût des ventes (COGS)", field: "cogs", fmt: fmtM, invertDelta: true },
+  { key: "revenue_recurring", label: "  dont récurrent", field: "revenue_recurring", fmt: fmtM, indent: true },
+  { key: "revenue_non_recurring", label: "  dont non-récurrent", field: "revenue_non_recurring", fmt: fmtM, indent: true },
+  { key: "recurring_rate", label: "Taux de récurrence", calc: true, getValue: r => calcVal(r, "recurring_rate"), fmt: fmtPct, isMargin: true },
+  { key: "cogs", label: "Coût des ventes (COGS)", field: "cogs", fmt: fmtM, invertDelta: true },
   { key: "gross_profit", label: "Marge brute", calc: true, getValue: r => calcVal(r, "gross_profit"), fmt: fmtM },
   { key: "gross_margin", label: "Taux de marge brute", calc: true, getValue: r => calcVal(r, "gross_margin"), fmt: fmtPct, isMargin: true },
-  { key: "_s_opex", label: "", section: "CHARGES OP\ÉRATIONNELLES", field: undefined, fmt: fmtM },
+  { key: "_s_opex", label: "", section: "CHARGES OPÉRATIONNELLES", field: undefined, fmt: fmtM },
   { key: "payroll", label: "Masse salariale", field: "payroll", fmt: fmtM, invertDelta: true },
   { key: "payroll_rd", label: "  dont R&D", field: "payroll_rd", fmt: fmtM, indent: true, invertDelta: true },
   { key: "payroll_sales", label: "  dont Commercial", field: "payroll_sales", fmt: fmtM, indent: true, invertDelta: true },
@@ -296,24 +296,24 @@ const PL_ROWS: RowDef[] = [
   { key: "marketing", label: "Marketing", field: "marketing", fmt: fmtM, invertDelta: true },
   { key: "rent", label: "Loyers", field: "rent", fmt: fmtM, invertDelta: true },
   { key: "other_opex", label: "Autres charges", field: "other_opex", fmt: fmtM, invertDelta: true },
-  { key: "_s_res", label: "", section: "R\ÉSULTAT", field: undefined, fmt: fmtM },
+  { key: "_s_res", label: "", section: "RÉSULTAT", field: undefined, fmt: fmtM },
   { key: "ebitda", label: "EBITDA", calc: true, getValue: r => calcVal(r, "ebitda"), fmt: fmtM },
   { key: "ebitda_margin", label: "Marge EBITDA", calc: true, getValue: r => calcVal(r, "ebitda_margin"), fmt: fmtPct, isMargin: true },
   { key: "da", label: "D&A (amortissements)", field: "da", fmt: fmtM, invertDelta: true },
   { key: "ebit", label: "EBIT", calc: true, getValue: r => calcVal(r, "ebit"), fmt: fmtM },
   { key: "ebit_margin", label: "Marge EBIT", calc: true, getValue: r => calcVal(r, "ebit_margin"), fmt: fmtPct, isMargin: true },
-  { key: "financial_charges", label: "Charges financi\ères", field: "financial_charges", fmt: fmtM, invertDelta: true },
-  { key: "ebt", label: "R\ésultat avant imp\ôts", calc: true, getValue: r => calcVal(r, "ebt"), fmt: fmtM },
-  { key: "taxes", label: "Imp\ôts", field: "taxes", fmt: fmtM, invertDelta: true },
-  { key: "net_income", label: "R\ésultat net", calc: true, getValue: r => calcVal(r, "net_income"), fmt: fmtM },
+  { key: "financial_charges", label: "Charges financières", field: "financial_charges", fmt: fmtM, invertDelta: true },
+  { key: "ebt", label: "Résultat avant impôts", calc: true, getValue: r => calcVal(r, "ebt"), fmt: fmtM },
+  { key: "taxes", label: "Impôts", field: "taxes", fmt: fmtM, invertDelta: true },
+  { key: "net_income", label: "Résultat net", calc: true, getValue: r => calcVal(r, "net_income"), fmt: fmtM },
   { key: "net_margin", label: "Marge nette", calc: true, getValue: r => calcVal(r, "net_margin"), fmt: fmtPct, isMargin: true },
   { key: "capex", label: "Capex", field: "capex", fmt: fmtM, invertDelta: true },
   { key: "cash_ebitda", label: "Cash EBITDA (EBITDA - Capex)", calc: true, getValue: r => calcVal(r, "cash_ebitda"), fmt: fmtM },
 ];
 
 const RECURRENT_ROWS: RowDef[] = [
-  { key: "revenue_recurring", label: "Revenu r\écurrent", field: "revenue_recurring", fmt: fmtM },
-  { key: "recurring_rate", label: "Taux de r\écurrence", calc: true, getValue: r => calcVal(r, "recurring_rate"), fmt: fmtPct, isMargin: true },
+  { key: "revenue_recurring", label: "Revenu récurrent", field: "revenue_recurring", fmt: fmtM },
+  { key: "recurring_rate", label: "Taux de récurrence", calc: true, getValue: r => calcVal(r, "recurring_rate"), fmt: fmtPct, isMargin: true },
   { key: "arr", label: "ARR", field: "arr", fmt: fmtM },
   { key: "mrr", label: "MRR", calc: true, getValue: r => calcVal(r, "mrr"), fmt: fmtM },
   { key: "churn_rate", label: "Churn rate (%)", field: "churn_rate", fmt: fmtPctRaw, invertDelta: true },
@@ -322,25 +322,25 @@ const RECURRENT_ROWS: RowDef[] = [
   { key: "ltv", label: "LTV", calc: true, getValue: r => calcVal(r, "ltv"), fmt: fmtM },
   { key: "ltv_cac", label: "LTV / CAC", calc: true, getValue: r => calcVal(r, "ltv_cac"), fmt: fmtX },
   { key: "rule_of_40", label: "Rule of 40", calc: true, getValue: r => calcVal(r, "rule_of_40"), fmt: fmtPctRaw },
-  { key: "growth_fcst", label: "Croissance pr\évue (%)", field: "growth_fcst", fmt: fmtPctRaw },
+  { key: "growth_fcst", label: "Croissance prévue (%)", field: "growth_fcst", fmt: fmtPctRaw },
 ];
 
 const BILAN_ROWS: RowDef[] = [
   { key: "_s_actif", label: "", section: "ACTIF", field: undefined, fmt: fmtM },
   { key: "intangible_assets", label: "Immobilisations incorporelles", field: "intangible_assets", fmt: fmtM },
   { key: "tangible_assets", label: "Immobilisations corporelles", field: "tangible_assets", fmt: fmtM },
-  { key: "financial_assets", label: "Immobilisations financi\ères", field: "financial_assets", fmt: fmtM },
-  { key: "total_fixed_assets", label: "Total actif immobilis\é", calc: true, getValue: r => calcVal(r, "total_fixed_assets"), fmt: fmtM },
+  { key: "financial_assets", label: "Immobilisations financières", field: "financial_assets", fmt: fmtM },
+  { key: "total_fixed_assets", label: "Total actif immobilisé", calc: true, getValue: r => calcVal(r, "total_fixed_assets"), fmt: fmtM },
   { key: "inventory", label: "Stocks", field: "inventory", fmt: fmtM },
-  { key: "accounts_receivable", label: "Cr\éances clients", field: "accounts_receivable", fmt: fmtM },
+  { key: "accounts_receivable", label: "Créances clients", field: "accounts_receivable", fmt: fmtM },
   { key: "other_current_assets", label: "Autres actifs courants", field: "other_current_assets", fmt: fmtM },
-  { key: "cash", label: "Tr\ésorerie", field: "cash", fmt: fmtM },
+  { key: "cash", label: "Trésorerie", field: "cash", fmt: fmtM },
   { key: "total_current_assets", label: "Total actif circulant", calc: true, getValue: r => calcVal(r, "total_current_assets"), fmt: fmtM },
   { key: "total_assets", label: "TOTAL ACTIF", calc: true, getValue: r => calcVal(r, "total_assets"), fmt: fmtM },
   { key: "_s_passif", label: "", section: "PASSIF", field: undefined, fmt: fmtM },
   { key: "share_capital", label: "Capital social", field: "share_capital", fmt: fmtM },
-  { key: "reserves", label: "R\éserves", field: "reserves", fmt: fmtM },
-  { key: "net_income_bs", label: "R\ésultat de l'exercice", field: "net_income_bs", fmt: fmtM },
+  { key: "reserves", label: "Réserves", field: "reserves", fmt: fmtM },
+  { key: "net_income_bs", label: "Résultat de l'exercice", field: "net_income_bs", fmt: fmtM },
   { key: "equity_calc", label: "Capitaux propres", calc: true, getValue: r => calcVal(r, "equity"), fmt: fmtM },
   { key: "debt_lt", label: "Dettes long terme", field: "debt_lt", fmt: fmtM, invertDelta: true },
   { key: "debt_st", label: "Dettes court terme", field: "debt_st", fmt: fmtM, invertDelta: true },
@@ -353,16 +353,16 @@ const DETTE_ROWS: RowDef[] = [
   { key: "_s_dette", label: "", section: "DETTE NETTE", field: undefined, fmt: fmtM },
   { key: "debt_lt", label: "Dettes long terme", field: "debt_lt", fmt: fmtM, invertDelta: true },
   { key: "debt_st", label: "Dettes court terme", field: "debt_st", fmt: fmtM, invertDelta: true },
-  { key: "cash_d", label: "Tr\ésorerie", field: "cash", fmt: fmtM },
+  { key: "cash_d", label: "Trésorerie", field: "cash", fmt: fmtM },
   { key: "net_debt", label: "Dette nette", calc: true, getValue: r => calcVal(r, "net_debt"), fmt: fmtM, invertDelta: true },
   { key: "_s_bfr", label: "", section: "BESOIN EN FONDS DE ROULEMENT", field: undefined, fmt: fmtM },
-  { key: "accounts_receivable_d", label: "Cr\éances clients", field: "accounts_receivable", fmt: fmtM },
+  { key: "accounts_receivable_d", label: "Créances clients", field: "accounts_receivable", fmt: fmtM },
   { key: "inventory_d", label: "Stocks", field: "inventory", fmt: fmtM },
   { key: "accounts_payable_d", label: "Dettes fournisseurs", field: "accounts_payable", fmt: fmtM },
   { key: "bfr", label: "BFR", calc: true, getValue: r => calcVal(r, "bfr"), fmt: fmtM },
-  { key: "dso", label: "DSO (d\élai clients)", calc: true, getValue: r => calcVal(r, "dso"), fmt: fmtDays, invertDelta: true },
-  { key: "dio", label: "DIO (d\élai stocks)", calc: true, getValue: r => calcVal(r, "dio"), fmt: fmtDays, invertDelta: true },
-  { key: "dpo", label: "DPO (d\élai fournisseurs)", calc: true, getValue: r => calcVal(r, "dpo"), fmt: fmtDays },
+  { key: "dso", label: "DSO (délai clients)", calc: true, getValue: r => calcVal(r, "dso"), fmt: fmtDays, invertDelta: true },
+  { key: "dio", label: "DIO (délai stocks)", calc: true, getValue: r => calcVal(r, "dio"), fmt: fmtDays, invertDelta: true },
+  { key: "dpo", label: "DPO (délai fournisseurs)", calc: true, getValue: r => calcVal(r, "dpo"), fmt: fmtDays },
   { key: "ccc", label: "Cycle de conversion cash", calc: true, getValue: r => calcVal(r, "ccc"), fmt: fmtDays, invertDelta: true },
   { key: "_s_fcf", label: "", section: "FREE CASH FLOW", field: undefined, fmt: fmtM },
   { key: "fcf", label: "FCF (EBITDA - Capex)", calc: true, getValue: r => calcVal(r, "fcf"), fmt: fmtM },
@@ -536,7 +536,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
     return (
       <div style={{ padding: "40px 24px", textAlign: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 6 }}>
-          Aucune donn\ée financi\ère
+          Aucune donnée financière
         </div>
         <div style={{ fontSize: 13, color: "var(--text-5)", marginBottom: 16 }}>
           Ajoutez un exercice pour commencer la saisie
@@ -568,10 +568,10 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           <thead>
             <tr style={{ background: "var(--surface-2)" }}>
               <th style={{ ...S.th, textAlign: "left", minWidth: 180, borderRight: "1px solid var(--border)" }}>Indicateur</th>
-              <th style={S.th}>{sel?.fiscal_year ?? "\—"} (N)</th>
-              <th style={{ ...S.th, color: "var(--text-5)" }}>{prev1?.fiscal_year ?? "\—"} (N-1)</th>
-              <th style={{ ...S.th, color: "var(--text-5)" }}>{prev2?.fiscal_year ?? "\—"} (N-2)</th>
-              <th style={S.th}>\u0394 N/N-1</th>
+              <th style={S.th}>{sel?.fiscal_year ?? "—"} (N)</th>
+              <th style={{ ...S.th, color: "var(--text-5)" }}>{prev1?.fiscal_year ?? "—"} (N-1)</th>
+              <th style={{ ...S.th, color: "var(--text-5)" }}>{prev2?.fiscal_year ?? "—"} (N-2)</th>
+              <th style={S.th}>Δ N/N-1</th>
             </tr>
           </thead>
           <tbody>
@@ -600,7 +600,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                         type="text"
                         style={S.input}
                         defaultValue={vN != null ? String(vN) : ""}
-                        placeholder="\—"
+                        placeholder="—"
                         onBlur={e => updateField(selectedYearIdx, def.field!, e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                       />
@@ -616,7 +616,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                         {delta.text}
                       </span>
                     ) : (
-                      <span style={{ fontSize: 11, color: "var(--text-5)" }}>\—</span>
+                      <span style={{ fontSize: 11, color: "var(--text-5)" }}>—</span>
                     )}
                   </td>
                 </tr>
@@ -630,7 +630,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           if (c.balance_check != null && Math.abs(c.balance_check) > 1) {
             return (
               <div style={{ padding: "8px 14px", background: "#FEF2F2", borderTop: "1px solid #FCA5A5", fontSize: 12.5, color: "#DC2626", fontWeight: 600 }}>
-                Ecart Actif / Passif : {fmtM(c.balance_check)} \— V\érifiez vos saisies
+                Ecart Actif / Passif : {fmtM(c.balance_check)} — Vérifiez vos saisies
               </div>
             );
           }
@@ -659,7 +659,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           <table style={S.table}>
             <thead>
               <tr style={{ background: "var(--surface-2)" }}>
-                <th style={{ ...S.th, textAlign: "left", borderRight: "1px solid var(--border)" }}>M\éthode</th>
+                <th style={{ ...S.th, textAlign: "left", borderRight: "1px solid var(--border)" }}>Méthode</th>
                 <th style={S.th}>Multiple bas</th>
                 <th style={S.th}>Multiple mid</th>
                 <th style={S.th}>Multiple haut</th>
@@ -677,7 +677,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                         type="text"
                         style={{ ...S.input, width: 70 }}
                         defaultValue={sel[f] != null ? String(sel[f]) : ""}
-                        placeholder="\—"
+                        placeholder="—"
                         onBlur={e => updateField(selectedYearIdx, f, e.target.value)}
                       />
                     </td>
@@ -693,13 +693,13 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
         {/* Bridge VE -> CP */}
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-4)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 10 }}>
-            Bridge VE \u2192 Capitaux propres
+            Bridge VE → Capitaux propres
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
             {[
               { label: "Ajustements divers", field: "misc_adjustments" as keyof FinancialRow },
               { label: "Passifs contingents", field: "contingent_liabilities" as keyof FinancialRow },
-              { label: "Tr\éso exc\édentaire", field: "excess_cash" as keyof FinancialRow },
+              { label: "Tréso excédentaire", field: "excess_cash" as keyof FinancialRow },
             ].map(item => (
               <div key={item.field}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>{item.label}</div>
@@ -707,7 +707,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                   type="text"
                   style={S.input}
                   defaultValue={sel[item.field] != null ? String(sel[item.field]) : ""}
-                  placeholder="\—"
+                  placeholder="—"
                   onBlur={e => updateField(selectedYearIdx, item.field, e.target.value)}
                 />
               </div>
@@ -733,19 +733,19 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>WACC (%)</div>
-                  <input type="text" style={S.input} defaultValue={sel.wacc != null ? String(sel.wacc) : ""} placeholder="\—" onBlur={e => updateField(selectedYearIdx, "wacc", e.target.value)} />
+                  <input type="text" style={S.input} defaultValue={sel.wacc != null ? String(sel.wacc) : ""} placeholder="—" onBlur={e => updateField(selectedYearIdx, "wacc", e.target.value)} />
                 </div>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>Taux de croissance terminal (%)</div>
-                  <input type="text" style={S.input} defaultValue={sel.terminal_growth_rate != null ? String(sel.terminal_growth_rate) : ""} placeholder="\—" onBlur={e => updateField(selectedYearIdx, "terminal_growth_rate", e.target.value)} />
+                  <input type="text" style={S.input} defaultValue={sel.terminal_growth_rate != null ? String(sel.terminal_growth_rate) : ""} placeholder="—" onBlur={e => updateField(selectedYearIdx, "terminal_growth_rate", e.target.value)} />
                 </div>
               </div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 6 }}>FCF projet\és (N+1 \à N+5)</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 6 }}>FCF projetés (N+1 à N+5)</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 12 }}>
                 {(["fcf_n1", "fcf_n2", "fcf_n3", "fcf_n4", "fcf_n5"] as const).map((f, i) => (
                   <div key={f}>
                     <div style={{ fontSize: 10, color: "var(--text-5)", marginBottom: 2 }}>N+{i + 1}</div>
-                    <input type="text" style={S.input} defaultValue={sel[f] != null ? String(sel[f]) : ""} placeholder="\—" onBlur={e => updateField(selectedYearIdx, f, e.target.value)} />
+                    <input type="text" style={S.input} defaultValue={sel[f] != null ? String(sel[f]) : ""} placeholder="—" onBlur={e => updateField(selectedYearIdx, f, e.target.value)} />
                   </div>
                 ))}
               </div>
@@ -774,20 +774,20 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
     const bench = getBenchmark(sel.sector);
 
     const cards: { label: string; value: number | null | undefined; fmt: (v: number | null | undefined) => string; benchLow: number; benchHigh: number; lowerIsBetter?: boolean }[] = [
-      { label: "Marge brute", value: c.gross_margin != null ? c.gross_margin * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "\—", benchLow: bench.gross_margin.low, benchHigh: bench.gross_margin.high },
-      { label: "Marge EBITDA", value: c.ebitda_margin != null ? c.ebitda_margin * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "\—", benchLow: bench.ebitda_margin.low, benchHigh: bench.ebitda_margin.high },
-      { label: "Marge nette", value: c.net_margin != null ? c.net_margin * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "\—", benchLow: 5, benchHigh: 15 },
+      { label: "Marge brute", value: c.gross_margin != null ? c.gross_margin * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "—", benchLow: bench.gross_margin.low, benchHigh: bench.gross_margin.high },
+      { label: "Marge EBITDA", value: c.ebitda_margin != null ? c.ebitda_margin * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "—", benchLow: bench.ebitda_margin.low, benchHigh: bench.ebitda_margin.high },
+      { label: "Marge nette", value: c.net_margin != null ? c.net_margin * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "—", benchLow: 5, benchHigh: 15 },
       { label: "Leverage (DN/EBITDA)", value: c.leverage, fmt: fmtX, benchLow: bench.net_debt_ebitda.healthy, benchHigh: bench.net_debt_ebitda.lbo, lowerIsBetter: true },
       { label: "Gearing (DN/CP)", value: c.gearing, fmt: fmtX, benchLow: 0.5, benchHigh: 1.5, lowerIsBetter: true },
       { label: "Current ratio", value: c.current_ratio, fmt: fmtX, benchLow: 1, benchHigh: 2 },
-      { label: "ROCE", value: c.roce != null ? c.roce * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "\—", benchLow: 8, benchHigh: 15 },
-      { label: "Conversion FCF", value: c.fcf_conversion != null ? c.fcf_conversion * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "\—", benchLow: 50, benchHigh: 80 },
+      { label: "ROCE", value: c.roce != null ? c.roce * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "—", benchLow: 8, benchHigh: 15 },
+      { label: "Conversion FCF", value: c.fcf_conversion != null ? c.fcf_conversion * 100 : null, fmt: v => v != null ? `${v.toFixed(1)}%` : "—", benchLow: 50, benchHigh: 80 },
     ];
 
     if (hasRecurrent) {
       cards.push(
         { label: "LTV / CAC", value: c.ltv_cac, fmt: fmtX, benchLow: 3, benchHigh: 5 },
-        { label: "Rule of 40", value: c.rule_of_40, fmt: v => v != null ? `${v.toFixed(0)}` : "\—", benchLow: 30, benchHigh: 40 },
+        { label: "Rule of 40", value: c.rule_of_40, fmt: v => v != null ? `${v.toFixed(0)}` : "—", benchLow: 30, benchHigh: 40 },
       );
     }
 
@@ -806,7 +806,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {rating && <span style={S.ratingBadge(rating)}>{rating === "green" ? "Bon" : rating === "yellow" ? "Moyen" : "Faible"}</span>}
                 <span style={{ fontSize: 10, color: "var(--text-5)" }}>
-                  Bench: {card.benchLow}\u2013{card.benchHigh}
+                  Bench: {card.benchLow}–{card.benchHigh}
                 </span>
               </div>
             </div>
@@ -823,7 +823,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
       {/* Header + saving indicator + bouton Analyser IA */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Donn\ées financi\ères</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Données financières</span>
           {saving && (
             <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "var(--text-4)" }}>
               <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Enregistrement...
@@ -852,7 +852,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
         )}
       </div>
 
-      {/* Panel r\ésultat IA */}
+      {/* Panel résultat IA */}
       {(aiState?.ai_financial_score !== null && aiState?.ai_financial_score !== undefined) && (
         <AiAnalysisPanel
           ai={aiState!}
@@ -878,7 +878,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                 background: r.is_forecast ? "#EDE9FE" : (i === selectedYearIdx ? "rgba(255,255,255,.2)" : "var(--surface-3)"),
                 color: r.is_forecast ? "#6D28D9" : (i === selectedYearIdx ? "#fff" : "var(--text-5)"),
               }}>
-                {r.is_forecast ? "Pr\évision" : "R\éel"}
+                {r.is_forecast ? "Prévision" : "Réel"}
               </span>
             </button>
             <button
@@ -979,7 +979,7 @@ function AddYearModal({
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>
-            Ann\ée
+            Année
           </label>
           <input
             type="number"
@@ -992,7 +992,7 @@ function AddYearModal({
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--text-3)", marginBottom: 16, cursor: "pointer" }}>
           <input type="checkbox" checked={newIsForecast} onChange={e => setNewIsForecast(e.target.checked)} />
-          Exercice pr\évisionnel
+          Exercice prévisionnel
         </label>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
@@ -1006,7 +1006,7 @@ function AddYearModal({
             disabled={saving}
             style={{ padding: "8px 20px", borderRadius: 8, background: "#1a56db", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.6 : 1 }}
           >
-            {saving ? "Cr\éation..." : "Cr\éer"}
+            {saving ? "Création..." : "Créer"}
           </button>
         </div>
       </div>
@@ -1061,13 +1061,13 @@ function AiAnalysisPanel({ ai, currency, expanded, onToggle }: {
         <Sparkles size={16} color={scoreColor} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>
-            Analyse IA financi\ère
+            Analyse IA financière
             <span style={{ marginLeft: 10, fontSize: 18, fontWeight: 800, color: scoreColor }}>
               {score}/100
             </span>
           </div>
           <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 2 }}>
-            Analys\é le {fmtAnalyzedAt(ai.ai_analyzed_at)}
+            Analysé le {fmtAnalyzedAt(ai.ai_analyzed_at)}
           </div>
         </div>
         {expanded ? <ChevronDown size={16} color="var(--text-4)" /> : <ChevronRight size={16} color="var(--text-4)" />}
@@ -1122,7 +1122,7 @@ function AiAnalysisPanel({ ai, currency, expanded, onToggle }: {
           )}
 
           <div style={{ fontSize: 10.5, color: "var(--text-5)", marginTop: 10, fontStyle: "italic" }}>
-            G\én\ér\é par Claude · L'IA sugg\ère, l'\équipe valide.
+            Généré par Claude · L'IA suggère, l'équipe valide.
           </div>
         </div>
       )}
