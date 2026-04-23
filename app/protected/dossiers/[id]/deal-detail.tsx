@@ -14,9 +14,9 @@ import { FinancialTab, type FinancialRow } from "./financial-tab";
 import { updateDealMatchingProfile } from "@/actions/matching";
 import {
   createCommitment, updateCommitment, deleteCommitment,
-  createDealDocument, deleteDealDocument,
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
 } from "@/actions/deals";
+import { DocumentsTab } from "./documents-tab";
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
@@ -36,7 +36,7 @@ import { StatusDropdown } from "../../components/status-dropdown";
 type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; role_in_dossier?:string; contacts: Contact[] };
 type Contact = { id:string; first_name:string; last_name:string; email?:string; phone?:string; title?:string; linkedin_url?:string; base_status:string; last_contact_date?:string; role_label?:string; org_id?:string; org_name?:string };
 type Commitment = { id:string; amount?:number; currency:string; status:string; committed_at?:string; notes?:string; organization_id?:string; org_name?:string };
-type Doc = { id:string; name:string; document_type:string; document_status:string; document_url?:string; version_label?:string; added_at:string };
+// Les documents sont gérés dans l'onglet Documents (V49) via ma_documents + Supabase Storage.
 
 // ── Helpers ──────────────────────────────────────────────────
 const DT: Record<string,{bg:string;tx:string;border:string}> = {
@@ -291,12 +291,11 @@ function MandateTabContent({
 }
 
 // ════════════════════════════════════════════════════════════
-export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialDocs, initialFinancialData, initialMandate }: {
+export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialFinancialData, initialMandate }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
   initialCommitments: Commitment[];
-  initialDocs: Doc[];
   initialFinancialData: FinancialRow[];
   initialMandate: any;
 }) {
@@ -319,13 +318,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   }, []);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
-  const [docs, setDocs] = useState<Doc[]>(initialDocs);
 
   // Expanded sections
   const [expOrgs, setExpOrgs] = useState(true);
   const [expOrg, setExpOrg] = useState<Record<string,boolean>>({});
   const [expPipeline, setExpPipeline] = useState(true);
-  const [expDocs, setExpDocs] = useState(true);
   const [expSpecs, setExpSpecs] = useState(true);
 
   // Modals
@@ -339,7 +336,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "mandat" | "matching" | "matching_ma" | "pipeline" | "matching_rh" | "financier">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "mandat" | "matching" | "matching_ma" | "pipeline" | "matching_rh" | "financier" | "documents">("dossier");
   const [matchingRefreshKey, setMatchingRefreshKey] = useState(0);
 
   // Mandat — state et handlers
@@ -446,28 +443,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     setCommitments(p=>p.filter(c=>c.id!==id));
   }
 
-  async function saveDocument() {
-    if (!form.doc_name) return;
-    setLoading(true);
-    try {
-      const r = await createDealDocument(deal.id, {
-        name:          form.doc_name,
-        document_url:  form.doc_url  || null,
-        version_label: form.doc_version || null,
-      });
-      if (!r.success) throw new Error(r.error);
-      setDocs(p => [...p, r.data!]);
-      closeModal();
-    } catch(e:any) { alert(e.message); } finally { setLoading(false); }
-  }
-
-  async function deleteDoc(id:string) {
-    if (!confirm("Supprimer ce document ?")) return;
-    const r = await deleteDealDocument(deal.id, id);
-    if (!r.success) { alert(r.error); return; }
-    setDocs(p => p.filter(d => d.id !== id));
-  }
-
   const cardStyle: React.CSSProperties = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", marginBottom:10 };
   const rowStyle: React.CSSProperties = { display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderBottom:"1px solid var(--border)" };
   const actionBtn: React.CSSProperties = { width:26, height:26, borderRadius:7, background:"none", border:"1px solid var(--border)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-4)", flexShrink:0 };
@@ -499,16 +474,17 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
         <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
           {(isFundraising
-            ? (["dossier","mandat","matching","financier"] as const)
+            ? (["dossier","mandat","matching","financier","documents"] as const)
             : isRecruitment
-            ? (["dossier","mandat","pipeline","matching_rh"] as const)
+            ? (["dossier","mandat","pipeline","matching_rh","documents"] as const)
             : isMa
-            ? (["dossier","mandat","matching_ma","financier"] as const)
-            : (["dossier","mandat","financier"] as const)
+            ? (["dossier","mandat","matching_ma","financier","documents"] as const)
+            : (["dossier","mandat","financier","documents"] as const)
           ).map(tab => {
             const labels: Record<string, string> = {
               dossier:"Dossier", mandat:"Mandat", matching:"Matching", matching_ma:"Matching M&A",
               pipeline:"Pipeline", matching_rh:"Matching vivier", financier:"Financier",
+              documents:"Documents",
             };
             const accentColor = isFundraising ? "var(--fund-tx)" : isRecruitment ? "var(--rec-tx)" : isMa ? "var(--sell-tx)" : "var(--sell-tx)";
             const isActive = activeTab === tab;
@@ -536,6 +512,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             dealType={deal.deal_type}
             initialData={initialFinancialData}
           />
+        )}
+
+        {/* Onglet Documents — Dataroom intégré V49 */}
+        {activeTab === "documents" && (
+          <DocumentsTab dealId={deal.id} dealName={deal.name} />
         )}
 
         {/* Onglet Matching (fundraising) */}
@@ -939,24 +920,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               <ActionTimeline filters={{ deal_id: deal.id }} showCreateButton={true} />
             </div>
 
-            {/* DOCUMENTS */}
-            <div style={cardStyle}>
-              <SectionHeader icon={FileText} title="Documents" count={docs.length} expanded={expDocs} onToggle={()=>setExpDocs(p=>!p)} onAdd={()=>openModal("document")} addLabel="Ajouter"/>
-              {expDocs && docs.slice(0,5).map((d,i) => (
-                <div key={d.id} style={{ ...rowStyle, borderBottom: i<Math.min(docs.length,5)-1?"1px solid var(--border)":"none" }}>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)" }}>{d.name}</div>
-                    <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:1 }}>{d.document_type} {d.version_label?`· v${d.version_label}`:""}</div>
-                  </div>
-                  <span style={{ fontSize:11.5, color:"var(--text-5)", flexShrink:0 }}>{fmt(d.added_at)}</span>
-                  {d.document_url && (
-                    <a href={d.document_url} target="_blank" rel="noreferrer" style={{...actionBtn, textDecoration:"none"}}><ExternalLink size={11}/></a>
-                  )}
-                  <button onClick={()=>deleteDoc(d.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
-                </div>
-              ))}
-              {expDocs && docs.length===0 && <div style={{ padding:"20px 16px", fontSize:13, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>Aucun document</div>}
-            </div>
+            {/* Documents — désormais dans l'onglet dédié "Documents" (V49) */}
 
           </div>
         </div>
@@ -1049,27 +1013,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         </Modal>
       )}
 
-      {/* Document */}
-      {modal==="document" && (
-        <Modal title="Ajouter un document" onClose={closeModal}>
-          <Field label="Nom du document *">
-            <input style={inp} placeholder="ex: Teaser Redpeaks v1, NDA signé…" value={form.doc_name||""} onChange={setF("doc_name")}/>
-          </Field>
-          <Field label="Lien (URL ou Google Drive)">
-            <input style={inp} type="url" placeholder="https://drive.google.com/…" value={form.doc_url||""} onChange={setF("doc_url")}/>
-            <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:4 }}>
-              Colle le lien de partage Google Drive ou toute autre URL.
-            </div>
-          </Field>
-          <Field label="Version">
-            <input style={inp} placeholder="ex: v1.0" value={form.doc_version||""} onChange={setF("doc_version")}/>
-          </Field>
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
-            <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
-            <BtnPrimary onClick={saveDocument} loading={loading}>Ajouter</BtnPrimary>
-          </div>
-        </Modal>
-      )}
+      {/* Modal Document supprimée (V49) — ajout via l'onglet Documents dédié. */}
 
       {/* ActionModal — déclenchée depuis MatchingTab pour créer une action ciblant un investisseur */}
       <ActionModal

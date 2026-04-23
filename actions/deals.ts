@@ -77,14 +77,8 @@ export interface CommitmentInput {
   notes?: string | null;
 }
 
-export interface DocumentInput {
-  name: string;
-  document_type?: string;
-  document_status?: string;
-  document_url?: string | null;
-  version_label?: string | null;
-  note?: string | null;
-}
+// DocumentInput : supprimée (V49). Remplacée par CreateDocumentInput dans
+// actions/documents.ts (ma_documents + Supabase Storage).
 
 // ── Simple list (autocomplete) ────────────────────────────────────────────────
 
@@ -328,63 +322,8 @@ export async function deleteCommitment(dealId: string, commitmentId: string) {
   return { success: true };
 }
 
-// ── Documents deal ────────────────────────────────────────────────────────────
-
-export async function createDealDocument(dealId: string, data: DocumentInput) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false as const, error: "Non autorisé" };
-  if (!data.name?.trim()) return { success: false as const, error: "Nom requis" };
-
-  const { data: doc, error } = await supabase.from("deal_documents").insert({
-    deal_id:         dealId,
-    user_id:         user.id,
-    name:            data.name.trim(),
-    document_type:   data.document_type   ?? "other",
-    document_status: data.document_status ?? "received",
-    document_url:    data.document_url    ?? null,
-    version_label:   data.version_label   ?? null,
-    note:            data.note            ?? null,
-    added_at:        new Date().toISOString(),
-  }).select("id,name,document_type,document_status,document_url,version_label,added_at,note").single();
-
-  if (error) return { success: false as const, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true as const, data: doc };
-}
-
-export async function updateDealDocument(
-  dealId: string,
-  documentId: string,
-  updates: Partial<DocumentInput>,
-) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Non autorisé" };
-
-  const { error } = await supabase.from("deal_documents")
-    .update(updates)
-    .eq("id", documentId)
-    .eq("deal_id", dealId)
-    .eq("user_id", user.id);
-
-  if (error) return { success: false, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true };
-}
-
-export async function deleteDealDocument(dealId: string, documentId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Non autorisé" };
-
-  const { error } = await supabase.from("deal_documents")
-    .delete().eq("id", documentId).eq("deal_id", dealId).eq("user_id", user.id);
-
-  if (error) return { success: false, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true };
-}
+// Documents deal : supprimés (V49). La table deal_documents a été droppée
+// au profit de ma_documents + Supabase Storage. Voir actions/documents.ts.
 
 // ── Liaison deal ↔ organisation ───────────────────────────────────────────────
 

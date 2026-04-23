@@ -20,11 +20,12 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   // Les actions (tâches + activités) sont chargées côté client par
   // <ActionTimeline filters={{ deal_id: id }} /> dans DealDetail —
   // plus de fetch server-side ici.
-  const [orgsRes, docsRes, commitmentsRes, financialRes] = await Promise.all([
+  // Documents gérés dans l'onglet Documents (V49) — fetch côté client via
+  // listDealDocuments, pas de prefetch server-side ici.
+  const [orgsRes, commitmentsRes, financialRes] = await Promise.all([
     supabase.from("deal_organizations")
       .select("organization_id,role_in_dossier,organizations(id,name,organization_type,base_status,location,investment_ticket,investment_stage)")
       .eq("deal_id", id),
-    supabase.from("deal_documents").select("id,name,document_type,document_status,document_url,version_label,added_at,note").eq("deal_id", id).order("added_at",{ascending:false}),
     supabase.from("investor_commitments").select("id,amount,currency,status,committed_at,notes,organization_id,organizations(name)").eq("deal_id",id).order("committed_at",{ascending:false}),
     supabase.from("financial_data").select("*").eq("deal_id",id).order("fiscal_year",{ascending:false}),
   ]);
@@ -66,7 +67,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       initialOrgs={orgs}
       initialContacts={contacts}
       initialCommitments={comms}
-      initialDocs={docsRes.data ?? []}
       initialFinancialData={financialRes.data ?? []}
       initialMandate={initialMandate}
     />
