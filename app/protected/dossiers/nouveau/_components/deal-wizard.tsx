@@ -4,6 +4,9 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createDealWizardAction, type WizardDealPayload } from "../actions";
 import { createOrganisationAction } from "@/actions/organisations";
+import { createContact, linkContactToOrganisation } from "@/actions/contacts";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { Building2 } from "lucide-react";
 import {
   SECTORS,
   COMPANY_STAGES,
@@ -197,6 +200,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   // Step 1 — client org (obligatoire depuis V54 : 2 modes)
   const [clientOrgMode, setClientOrgMode] = useState<"existing" | "new">("existing");
   const [clientOrgId, setClientOrgId] = useState<string>("");
+  const [clientOrgLabel, setClientOrgLabel] = useState<string>("");
   const [clientOrgName, setClientOrgName] = useState("");
   const [clientOrgType, setClientOrgType] = useState("client");
   // V54 : taille d'entreprise, stockée sur organizations.company_stage
@@ -343,15 +347,39 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
       return;
     }
 
-    // 2. Création inline dirigeant (si mode new et contact souhaité)
+    // 2. Création inline dirigeant.
+    // Mode "existing" : on récupère l'id du contact choisi.
+    // Mode "new" : promotion automatique en contact CRM. Si un prénom OU
+    // un nom a été saisi, on crée le contact, on le lie à l'organisation
+    // cliente avec son titre comme rôle, puis on récupère son id pour
+    // deal.dirigeant_id. Les champs dénormalisés dirigeant_* sur le deal
+    // restent renseignés en miroir (pour compat avec le code existant).
     let resolvedDirigeantId: string | null = null;
     if (dirigeantMode === "existing" && dirigeantId) {
       resolvedDirigeantId = dirigeantId;
+    } else if (dirigeantMode === "new") {
+      const fn = dirigeantFirstName.trim();
+      const ln = dirigeantLastName.trim();
+      if (fn || ln) {
+        const cRes = await createContact({
+          first_name: fn || "—",
+          last_name: ln || fn,
+          email: dirigeantEmail.trim() || null,
+          phone: dirigeantPhone.trim() || null,
+          title: dirigeantTitle.trim() || null,
+        });
+        if (cRes.success) {
+          resolvedDirigeantId = cRes.id;
+          await linkContactToOrganisation(
+            cRes.id,
+            resolvedClientOrgId,
+            dirigeantTitle.trim() || "Dirigeant",
+          );
+        }
+        // Si la création échoue (ex: doublon par email), on laisse le
+        // dossier se créer avec les champs texte dénormalisés. Pas bloquant.
+      }
     }
-    // Note : en mode "new" on NE crée PAS de contact CRM par défaut
-    // (on ne fait que remplir les champs dirigeant_* sur le deal).
-    // Si le dirigeant doit être aussi un contact CRM, il sera ajouté
-    // via la fiche dossier après création.
 
     // 3. Préparation payload complet
     const payload: WizardDealPayload = {
@@ -640,10 +668,32 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                 ))}
               </div>
               {clientOrgMode === "existing" && (
-                <select value={clientOrgId} onChange={e => setClientOrgId(e.target.value)} style={inp}>
-                  <option value="">— Choisir une organisation —</option>
-                  {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
+                clientOrgId ? (
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "10px 12px", borderRadius: 8,
+                    background: "var(--surface-2)", border: "1px solid var(--border)",
+                  }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--text-1)", minWidth: 0 }}>
+                      <Building2 size={14} color="var(--text-4)" />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{clientOrgLabel || organisations.find(o => o.id === clientOrgId)?.name || "Organisation"}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setClientOrgId(""); setClientOrgLabel(""); }}
+                      style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontFamily: "inherit" }}
+                    >
+                      Changer
+                    </button>
+                  </div>
+                ) : (
+                  <EntityPicker
+                    entityType="organization"
+                    disableCreate
+                    placeholder="Rechercher une organisation cliente."
+                    onPicked={(id, label) => { setClientOrgId(id); setClientOrgLabel(label); }}
+                  />
+                )
               )}
               {clientOrgMode === "new" && (
                 <div style={grid2}>
@@ -746,14 +796,35 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                 ))}
               </div>
               {dirigeantMode === "existing" && (
-                <select value={dirigeantId} onChange={e => setDirigeantId(e.target.value)} style={inp}>
-                  <option value="">— Choisir un contact —</option>
-                  {contacts.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.first_name} {c.last_name}{c.email ? ` — ${c.email}` : ""}
-                    </option>
-                  ))}
-                </select>
+                dirigeantId ? (() => {
+                  const c = contacts.find(x => x.id === dirigeantId);
+                  return (
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "10px 12px", borderRadius: 8,
+                      background: "var(--surface-2)", border: "1px solid var(--border)",
+                    }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>
+                        {c ? `${c.first_name} ${c.last_name}` : "Contact sélectionné"}
+                        {c?.email && <span style={{ fontWeight: 400, color: "var(--text-5)" }}> — {c.email}</span>}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDirigeantId("")}
+                        style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontFamily: "inherit" }}
+                      >
+                        Changer
+                      </button>
+                    </div>
+                  );
+                })() : (
+                  <EntityPicker
+                    entityType="contact"
+                    disableCreate
+                    placeholder="Rechercher un contact existant."
+                    onPicked={(id) => setDirigeantId(id)}
+                  />
+                )
               )}
               {dirigeantMode === "new" && (
                 <>
@@ -781,7 +852,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                     <label style={lbl}>Téléphone</label>
                     <input value={dirigeantPhone} onChange={e => setDirigeantPhone(e.target.value)} placeholder="+33 6 …" style={inp} />
                   </div>
-                  <div style={hint}>Le dirigeant n&apos;est pas encore ajouté au CRM comme contact. Pour le faire, crée-le depuis la fiche dossier après création.</div>
+                  <div style={hint}>Le dirigeant sera automatiquement créé comme contact CRM et rattaché à l&apos;organisation cliente.</div>
                 </>
               )}
             </div>

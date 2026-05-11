@@ -31,12 +31,14 @@ export function EntityPicker({
   placeholder,
   excludeIds = [],
   autoFocus = true,
+  disableCreate = false,
 }: {
   entityType: PickerEntityType;
   onPicked: (id: string, label: string) => void | Promise<void>;
   placeholder?: string;
   excludeIds?: string[];
   autoFocus?: boolean;
+  disableCreate?: boolean;
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const [query, setQuery] = useState("");
@@ -149,7 +151,7 @@ export function EntityPicker({
     .filter((i) => (q.length >= 1 ? i.label.toLowerCase().includes(q) : true))
     .slice(0, 8);
 
-  const canCreate = query.trim().length >= 2;
+  const canCreate = !disableCreate && query.trim().length >= 2;
   const showCreatePrompt = canCreate && filtered.length === 0;
 
   if (createOpen) {
