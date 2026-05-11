@@ -677,9 +677,16 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           deal={deal}
           financialData={initialFinancialData}
           mandate={mandate ? {
+            type: mandate.type ?? null,
             estimated_fee_amount: mandate.estimated_fee_amount ?? null,
             confirmed_fee_amount: mandate.confirmed_fee_amount ?? null,
             currency: mandate.currency ?? null,
+            success_fee_percent: mandate.success_fee_percent ?? null,
+            retainer_monthly: mandate.retainer_monthly ?? null,
+            operation_amount: mandate.operation_amount ?? null,
+            start_date: mandate.start_date ?? null,
+            target_close_date: mandate.target_close_date ?? null,
+            end_date: mandate.end_date ?? null,
           } : null}
         />
 

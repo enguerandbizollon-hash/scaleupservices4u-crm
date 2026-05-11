@@ -1,7 +1,8 @@
 "use client";
 
-import { TrendingUp, Banknote, Target, Building2, Activity, Briefcase, Calendar } from "lucide-react";
+import { TrendingUp, Banknote, Target, Building2, Activity, Briefcase, Calendar, Sparkles } from "lucide-react";
 import { stageLabel, ROUND_TYPES, SENIORITY_OPTIONS } from "@/lib/crm/matching-maps";
+import { computeSuccessFee, type MandateForFee, type DealForFee } from "@/lib/crm/fee-calculator";
 
 type Deal = {
   id: string;
@@ -28,6 +29,8 @@ type Deal = {
   acquisition_budget_max?: number | null;
   target_revenue_min?: number | null;
   target_revenue_max?: number | null;
+  target_ev_min?: number | null;
+  target_ev_max?: number | null;
   // RH
   job_title?: string | null;
   required_seniority?: string | null;
@@ -46,9 +49,16 @@ type FinancialRow = {
 };
 
 type MandateLite = {
+  type?: string | null;
   estimated_fee_amount: number | null;
   confirmed_fee_amount: number | null;
   currency: string | null;
+  success_fee_percent?: number | null;
+  retainer_monthly?: number | null;
+  operation_amount?: number | null;
+  start_date?: string | null;
+  target_close_date?: string | null;
+  end_date?: string | null;
 } | null;
 
 function fmtMoney(n: number | null | undefined, currency: string | null | undefined): string {
@@ -296,6 +306,44 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
       icon: Building2,
       tone: "neutral",
     });
+  } else if (mandate) {
+    // Calcul live du success fee si pas d'estimé stocké, à partir des
+    // paramètres du mandat (% success fee) et des chiffres du dossier
+    // (asking_price / target_raise / salary). Affiché avec une étoile
+    // pour signaler que c'est un calcul automatique.
+    const mandateForFee: MandateForFee = {
+      type: mandate.type ?? deal.deal_type,
+      currency: mandate.currency,
+      success_fee_percent: mandate.success_fee_percent,
+      retainer_monthly: mandate.retainer_monthly,
+      operation_amount: mandate.operation_amount,
+      start_date: mandate.start_date,
+      target_close_date: mandate.target_close_date,
+      end_date: mandate.end_date,
+    };
+    const dealForFee: DealForFee = {
+      deal_type: deal.deal_type,
+      target_raise_amount: deal.target_raise_amount,
+      asking_price_min: deal.asking_price_min,
+      asking_price_max: deal.asking_price_max,
+      target_ev_min: deal.target_ev_min,
+      target_ev_max: deal.target_ev_max,
+      acquisition_budget_min: deal.acquisition_budget_min,
+      acquisition_budget_max: deal.acquisition_budget_max,
+      salary_min: deal.salary_min,
+      salary_max: deal.salary_max,
+      target_amount: deal.target_amount,
+    };
+    const fee = computeSuccessFee(mandateForFee, dealForFee);
+    if (fee.estimated != null && fee.estimated > 0) {
+      out.push({
+        label: "Fee estimé (auto)",
+        value: fmtMoney(fee.estimated, fee.currency),
+        sublabel: fee.percent != null ? `${fee.percent}% × base ${fmtMoney(fee.base, fee.currency)}` : undefined,
+        icon: Sparkles,
+        tone: "positive",
+      });
+    }
   }
 
   return out;
