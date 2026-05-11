@@ -195,6 +195,51 @@ export async function updateOrganisationAction(
   return { success: true, id };
 }
 
+// ── createOrganisationMinimal ──────────────────────────────────────────
+// Création légère pour les pickers inline. Crée une organisation avec
+// le minimum requis (nom + type) et tous les autres champs en defaults.
+// L'utilisateur enrichit ensuite via la fiche complète.
+
+export async function createOrganisationMinimal(input: {
+  name: string;
+  organization_type?: string;
+}): Promise<OrgActionResult> {
+  const name = input.name.trim();
+  if (!name) return { success: false, error: "Le nom est obligatoire" };
+
+  const orgType = input.organization_type || "other";
+
+  return createOrganisationAction({
+    name,
+    organization_type: orgType,
+    base_status: "to_qualify",
+    location: null,
+    website: null,
+    linkedin_url: null,
+    description: null,
+    notes: null,
+    investor_ticket_min: null,
+    investor_ticket_max: null,
+    investor_sectors: [],
+    investor_stages: [],
+    investor_geographies: [],
+    investor_thesis: null,
+    sector: null,
+    founded_year: null,
+    employee_count: null,
+    company_stage: null,
+    revenue_range: null,
+    sale_readiness: null,
+    partial_sale_ok: false,
+    acquisition_rationale: null,
+    target_sectors: [],
+    excluded_sectors: [],
+    target_geographies: [],
+    target_revenue_min: null,
+    target_revenue_max: null,
+  });
+}
+
 // ── getAllOrganisationsSimple ──────────────────────────────────────────
 // Liste légère id+name — utilisée pour les sélecteurs dans les formulaires
 

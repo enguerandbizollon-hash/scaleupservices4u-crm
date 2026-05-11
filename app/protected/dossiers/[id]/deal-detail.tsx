@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EntityDrawer, type EntityRef } from "@/components/ui/EntityDrawer";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { useRouter } from "next/navigation";
 
 // ── Types ────────────────────────────────────────────────────
 type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; role_in_dossier?:string; contacts: Contact[] };
@@ -352,6 +354,8 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   // Drawer latéral pour entités liées (contacts, organisations)
   const [drawerEntity, setDrawerEntity] = useState<EntityRef>(null);
 
+  const router = useRouter();
+
   // V54 : organisation cliente (sujet du dossier). Affichage en lecture seule
   // dans le header. L'édition de la taille se fait sur la fiche organisation
   // pour éviter la superposition (la taille est une propriété de l'org,
@@ -666,6 +670,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               </div>
               <DirigeantSection
                 dealId={deal.id}
+                organizationId={clientOrg?.id ?? deal.organization_id ?? undefined}
                 initial={{
                   dirigeant_id: deal.dirigeant_id ?? null,
                   dirigeant_nom: deal.dirigeant_nom ?? null,
@@ -1053,50 +1058,56 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
 
 
-      {/* Ajouter contact */}
+      {/* Ajouter contact — picker unifié (recherche + création) */}
       {modal==="add_contact" && (
         <Modal title="Ajouter un contact" onClose={closeModal}>
-          <Field label="Contact existant">
-            <select style={sel} value={form.contact_id||""} onChange={setF("contact_id")}>
-              <option value="">— Rechercher —</option>
-              {/* Les contacts viendront de la base — pour l'instant liste vide à compléter */}
-            </select>
-          </Field>
-          <Field label="Ou créer un nouveau contact">
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <input style={inp} placeholder="Prénom" value={form.first_name||""} onChange={setF("first_name")}/>
-              <input style={inp} placeholder="Nom" value={form.last_name||""} onChange={setF("last_name")}/>
+          {orgs.length === 0 ? (
+            <div style={{ padding:"12px 0 4px", color:"var(--text-5)", fontSize:13.5, lineHeight:1.55 }}>
+              Ajoute d'abord une organisation au dossier pour pouvoir y rattacher un contact.
             </div>
-          </Field>
-          <Field label="Email">
-            <input style={inp} type="email" placeholder="email@exemple.com" value={form.email||""} onChange={setF("email")}/>
-          </Field>
-          <Field label="Organisation (dans ce dossier)">
-            <select style={sel} value={form.org_name||""} onChange={setF("org_name")}>
-              <option value="">— Choisir —</option>
-              {orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Rôle">
-            <input style={inp} placeholder="ex: Partner, Investor…" value={form.role_label||""} onChange={setF("role_label")}/>
-          </Field>
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
-            <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
-            <BtnPrimary onClick={async()=>{
-              setLoading(true);
-              try {
-                const orgId = form.org_name;
-                if (!orgId) { alert("Choisir une organisation"); return; }
-                // Créer ou trouver le contact puis lier
-                const cu = await upsertContact({ first_name:form.first_name||"", last_name:form.last_name||"", email:form.email||null });
-                if (!cu.success) throw new Error(cu.error);
-                await linkContactToOrganisation(cu.id, orgId, form.role_label||undefined);
-                const org = orgs.find(o=>o.id===orgId);
-                setContacts(p=>[...p,{ id:cu.id, first_name:form.first_name, last_name:form.last_name, email:form.email, base_status:"to_qualify", org_id:orgId, org_name:org?.name }]);
-                closeModal();
-              } catch(e:any){ alert(e.message); } finally { setLoading(false); }
-            }} loading={loading}>Ajouter</BtnPrimary>
-          </div>
+          ) : (
+            <>
+              <Field label="Organisation cible">
+                {orgs.length === 1 ? (
+                  <div style={{ padding:"9px 12px", borderRadius:8, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-1)", display:"flex", alignItems:"center", gap:7 }}>
+                    <Building2 size={13} color="var(--text-4)"/>{orgs[0].name}
+                  </div>
+                ) : (
+                  <select style={sel} value={form.org_id || ""} onChange={(e) => setForm((p) => ({ ...p, org_id: e.target.value }))}>
+                    <option value="">— Choisir —</option>
+                    {orgs.map((o) => (<option key={o.id} value={o.id}>{o.name}</option>))}
+                  </select>
+                )}
+              </Field>
+              <Field label="Rôle dans l'organisation (optionnel)">
+                <input
+                  style={inp}
+                  placeholder="ex: Partner, CFO, DAF, Investisseur."
+                  value={form.role_label || ""}
+                  onChange={setF("role_label")}
+                />
+              </Field>
+              <Field label="Contact (rechercher ou créer)">
+                <EntityPicker
+                  entityType="contact"
+                  excludeIds={contacts
+                    .filter((c) => c.org_id === (orgs.length === 1 ? orgs[0].id : form.org_id))
+                    .map((c) => c.id)}
+                  onPicked={async (contactId) => {
+                    const orgId = orgs.length === 1 ? orgs[0].id : form.org_id;
+                    if (!orgId) { alert("Choisis d'abord une organisation."); return; }
+                    const r = await linkContactToOrganisation(contactId, orgId, form.role_label || undefined);
+                    if (!r.success) { alert(r.error); return; }
+                    closeModal();
+                    router.refresh();
+                  }}
+                />
+              </Field>
+              <div style={{ fontSize:11.5, color:"var(--text-5)", marginTop:6, lineHeight:1.5 }}>
+                Astuce : tape un nom existant pour le retrouver, ou un nouveau nom pour créer un contact en un clic.
+              </div>
+            </>
+          )}
         </Modal>
       )}
 

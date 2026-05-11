@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { User, Mail, Phone, Pencil, Check, X, Plus, ExternalLink } from "lucide-react";
+import { User, Mail, Phone, Pencil, Check, X, Plus, ExternalLink, UserPlus } from "lucide-react";
 import { updateDealDirigeant } from "@/actions/deals";
-import { createContact, getAllContactsSimple } from "@/actions/contacts";
+import { createContact, getAllContactsSimple, linkContactToOrganisation } from "@/actions/contacts";
 import Link from "next/link";
 
 interface DirigeantData {
@@ -113,6 +113,37 @@ export function DirigeantSection({ dealId, initial, organizationId }: DirigeantS
     setSaving(false);
   }
 
+  // Promotion : transforme un dirigeant saisi en texte libre en un vrai
+  // contact CRM. Crée le contact avec les infos disponibles, met à jour
+  // dirigeant_id, et lie automatiquement le contact à l'organisation
+  // cliente si elle est connue.
+  async function handlePromoteToContact() {
+    if (!data.dirigeant_nom) return;
+    setSaving(true);
+    const parts = data.dirigeant_nom.trim().split(/\s+/);
+    const firstName = parts.length >= 2 ? (parts[0] ?? "") : "";
+    const lastName  = parts.length >= 2 ? parts.slice(1).join(" ") : (parts[0] ?? "");
+    const res = await createContact({
+      first_name: firstName || "—",
+      last_name: lastName,
+      email: data.dirigeant_email,
+      phone: data.dirigeant_telephone,
+      title: data.dirigeant_titre,
+    });
+    if (!res.success) {
+      setSaving(false);
+      alert(res.error);
+      return;
+    }
+    const newData: DirigeantData = { ...data, dirigeant_id: res.id };
+    await updateDealDirigeant(dealId, newData);
+    if (organizationId) {
+      await linkContactToOrganisation(res.id, organizationId, data.dirigeant_titre || undefined);
+    }
+    setData(newData);
+    setSaving(false);
+  }
+
   const filtered = search.trim().length >= 2
     ? contacts.filter(c => `${c.first_name} ${c.last_name}`.toLowerCase().includes(search.toLowerCase()) || (c.email ?? "").toLowerCase().includes(search.toLowerCase())).slice(0, 6)
     : [];
@@ -161,7 +192,25 @@ export function DirigeantSection({ dealId, initial, organizationId }: DirigeantS
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            {!data.dirigeant_id && data.dirigeant_nom && (
+              <button
+                onClick={handlePromoteToContact}
+                disabled={saving}
+                title="Promouvoir ce dirigeant en contact CRM"
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "4px 10px", height: 26, borderRadius: 6,
+                  border: "1px solid var(--accent, #1a56db)",
+                  background: "var(--surface-2)",
+                  cursor: saving ? "default" : "pointer",
+                  color: "var(--accent, #1a56db)", fontSize: 11.5, fontWeight: 600,
+                  fontFamily: "inherit", opacity: saving ? 0.6 : 1,
+                }}
+              >
+                <UserPlus size={11} /> Promouvoir
+              </button>
+            )}
             {data.dirigeant_id && (
               <Link href={`/protected/contacts/${data.dirigeant_id}`} style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-4)" }} title="Voir la fiche contact">
                 <ExternalLink size={11} />
