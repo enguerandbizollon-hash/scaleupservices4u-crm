@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Plus, AlertTriangle, CheckSquare, CalendarDays, Activity } from "lucide-react";
 import { DealsKanban } from "./_components/deals-kanban";
+import { ViewToggle } from "@/components/dossiers/ViewToggle";
 import { stageLabel } from "@/lib/crm/matching-maps";
 
 export const revalidate = 60;
@@ -147,9 +148,7 @@ async function Content() {
           </div>
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          <Link href="/protected/dossiers?view=kanban" style={{ fontSize:12.5, padding:"7px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", textDecoration:"none" }}>
-            Vue kanban
-          </Link>
+          <ViewToggle current="list" />
           <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
             <Plus size={14}/> Nouveau dossier
           </Link>

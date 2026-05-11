@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { updateDealStageAction } from "@/actions/deals";
+import { ViewToggle } from "@/components/dossiers/ViewToggle";
 import {
   DEAL_STAGES_BY_TYPE,
   DEAL_STAGES_MAIN_BY_TYPE,
@@ -86,17 +87,20 @@ export function DealsKanban({ deals: initialDeals }: Props) {
   }, [initialDeals]);
   const [typeFilter, setTypeFilter] = useState<DealTypeKey>(firstType);
   const [showClosed, setShowClosed] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "high_medium">("all");
   const [, startTransition] = useTransition();
 
   // V55 : filtrage strict par type (un kanban = un métier). Statut closed
-  // toggle (won/lost masqués par défaut).
+  // toggle (won/lost masqués par défaut). Filtre priorité optionnel.
   const filtered = useMemo(() => {
     return deals.filter(d => {
       if (d.deal_type !== typeFilter) return false;
       if (!showClosed && (d.deal_status === "won" || d.deal_status === "lost")) return false;
+      if (priorityFilter === "high" && d.priority_level !== "high") return false;
+      if (priorityFilter === "high_medium" && d.priority_level !== "high" && d.priority_level !== "medium") return false;
       return true;
     });
-  }, [deals, typeFilter, showClosed]);
+  }, [deals, typeFilter, showClosed, priorityFilter]);
 
   // Regroupement par stage
   const byStage = useMemo(() => {
@@ -131,19 +135,14 @@ export function DealsKanban({ deals: initialDeals }: Props) {
     return m;
   }, [deals, showClosed]);
 
-  async function moveDeal(dealId: string, dir: "prev" | "next") {
+  async function moveDealToStage(dealId: string, newStage: string) {
     const current = deals.find(d => d.id === dealId);
     if (!current) return;
-    // V55 : la séquence valide dépend du type du dossier.
+    if (current.deal_stage === newStage) return;
+    // V55 : valider que le nouveau stage est dans la séquence du type du dossier.
     const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "fundraising") as DealTypeKey;
-    const stages = [...DEAL_STAGES_BY_TYPE[typeKey]];
-    const idx = stages.indexOf(current.deal_stage);
-    if (idx === -1) return;
-    const newIdx = dir === "prev" ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= stages.length) return;
-    const newStage = stages[newIdx]!;
+    if (!DEAL_STAGES_BY_TYPE[typeKey].includes(newStage)) return;
 
-    // Optimistic update
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, deal_stage: newStage } : d));
 
     startTransition(async () => {
@@ -154,6 +153,42 @@ export function DealsKanban({ deals: initialDeals }: Props) {
         alert(`Erreur : ${res.error}`);
       }
     });
+  }
+
+  function moveDeal(dealId: string, dir: "prev" | "next") {
+    const current = deals.find(d => d.id === dealId);
+    if (!current) return;
+    const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "fundraising") as DealTypeKey;
+    const stages = [...DEAL_STAGES_BY_TYPE[typeKey]];
+    const idx = stages.indexOf(current.deal_stage);
+    if (idx === -1) return;
+    const newIdx = dir === "prev" ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= stages.length) return;
+    void moveDealToStage(dealId, stages[newIdx]!);
+  }
+
+  // ── Drag & drop natif HTML5 ────────────────────────────────────────────────
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+
+  function handleDragStart(e: React.DragEvent<HTMLDivElement>, dealId: string) {
+    e.dataTransfer.setData("text/deal-id", dealId);
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>, stage: string) {
+    if (!e.dataTransfer.types.includes("text/deal-id")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverStage !== stage) setDragOverStage(stage);
+  }
+  function handleDragLeave(stage: string) {
+    if (dragOverStage === stage) setDragOverStage(null);
+  }
+  function handleDrop(e: React.DragEvent<HTMLDivElement>, stage: string) {
+    e.preventDefault();
+    setDragOverStage(null);
+    const dealId = e.dataTransfer.getData("text/deal-id");
+    if (!dealId) return;
+    void moveDealToStage(dealId, stage);
   }
 
   // ── Styles communs ─────────────────────────────────────────────────────────
@@ -176,9 +211,7 @@ export function DealsKanban({ deals: initialDeals }: Props) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <Link href="/protected/dossiers?view=list" style={{ fontSize: 12.5, padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", textDecoration: "none" }}>
-            Vue liste
-          </Link>
+          <ViewToggle current="kanban" />
           <Link href="/protected/dossiers/nouveau" style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}>
             <Plus size={14}/> Nouveau dossier
           </Link>
@@ -199,6 +232,29 @@ export function DealsKanban({ deals: initialDeals }: Props) {
           );
         })}
         <div style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginRight: 12 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-5)", textTransform: "uppercase", letterSpacing: ".05em" }}>Priorité</span>
+          {(["all", "high", "high_medium"] as const).map(p => {
+            const label = p === "all" ? "Toutes" : p === "high" ? "Haute" : "Haute + Moyenne";
+            const active = priorityFilter === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPriorityFilter(p)}
+                style={{
+                  padding: "4px 10px", borderRadius: 16,
+                  border: "1px solid " + (active ? "var(--text-1)" : "var(--border)"),
+                  background: active ? "var(--text-1)" : "var(--surface-2)",
+                  color: active ? "var(--bg)" : "var(--text-3)",
+                  fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-3)", cursor: "pointer" }}>
           <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} />
           Afficher clôturés (gagnés/perdus)
@@ -211,16 +267,25 @@ export function DealsKanban({ deals: initialDeals }: Props) {
           {visibleStages.map(stageValue => {
             const cards = byStage[stageValue] ?? [];
             const label = stageLabel(stageValue);
+            const isDragOver = dragOverStage === stageValue;
             return (
-              <div key={stageValue} style={{ flex: 1, minWidth: 220 }}>
+              <div
+                key={stageValue}
+                style={{ flex: 1, minWidth: 220 }}
+                onDragOver={(e) => handleDragOver(e, stageValue)}
+                onDragLeave={() => handleDragLeave(stageValue)}
+                onDrop={(e) => handleDrop(e, stageValue)}
+              >
                 {/* Colonne header */}
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "8px 12px", marginBottom: 6,
-                  background: "var(--surface-2)", borderRadius: 9,
-                  border: "1px solid var(--border)",
+                  background: isDragOver ? "#DBEAFE" : "var(--surface-2)",
+                  borderRadius: 9,
+                  border: `1px solid ${isDragOver ? "#1D4ED8" : "var(--border)"}`,
+                  transition: "background .12s, border-color .12s",
                 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isDragOver ? "#1D4ED8" : "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>
                     {label}
                   </span>
                   <span style={{
@@ -233,13 +298,28 @@ export function DealsKanban({ deals: initialDeals }: Props) {
                 </div>
 
                 {/* Cartes */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 60 }}>
+                <div style={{
+                  display: "flex", flexDirection: "column", gap: 6, minHeight: 60,
+                  padding: isDragOver ? 6 : 0,
+                  borderRadius: 9,
+                  background: isDragOver ? "rgba(29, 78, 216, .06)" : "transparent",
+                  transition: "background .12s",
+                }}>
                   {cards.length === 0 ? (
-                    <div style={{ height: 52, border: "1px dashed var(--border)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 11, color: "var(--text-6, var(--text-5))" }}>—</span>
+                    <div style={{ height: 52, border: `1px dashed ${isDragOver ? "#1D4ED8" : "var(--border)"}`, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 11, color: isDragOver ? "#1D4ED8" : "var(--text-6, var(--text-5))" }}>
+                        {isDragOver ? "Déposer ici" : "—"}
+                      </span>
                     </div>
                   ) : (
-                    cards.map(d => <KanbanCard key={d.id} deal={d} onMove={moveDeal} />)
+                    cards.map(d => (
+                      <KanbanCard
+                        key={d.id}
+                        deal={d}
+                        onMove={moveDeal}
+                        onDragStart={(e) => handleDragStart(e, d.id)}
+                      />
+                    ))
                   )}
                 </div>
               </div>
@@ -253,9 +333,10 @@ export function DealsKanban({ deals: initialDeals }: Props) {
 
 // ── Carte individuelle ──────────────────────────────────────────────────────
 
-function KanbanCard({ deal, onMove }: {
+function KanbanCard({ deal, onMove, onDragStart }: {
   deal: KanbanDeal;
   onMove: (dealId: string, dir: "prev" | "next") => void;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>) => void;
 }) {
   const meta = TYPE_META[deal.deal_type] ?? TYPE_META.fundraising;
   const prioColor = PRIO_COLOR[deal.priority_level] ?? PRIO_COLOR.low;
@@ -269,15 +350,20 @@ function KanbanCard({ deal, onMove }: {
   const inactive = deal.deal_status !== "open";
 
   return (
-    <div style={{
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
-      borderLeft: `3px solid ${prioColor}`,
-      borderRadius: 9,
-      padding: "10px 11px",
-      opacity: inactive ? 0.55 : 1,
-      display: "flex", flexDirection: "column", gap: 5,
-    }}>
+    <div
+      draggable={!inactive}
+      onDragStart={inactive ? undefined : onDragStart}
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderLeft: `3px solid ${prioColor}`,
+        borderRadius: 9,
+        padding: "10px 11px",
+        opacity: inactive ? 0.55 : 1,
+        display: "flex", flexDirection: "column", gap: 5,
+        cursor: inactive ? "default" : "grab",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
         <Link href={`/protected/dossiers/${deal.id}`}
           style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "var(--text-1)", textDecoration: "none", minWidth: 0, lineHeight: 1.3 }}>
