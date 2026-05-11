@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { updateDealStageAction } from "@/actions/deals";
 import { ViewToggle } from "@/components/dossiers/ViewToggle";
+import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
+import { computeDealHealth, isDormant, DORMANT_THRESHOLD_DAYS } from "@/lib/crm/health-score";
 import {
   DEAL_STAGES_BY_TYPE,
   DEAL_STAGES_MAIN_BY_TYPE,
@@ -27,6 +29,10 @@ export interface KanbanDeal {
   currency: string | null;
   next_action_date: string | null;
   screening_status: string | null;
+  organization_id?: string | null;
+  mandate_id?: string | null;
+  dirigeant_id?: string | null;
+  dirigeant_nom?: string | null;
 }
 
 // Mini pill de statut screening (V53) — non bloquant, purement informatif
@@ -39,6 +45,7 @@ const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> 
 
 interface Props {
   deals: KanbanDeal[];
+  lastActivityByDeal?: Record<string, string | null>;
 }
 
 // ── Présentation par deal_type ───────────────────────────────────────────────
@@ -76,8 +83,9 @@ function fmtAmount(n: number | null, c: string | null): string | null {
 
 // ── Composant principal ──────────────────────────────────────────────────────
 
-export function DealsKanban({ deals: initialDeals }: Props) {
+export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Props) {
   const [deals, setDeals] = useState<KanbanDeal[]>(initialDeals);
+  const [dormantFilter, setDormantFilter] = useState<"all" | "active" | "dormant">("all");
   // V55 : un kanban = un métier. Par défaut, on sélectionne le premier type
   // présent dans les dossiers ouverts pour éviter un écran vide.
   const firstType = useMemo<DealTypeKey>(() => {
@@ -98,9 +106,18 @@ export function DealsKanban({ deals: initialDeals }: Props) {
       if (!showClosed && (d.deal_status === "won" || d.deal_status === "lost")) return false;
       if (priorityFilter === "high" && d.priority_level !== "high") return false;
       if (priorityFilter === "high_medium" && d.priority_level !== "high" && d.priority_level !== "medium") return false;
+      if (dormantFilter !== "all") {
+        const dormant = isDormant(lastActivityByDeal[d.id] ?? null, d.deal_status);
+        if (dormantFilter === "dormant" && !dormant) return false;
+        if (dormantFilter === "active" && dormant) return false;
+      }
       return true;
     });
-  }, [deals, typeFilter, showClosed, priorityFilter]);
+  }, [deals, typeFilter, showClosed, priorityFilter, dormantFilter, lastActivityByDeal]);
+
+  const dormantCount = useMemo(() => {
+    return deals.filter(d => d.deal_type === typeFilter && isDormant(lastActivityByDeal[d.id] ?? null, d.deal_status)).length;
+  }, [deals, typeFilter, lastActivityByDeal]);
 
   // Regroupement par stage
   const byStage = useMemo(() => {
@@ -233,6 +250,33 @@ export function DealsKanban({ deals: initialDeals }: Props) {
         })}
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginRight: 12 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-5)", textTransform: "uppercase", letterSpacing: ".05em" }}>Activité</span>
+          {(["all", "active", "dormant"] as const).map(d => {
+            const label =
+              d === "all" ? "Tous" :
+              d === "active" ? "Actifs" :
+              `Dormants${dormantCount > 0 ? ` (${dormantCount})` : ""}`;
+            const active = dormantFilter === d;
+            const isWarn = d === "dormant";
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDormantFilter(d)}
+                style={{
+                  padding: "4px 10px", borderRadius: 16,
+                  border: "1px solid " + (active ? (isWarn ? "#B45309" : "var(--text-1)") : "var(--border)"),
+                  background: active ? (isWarn ? "#FEF3C7" : "var(--text-1)") : "var(--surface-2)",
+                  color: active ? (isWarn ? "#92400E" : "var(--bg)") : "var(--text-3)",
+                  fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginRight: 12 }}>
           <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-5)", textTransform: "uppercase", letterSpacing: ".05em" }}>Priorité</span>
           {(["all", "high", "high_medium"] as const).map(p => {
             const label = p === "all" ? "Toutes" : p === "high" ? "Haute" : "Haute + Moyenne";
@@ -316,6 +360,7 @@ export function DealsKanban({ deals: initialDeals }: Props) {
                       <KanbanCard
                         key={d.id}
                         deal={d}
+                        lastActivityDate={lastActivityByDeal[d.id] ?? null}
                         onMove={moveDeal}
                         onDragStart={(e) => handleDragStart(e, d.id)}
                       />
@@ -333,8 +378,9 @@ export function DealsKanban({ deals: initialDeals }: Props) {
 
 // ── Carte individuelle ──────────────────────────────────────────────────────
 
-function KanbanCard({ deal, onMove, onDragStart }: {
+function KanbanCard({ deal, lastActivityDate, onMove, onDragStart }: {
   deal: KanbanDeal;
+  lastActivityDate: string | null;
   onMove: (dealId: string, dir: "prev" | "next") => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>) => void;
 }) {
@@ -369,9 +415,15 @@ function KanbanCard({ deal, onMove, onDragStart }: {
           style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "var(--text-1)", textDecoration: "none", minWidth: 0, lineHeight: 1.3 }}>
           {deal.name}
         </Link>
-        <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, borderRadius: 5, padding: "1px 6px", background: meta.bg, color: meta.tx }}>
-          {meta.icon}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 5, padding: "1px 6px", background: meta.bg, color: meta.tx }}>
+            {meta.icon}
+          </span>
+          <DealHealthBadge
+            health={computeDealHealth(deal, { last_activity_date: lastActivityDate })}
+            size="sm" showLabel={false}
+          />
+        </div>
       </div>
 
       {(deal.sector || amount) && (
@@ -390,18 +442,32 @@ function KanbanCard({ deal, onMove, onDragStart }: {
         </div>
       )}
 
-      {deal.screening_status && SCREENING_PILL[deal.screening_status] && (
-        <span style={{
-          alignSelf: "flex-start",
-          fontSize: 10, fontWeight: 600,
-          padding: "1px 6px",
-          background: SCREENING_PILL[deal.screening_status]!.bg,
-          color: SCREENING_PILL[deal.screening_status]!.tx,
-          borderRadius: 3,
-        }}>
-          {SCREENING_PILL[deal.screening_status]!.label}
-        </span>
-      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {deal.screening_status && SCREENING_PILL[deal.screening_status] && (
+          <span style={{
+            fontSize: 10, fontWeight: 600,
+            padding: "1px 6px",
+            background: SCREENING_PILL[deal.screening_status]!.bg,
+            color: SCREENING_PILL[deal.screening_status]!.tx,
+            borderRadius: 3,
+          }}>
+            {SCREENING_PILL[deal.screening_status]!.label}
+          </span>
+        )}
+        {isDormant(lastActivityDate, deal.deal_status) && (
+          <span
+            title={`Aucune activité depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus`}
+            style={{
+              fontSize: 10, fontWeight: 700,
+              padding: "1px 6px",
+              background: "#FEE2E2", color: "#991B1B",
+              borderRadius: 3,
+            }}
+          >
+            DORMANT
+          </span>
+        )}
+      </div>
 
       {/* Actions déplacement */}
       <div style={{ display: "flex", gap: 4, marginTop: 3 }}>

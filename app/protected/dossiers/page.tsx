@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { Plus, AlertTriangle, CheckSquare, CalendarDays, Activity } from "lucide-react";
 import { DealsKanban } from "./_components/deals-kanban";
 import { ViewToggle } from "@/components/dossiers/ViewToggle";
+import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
 import { stageLabel } from "@/lib/crm/matching-maps";
+import { computeDealHealth, isDormant, DORMANT_THRESHOLD_DAYS, type DealHealthResult } from "@/lib/crm/health-score";
 
 export const revalidate = 60;
 
@@ -123,6 +125,7 @@ async function Content() {
   const paused  = deals.filter(d => d.deal_status === "paused");
   const won     = deals.filter(d => d.deal_status === "won");
   const lost    = deals.filter(d => d.deal_status === "lost");
+  const dormantCount = open.filter(d => isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status)).length;
   const closed  = [...won, ...lost]; // affichés ensemble en grisé
   const types   = ["fundraising","ma_sell","ma_buy","cfo_advisor","recruitment"];
   const groups  = types.map(t => ({
@@ -142,6 +145,7 @@ async function Content() {
           <div style={{ display:"flex", gap:8, marginTop:6 }}>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{deals.length} total</span>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>{open.length} en cours</span>
+            {dormantCount > 0 && <span title={`Dossiers sans activité depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus`} style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#FEE2E2", color:"#991B1B", fontWeight:700 }}>⚠ {dormantCount} dormant{dormantCount > 1 ? "s" : ""}</span>}
             {paused.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{paused.length} en pause</span>}
             {won.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#D1FAE5", color:"#065F46", fontWeight:600 }}>{won.length} gagné{won.length !== 1 ? "s" : ""}</span>}
             {lost.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-5)", fontWeight:600 }}>{lost.length} perdu{lost.length !== 1 ? "s" : ""}</span>}
@@ -169,23 +173,39 @@ async function Content() {
 
             {g.open.length > 0 && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10, marginBottom: g.paused.length + g.won.length + g.lost.length > 0 ? 10 : 0 }}>
-                {g.open.map(d => (
-                  <DealCard key={d.id} deal={d} dt={g.dt}
-                    tasks={tasksByDeal[d.id] ?? []}
-                    lastActivity={(actsByDeal[d.id] ?? [])[0]?.activity_date ?? null}
-                    nextEvent={(eventsByDeal[d.id] ?? [])[0] ?? null}
-                    orgCount={orgCountByDeal[d.id] ?? 0}
-                  />
-                ))}
+                {g.open.map(d => {
+                  const lastActivity = (actsByDeal[d.id] ?? [])[0]?.activity_date ?? null;
+                  const tasks = tasksByDeal[d.id] ?? [];
+                  const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length;
+                  const health = computeDealHealth(d, {
+                    last_activity_date: lastActivity,
+                    open_tasks_count: tasks.length,
+                    overdue_tasks_count: overdue,
+                    linked_orgs_count: orgCountByDeal[d.id] ?? 0,
+                  });
+                  return (
+                    <DealCard key={d.id} deal={d} dt={g.dt}
+                      tasks={tasks}
+                      lastActivity={lastActivity}
+                      nextEvent={(eventsByDeal[d.id] ?? [])[0] ?? null}
+                      orgCount={orgCountByDeal[d.id] ?? 0}
+                      health={health}
+                    />
+                  );
+                })}
               </div>
             )}
             {(g.paused.length + g.won.length + g.lost.length) > 0 && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", gap:10, opacity:.5 }}>
-                {[...g.paused, ...g.won, ...g.lost].map(d => (
-                  <DealCard key={d.id} deal={d} dt={g.dt}
-                    tasks={[]} lastActivity={null} nextEvent={null} orgCount={0}
-                  />
-                ))}
+                {[...g.paused, ...g.won, ...g.lost].map(d => {
+                  const health = computeDealHealth(d, {});
+                  return (
+                    <DealCard key={d.id} deal={d} dt={g.dt}
+                      tasks={[]} lastActivity={null} nextEvent={null} orgCount={0}
+                      health={health}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -206,14 +226,16 @@ const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> 
 type TaskType = { id:string; deal_id:string; task_status:string; due_date:string|null; priority_level:string };
 type EventType = { id:string; deal_id:string; title:string; event_type:string; due_date:string; status:string } | null;
 
-function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount }: {
+function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount, health }: {
   deal: DealType; dt: typeof DT[string];
   tasks: TaskType[]; lastActivity: string|null; nextEvent: EventType; orgCount: number;
+  health: DealHealthResult;
 }) {
   const pcolor = PRIO[deal.priority_level] ?? "var(--border-2)";
   const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date());
   const daysSinceActivity = lastActivity ? daysSince(lastActivity) : null;
   const inactive = deal.deal_status !== "open";
+  const dormant = isDormant(lastActivity, deal.deal_status);
   const fmtAmount = (n: number|null, c: string|null) => {
     if (!n) return null;
     return n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c??"€"}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c??"€"}` : `${n} ${c??"€"}`;
@@ -230,13 +252,24 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount }: {
 
           {/* Titre + statut */}
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:6 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"var(--text-1)", lineHeight:1.3, flex:1, minWidth:0 }}>
-              {deal.name}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"var(--text-1)", lineHeight:1.3 }}>
+                {deal.name}
+              </div>
+              {dormant && (
+                <span
+                  title={`Aucune activité depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus`}
+                  style={{ display:"inline-block", marginTop:5, fontSize:10, fontWeight:700, padding:"1px 6px", background:"#FEE2E2", color:"#991B1B", borderRadius:3 }}
+                >
+                  DORMANT
+                </span>
+              )}
             </div>
             <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, flexShrink:0 }}>
               <span style={{ fontSize:11, fontWeight:700, borderRadius:6, padding:"2px 8px", background:dt.bg, color:dt.tx }}>
                 {stageLabel(deal.deal_stage)}
               </span>
+              <DealHealthBadge health={health} size="sm" showLabel={false} />
               {deal.screening_status && SCREENING_PILL[deal.screening_status] && (
                 <span style={{
                   fontSize:10, fontWeight:600, borderRadius:3, padding:"1px 6px",
@@ -318,9 +351,27 @@ async function KanbanContent() {
   const supabase = await createClient();
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date,screening_status")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date,screening_status,organization_id,mandate_id,dirigeant_id,dirigeant_nom")
     .order("priority_level");
-  return <DealsKanban deals={deals ?? []} />;
+
+  const dealIds = (deals ?? []).map(d => d.id);
+  let lastActivityByDeal: Record<string, string | null> = {};
+  if (dealIds.length > 0) {
+    const { data: acts } = await supabase
+      .from("actions")
+      .select("deal_id,start_datetime,due_date")
+      .in("deal_id", dealIds)
+      .neq("type", "task")
+      .order("start_datetime", { ascending: false, nullsFirst: false });
+    for (const a of acts ?? []) {
+      if (!a.deal_id) continue;
+      if (!lastActivityByDeal[a.deal_id]) {
+        lastActivityByDeal[a.deal_id] = a.start_datetime ?? a.due_date ?? null;
+      }
+    }
+  }
+
+  return <DealsKanban deals={deals ?? []} lastActivityByDeal={lastActivityByDeal} />;
 }
 
 export default async function DossiersPage({ searchParams }: {

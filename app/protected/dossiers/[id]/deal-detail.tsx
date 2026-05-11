@@ -23,8 +23,10 @@ import { DocumentsTab } from "./documents-tab";
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
 import { DealOverviewBlock } from "@/components/dossiers/DealOverviewBlock";
+import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
 import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
 import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
+import { computeDealHealth } from "@/lib/crm/health-score";
 import type { SuggestionWithRelations } from "@/lib/crm/suggestions";
 import { isScreeningReady } from "@/lib/crm/matching-maps";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
@@ -505,9 +507,17 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           </Link>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
             <div>
-              <div style={{ display:"flex", gap:7, marginBottom:8, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:7, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
                 <span style={{ fontSize:11.5, fontWeight:700, borderRadius:7, padding:"3px 10px", background:dt.bg, color:dt.tx, border:`1px solid ${dt.border}` }}>{TYPE_LABELS[deal.deal_type]??deal.deal_type}</span>
                 <span style={{ fontSize:11.5, fontWeight:600, borderRadius:7, padding:"3px 10px", background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>{stageLabel(deal.deal_stage)}</span>
+                <DealHealthBadge
+                  health={computeDealHealth(deal, {
+                    has_financial_data: (initialFinancialData?.length ?? 0) > 0,
+                    has_fees_estimated: !!(mandate?.estimated_fee_amount && mandate.estimated_fee_amount > 0),
+                    linked_orgs_count: orgs.length,
+                  })}
+                  size="md"
+                />
                 {deal.target_date && <span style={{ fontSize:11.5, color:"var(--text-5)", padding:"3px 8px" }}>🎯 {fmt(deal.target_date)}</span>}
               </div>
               <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>{deal.name}</h1>
