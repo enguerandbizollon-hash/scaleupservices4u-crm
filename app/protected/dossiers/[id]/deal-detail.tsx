@@ -6,8 +6,8 @@ import ActionTimeline from "@/components/actions/ActionTimeline";
 import ActionModal from "@/components/actions/ActionModal";
 import { MandateInlineForm } from "@/components/mandates/MandateInlineForm";
 import { getAllMandates, linkMandateToDeal, unlinkMandateFromDeal, getMandateByDealId } from "@/actions/mandates";
-import { MatchingTab } from "./matching-tab";
-import { MaMatchingTab } from "./ma-matching-tab";
+// MatchingTab et MaMatchingTab : supprimés, leur logique est désormais
+// intégrée comme sources internes dans le SourcingWizard (S4).
 import { RecruitmentKanban } from "./recruitment-kanban";
 import { RecruitmentMatching } from "./recruitment-matching";
 import { FinancialTab, type FinancialRow } from "./financial-tab";
@@ -15,14 +15,19 @@ import { updateDealMatchingProfile } from "@/actions/matching";
 import {
   createCommitment, updateCommitment, deleteCommitment,
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
+  updateDealOrganizationStage, setDealClientOrganization,
 } from "@/actions/deals";
 import { DocumentsTab } from "./documents-tab";
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
+import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
+import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
+import type { SuggestionWithRelations } from "@/lib/crm/suggestions";
+import { isScreeningReady } from "@/lib/crm/matching-maps";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
-import { COMPANY_STAGES, GEOGRAPHIES, ROUND_TYPES, DEAL_TIMING_OPTIONS, SENIORITY_OPTIONS, REMOTE_OPTIONS, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { COMPANY_STAGES, ORG_COMPANY_STAGES, GEOGRAPHIES, ROUND_TYPES, DEAL_TIMING_OPTIONS, SENIORITY_OPTIONS, REMOTE_OPTIONS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
@@ -31,6 +36,7 @@ import {
   FileText, ExternalLink, AlertTriangle, CalendarDays, Briefcase
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
+import { EntityDrawer, type EntityRef } from "@/components/ui/EntityDrawer";
 
 // ── Types ────────────────────────────────────────────────────
 type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; role_in_dossier?:string; contacts: Contact[] };
@@ -47,7 +53,9 @@ const DT: Record<string,{bg:string;tx:string;border:string}> = {
   recruitment:{bg:"var(--rec-bg)",tx:"var(--rec-tx)",border:"var(--rec-mid)"},
 };
 const TYPE_LABELS: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor", recruitment:"Recrutement" };
-const STAGE_LABELS: Record<string,string> = { kickoff:"Kickoff", preparation:"Préparation", outreach:"Prospection", management_meetings:"Meetings mgt", dd:"Due diligence", negotiation:"Négociation", closing:"Closing", post_closing:"Post-closing", ongoing_support:"Suivi", search:"Recherche" };
+// V55 : libellés unifiés via stageLabel() depuis matching-maps. Map gardée
+// vide pour éviter toute référence oubliée (remplacée une à une).
+const STAGE_LABELS: Record<string,string> = {};
 const STATUS_SC: Record<string,{bg:string,tx:string}> = {
   active:     {bg:"#D1FAE5",          tx:"#065F46"},
   to_qualify: {bg:"var(--surface-3)", tx:"var(--text-4)"},
@@ -291,13 +299,15 @@ function MandateTabContent({
 }
 
 // ════════════════════════════════════════════════════════════
-export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialFinancialData, initialMandate }: {
+export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialFinancialData, initialMandate, initialClientOrganization, initialSuggestions }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
   initialCommitments: Commitment[];
   initialFinancialData: FinancialRow[];
   initialMandate: any;
+  initialClientOrganization: { id: string; name: string; company_stage: string | null; organization_type: string | null; is_client: boolean } | null;
+  initialSuggestions: SuggestionWithRelations[];
 }) {
   // State sections
   const [orgs, setOrgs] = useState<Org[]>(initialOrgs);
@@ -336,8 +346,38 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "mandat" | "matching" | "matching_ma" | "pipeline" | "matching_rh" | "financier" | "documents">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "sourcing" | "mandat" | "pipeline" | "matching_rh" | "financier" | "documents">("dossier");
   const [matchingRefreshKey, setMatchingRefreshKey] = useState(0);
+
+  // Drawer latéral pour entités liées (contacts, organisations)
+  const [drawerEntity, setDrawerEntity] = useState<EntityRef>(null);
+
+  // V54 : organisation cliente (sujet du dossier). Affichage en lecture seule
+  // dans le header. L'édition de la taille se fait sur la fiche organisation
+  // pour éviter la superposition (la taille est une propriété de l'org,
+  // pas du dossier).
+  const clientOrg = initialClientOrganization;
+  const clientOrgStageLabel = clientOrg?.company_stage
+    ? ORG_COMPANY_STAGES.find(s => s.value === clientOrg.company_stage)?.label ?? null
+    : null;
+
+  // Fix V54 legacy : dossiers créés avant V54 sans organisation cliente.
+  // On permet de rattacher une org existante directement depuis le bandeau.
+  const [linkClientOrgId, setLinkClientOrgId] = useState<string>("");
+  const [linkingClientOrg, setLinkingClientOrg] = useState(false);
+  const [linkClientError, setLinkClientError] = useState<string | null>(null);
+  const handleLinkClientOrg = async () => {
+    if (!linkClientOrgId) return;
+    setLinkingClientOrg(true);
+    setLinkClientError(null);
+    const res = await setDealClientOrganization(deal.id, linkClientOrgId);
+    setLinkingClientOrg(false);
+    if (!res.success) {
+      setLinkClientError(res.error);
+      return;
+    }
+    window.location.reload();
+  };
 
   // Mandat — state et handlers
   const [mandate, setMandate] = useState<any>(initialMandate);
@@ -460,11 +500,54 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             <div>
               <div style={{ display:"flex", gap:7, marginBottom:8, flexWrap:"wrap" }}>
                 <span style={{ fontSize:11.5, fontWeight:700, borderRadius:7, padding:"3px 10px", background:dt.bg, color:dt.tx, border:`1px solid ${dt.border}` }}>{TYPE_LABELS[deal.deal_type]??deal.deal_type}</span>
-                <span style={{ fontSize:11.5, fontWeight:600, borderRadius:7, padding:"3px 10px", background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>{STAGE_LABELS[deal.deal_stage]??deal.deal_stage}</span>
+                <span style={{ fontSize:11.5, fontWeight:600, borderRadius:7, padding:"3px 10px", background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>{stageLabel(deal.deal_stage)}</span>
                 {deal.target_date && <span style={{ fontSize:11.5, color:"var(--text-5)", padding:"3px 8px" }}>🎯 {fmt(deal.target_date)}</span>}
               </div>
               <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>{deal.name}</h1>
               {deal.description && <p style={{ margin:"6px 0 0", fontSize:13, color:"var(--text-4)", lineHeight:1.5, maxWidth:600 }}>{deal.description}</p>}
+
+              {/* V54 : bloc client (lecture seule). La taille d'entreprise
+                  s'édite sur la fiche organisation, pas ici. */}
+              {clientOrg && (
+                <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:11.5, fontWeight:700, padding:"3px 10px", background:"#D1FAE5", color:"#065F46", border:"1px solid #6EE7B7", borderRadius:6 }}>
+                    Client
+                  </span>
+                  <Link href={`/protected/organisations/${clientOrg.id}`} style={{ fontSize:13, fontWeight:600, color:"var(--text-2)", textDecoration:"none" }}>
+                    {clientOrg.name}
+                  </Link>
+                  {clientOrgStageLabel && (
+                    <>
+                      <span style={{ color:"var(--text-5)", fontSize:12 }}>·</span>
+                      <span style={{ fontSize:12, color:"var(--text-4)" }}>{clientOrgStageLabel}</span>
+                    </>
+                  )}
+                </div>
+              )}
+              {!clientOrg && (
+                <div style={{ marginTop:10, fontSize:12, padding:"8px 12px", background:"#FEF3C7", border:"1px solid #FCD34D", color:"#92400E", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", maxWidth:700 }}>
+                  <AlertTriangle size={13}/>
+                  <span>Dossier sans organisation cliente. Rattache-la :</span>
+                  <select
+                    value={linkClientOrgId}
+                    onChange={e => setLinkClientOrgId(e.target.value)}
+                    disabled={linkingClientOrg}
+                    style={{ flex:1, minWidth:180, padding:"5px 8px", fontSize:12, border:"1px solid var(--border)", background:"#fff", color:"var(--text-1)", fontFamily:"inherit" }}
+                  >
+                    <option value="">— Choisir —</option>
+                    {allOrgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                  <button
+                    onClick={handleLinkClientOrg}
+                    disabled={!linkClientOrgId || linkingClientOrg}
+                    style={{ padding:"5px 12px", fontSize:12, fontWeight:600, background:"#065F46", color:"#fff", border:"none", cursor: linkClientOrgId && !linkingClientOrg ? "pointer" : "not-allowed", fontFamily:"inherit" }}
+                  >
+                    {linkingClientOrg ? "…" : "Rattacher"}
+                  </button>
+                  {linkClientError && <span style={{ width:"100%", color:"#991B1B" }}>{linkClientError}</span>}
+                </div>
+              )}
+
               <div style={{ marginTop:10 }}><TagInput objectType="deal" objectId={deal.id} /></div>
             </div>
             <Link href={`/protected/dossiers/${deal.id}/modifier`} style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}>Modifier</Link>
@@ -474,15 +557,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
         <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
           {(isFundraising
-            ? (["dossier","mandat","matching","financier","documents"] as const)
+            ? (["dossier","screening","sourcing","mandat","financier","documents"] as const)
             : isRecruitment
-            ? (["dossier","mandat","pipeline","matching_rh","documents"] as const)
+            ? (["dossier","screening","mandat","pipeline","matching_rh","documents"] as const)
             : isMa
-            ? (["dossier","mandat","matching_ma","financier","documents"] as const)
-            : (["dossier","mandat","financier","documents"] as const)
+            ? (["dossier","screening","sourcing","mandat","financier","documents"] as const)
+            : (["dossier","screening","mandat","financier","documents"] as const)
           ).map(tab => {
             const labels: Record<string, string> = {
-              dossier:"Dossier", mandat:"Mandat", matching:"Matching", matching_ma:"Matching M&A",
+              dossier:"Dossier", screening:"Screening", sourcing:"Sourcing", mandat:"Mandat",
               pipeline:"Pipeline", matching_rh:"Matching vivier", financier:"Financier",
               documents:"Documents",
             };
@@ -491,7 +574,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             return (
               <button key={tab} onClick={()=>{
                 setActiveTab(tab as typeof activeTab);
-                if (tab === "matching") setMatchingRefreshKey(k => k + 1);
               }} style={{
                 padding:"8px 16px", border:"none", background:"none", cursor:"pointer",
                 fontSize:13, fontWeight: isActive ? 700 : 500,
@@ -527,26 +609,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           <DocumentsTab dealId={deal.id} dealName={deal.name} />
         )}
 
-        {/* Onglet Matching (fundraising) */}
-        {isFundraising && activeTab === "matching" && (
-          <MatchingTab
-            dealId={deal.id}
-            refreshKey={matchingRefreshKey}
-            onCreateActivity={(orgId) => {
-              setActionModalContext({ deal_id: deal.id, organization_id: orgId });
-              setActionModalDefaultType("email");
-              setActionModalOpen(true);
-            }}
-          />
-        )}
-
-        {/* Onglet Matching M&A */}
-        {isMa && activeTab === "matching_ma" && (
-          <MaMatchingTab
-            dealId={deal.id}
-            dealType={deal.deal_type as "ma_sell" | "ma_buy"}
-          />
-        )}
+        {/* Onglets Matching et Matching M&A : supprimés (V56 Sourcing unifié).
+            La logique scoring réseau interne (ma-scoring, matching algo) est
+            intégrée comme source dans executeSourcingPlanAction. */}
 
         {/* Onglet Pipeline (recruitment) */}
         {isRecruitment && activeTab === "pipeline" && (
@@ -556,6 +621,20 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         {/* Onglet Matching vivier (recruitment) */}
         {isRecruitment && activeTab === "matching_rh" && (
           <RecruitmentMatching dealId={deal.id} />
+        )}
+
+        {/* Onglet Screening — qualification dossier avant ouverture vers l'extérieur (V53) */}
+        {activeTab === "screening" && (
+          <ScreeningSection dealId={deal.id} />
+        )}
+
+        {/* Onglet Sourcing — stratégie IA + CRM + Apollo unifiés (S4) */}
+        {activeTab === "sourcing" && (
+          <SourcingWizard
+            dealId={deal.id}
+            screeningReady={isScreeningReady(deal.screening_status)}
+            initialSuggestions={initialSuggestions}
+          />
         )}
 
         {/* Onglet Mandat — vue résumée + lien vers fiche mandat complète */}
@@ -735,7 +814,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                       <Building2 size={13} color="var(--text-4)"/>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                          <Link href={`/protected/organisations/${org.id}`} onClick={e=>e.stopPropagation()} style={{ fontSize:13.5, fontWeight:700, color:"var(--text-1)", textDecoration:"none" }}>{org.name}</Link>
+                          <button type="button" onClick={(e)=>{ e.stopPropagation(); setDrawerEntity({ type:"organization", id: org.id }); }} style={{ fontSize:13.5, fontWeight:700, color:"var(--text-1)", background:"none", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>{org.name}</button>
                           {(() => { const rc = ROLE_CONFIG[org.role_in_dossier ?? "autre"] ?? ROLE_CONFIG.autre; return (
                             <select value={org.role_in_dossier ?? "autre"} onClick={e=>e.stopPropagation()} onChange={async (e) => {
                               const newRole = e.target.value;
@@ -773,7 +852,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                           </div>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
-                              <Link href={`/protected/contacts/${c.id}`} style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", textDecoration:"none" }}>{c.first_name} {c.last_name}</Link>
+                              <button type="button" onClick={()=>setDrawerEntity({ type:"contact", id: c.id })} style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", background:"none", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>{c.first_name} {c.last_name}</button>
                               {c.title && <span style={{ fontSize:11.5, color:"var(--text-4)" }}>{c.title}</span>}
                             </div>
                             {days !== null && days > 15 && (
@@ -1119,6 +1198,9 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
           }}
         />
       )}
+
+      {/* Drawer latéral pour fiches contact/organisation liées */}
+      <EntityDrawer entity={drawerEntity} onClose={() => setDrawerEntity(null)} />
     </div>
   );
 }

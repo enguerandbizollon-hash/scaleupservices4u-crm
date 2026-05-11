@@ -132,7 +132,12 @@ export interface WizardDealPayload {
   currency: string;
 
   // Liens existants ou créations
+  // V54 : client_organization_id devient obligatoire (le dossier est toujours
+  // rattaché à une organisation cliente = sujet du dossier).
   client_organization_id: string | null;
+  // V54 : taille d'entreprise. Si renseignée, met à jour
+  // organizations.company_stage de l'organisation cliente.
+  client_organization_stage: string | null;
   dirigeant_id: string | null;
   dirigeant_nom: string | null;
   dirigeant_email: string | null;
@@ -217,8 +222,22 @@ export async function createDealWizardAction(
   const name = payload.name.trim();
   if (!name) return { success: false, error: "Nom du dossier obligatoire" };
   if (!payload.deal_type) return { success: false, error: "Type de mission obligatoire" };
+  if (!payload.client_organization_id) {
+    return { success: false, error: "Organisation cliente obligatoire (sujet du dossier)" };
+  }
 
   const warnings: string[] = [];
+
+  // V54 : mise à jour de la taille d'entreprise de l'organisation cliente
+  // si renseignée depuis le wizard. Non bloquant.
+  if (payload.client_organization_stage) {
+    const { error: stageErr } = await supabase
+      .from("organizations")
+      .update({ company_stage: payload.client_organization_stage })
+      .eq("id", payload.client_organization_id)
+      .eq("user_id", user.id);
+    if (stageErr) warnings.push(`Taille d'entreprise : ${stageErr.message}`);
+  }
 
   // 1. Création mandat inline si demandée (avant le deal pour pouvoir le lier)
   let mandateId = payload.mandate_id;
@@ -260,7 +279,9 @@ export async function createDealWizardAction(
     description: payload.description,
     currency: payload.currency || "EUR",
     mandate_id: mandateId,
-    client_organization_id: null, // lien via deal_organizations côté deal-detail
+    // V54 : le sujet du dossier = l'organisation cliente. FK directe sur deals.
+    organization_id: payload.client_organization_id,
+    client_organization_id: null, // legacy column, remplacée par organization_id
     // Dirigeant structuré
     dirigeant_id: payload.dirigeant_id,
     dirigeant_nom: payload.dirigeant_nom,
@@ -327,16 +348,10 @@ export async function createDealWizardAction(
   if (error) return { success: false, error: error.message };
   if (!deal?.id) return { success: false, error: "Erreur création dossier" };
 
-  // 3. Liaison organisation cliente via deal_organizations (si fournie)
-  if (payload.client_organization_id) {
-    const { error: linkError } = await supabase.from("deal_organizations").insert({
-      user_id: user.id,
-      deal_id: deal.id,
-      organization_id: payload.client_organization_id,
-      role_in_dossier: "client",
-    });
-    if (linkError) warnings.push(`Liaison client : ${linkError.message}`);
-  }
+  // 3. V54 : la liaison client est maintenant capturée par deals.organization_id
+  // (écrit à l'étape 2). Plus de double-saisie via deal_organizations role='client'.
+  // Les autres rôles (banque, avocat, cible, acquéreur, investisseur...) restent
+  // gérés via deal_organizations depuis deal-detail.tsx.
 
   // 4. Données financières N-1 (optionnel, non bloquant)
   if (payload.financial) {

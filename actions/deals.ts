@@ -82,6 +82,74 @@ export interface CommitmentInput {
 
 // ── Simple list (autocomplete) ────────────────────────────────────────────────
 
+// V54 fix : assigne une organisation cliente à un dossier qui en est
+// dépourvu (cas des dossiers legacy créés avant V54). Vérifie que l'org
+// appartient au user. Met à jour deal.organization_id.
+export async function setDealClientOrganization(
+  dealId: string,
+  organizationId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("id")
+    .eq("id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!org) return { success: false, error: "Organisation introuvable" };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({ organization_id: organizationId })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true };
+}
+
+// V54 : mise à jour de la taille d'entreprise (company_stage) de l'organisation
+// liée au dossier. Agit sur organizations.company_stage via deal.organization_id.
+// Centralise la règle "la taille vit sur l'organisation, éditée depuis le dossier
+// pour l'ergonomie".
+export async function updateDealOrganizationStage(
+  dealId: string,
+  stage: string | null,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("organization_id")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!deal?.organization_id) {
+    return { success: false, error: "Dossier sans organisation liée" };
+  }
+
+  const { error } = await supabase
+    .from("organizations")
+    .update({ company_stage: stage || null })
+    .eq("id", deal.organization_id)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  revalidatePath(`/protected/organisations/${deal.organization_id}`);
+  return { success: true };
+}
+
 export async function getAllDealsSimple(): Promise<{ id: string; name: string }[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -413,6 +481,22 @@ export async function updateDealStageAction(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
+
+  // V55 : validation du stade contre la séquence du type de dossier.
+  // On charge deal_type puis on compare avec DEAL_STAGES_BY_TYPE.
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("deal_type")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!deal) return { success: false, error: "Dossier introuvable" };
+
+  const { isValidStageForType } = await import("@/lib/crm/matching-maps");
+  if (!isValidStageForType(deal.deal_type, newStage)) {
+    return { success: false, error: `Stade "${newStage}" non valide pour ce type de dossier` };
+  }
 
   const { error } = await supabase.from("deals")
     .update({ deal_stage: newStage, updated_at: new Date().toISOString() })

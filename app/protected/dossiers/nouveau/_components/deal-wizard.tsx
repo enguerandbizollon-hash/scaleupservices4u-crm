@@ -7,6 +7,7 @@ import { createOrganisationAction } from "@/actions/organisations";
 import {
   SECTORS,
   COMPANY_STAGES,
+  ORG_COMPANY_STAGES,
   SENIORITY_OPTIONS,
   REMOTE_OPTIONS,
   ROUND_TYPES,
@@ -193,11 +194,13 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("EUR");
 
-  // Step 1 — client org (3 modes)
-  const [clientOrgMode, setClientOrgMode] = useState<"none" | "existing" | "new">("none");
+  // Step 1 — client org (obligatoire depuis V54 : 2 modes)
+  const [clientOrgMode, setClientOrgMode] = useState<"existing" | "new">("existing");
   const [clientOrgId, setClientOrgId] = useState<string>("");
   const [clientOrgName, setClientOrgName] = useState("");
   const [clientOrgType, setClientOrgType] = useState("client");
+  // V54 : taille d'entreprise, stockée sur organizations.company_stage
+  const [clientOrgStage, setClientOrgStage] = useState<string>("");
 
   // Step 1 — dirigeant (3 modes : none / contact existant / saisie libre)
   const [dirigeantMode, setDirigeantMode] = useState<"none" | "existing" | "new">("none");
@@ -277,13 +280,13 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
 
   // ── Validation Step 1 ──
   const step1Valid = name.trim().length > 0 && !!dealType;
-  // Création org inline : si mode = new, nom requis
-  const step1ClientOk = clientOrgMode !== "new" || clientOrgName.trim().length > 0;
-  // Création mandat inline : si mode = new, il faut une org cliente (existante ou en création)
-  const step1MandateOk = mandateMode !== "new" || (
-    newMandateName.trim().length > 0 &&
-    (clientOrgMode !== "none")
-  );
+  // V54 : organisation cliente obligatoire (sujet du dossier).
+  // Mode existing : il faut une org sélectionnée. Mode new : nom requis.
+  const step1ClientOk = clientOrgMode === "new"
+    ? clientOrgName.trim().length > 0
+    : !!clientOrgId;
+  // Création mandat inline : si mode = new, nom requis (l'org est toujours présente)
+  const step1MandateOk = mandateMode !== "new" || newMandateName.trim().length > 0;
   // Création dirigeant libre : si mode = new, prénom + nom requis
   const step1DirigeantOk = dirigeantMode !== "new" || (
     dirigeantFirstName.trim().length > 0 && dirigeantLastName.trim().length > 0
@@ -321,7 +324,9 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
         investor_sectors: [], investor_stages: [], investor_geographies: [],
         investor_thesis: null,
         sector: null, founded_year: null, employee_count: null,
-        company_stage: null, revenue_range: null,
+        // V54 : taille d'entreprise stockée à la création
+        company_stage: clientOrgStage || null,
+        revenue_range: null,
         sale_readiness: null, partial_sale_ok: true,
         acquisition_rationale: null,
         target_sectors: [], excluded_sectors: [], target_geographies: [],
@@ -329,6 +334,13 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
       });
       if (!res.success) { setSaving(false); setError(`Organisation : ${res.error}`); return; }
       resolvedClientOrgId = res.id;
+    }
+
+    // V54 : sécurité supplémentaire — ne pas avancer sans org cliente résolue.
+    if (!resolvedClientOrgId) {
+      setSaving(false);
+      setError("Organisation cliente obligatoire");
+      return;
     }
 
     // 2. Création inline dirigeant (si mode new et contact souhaité)
@@ -350,7 +362,9 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
       priority_level: priority,
       sector: sector || null,
       location: location || null,
-      company_stage: companyStage || null,
+      // V54 : stade startup uniquement pour fundraising. Les autres types
+      // s'appuient sur organizations.company_stage (taille d'entreprise).
+      company_stage: dealType === "fundraising" ? (companyStage || null) : null,
       company_geography: companyGeography || null,
       start_date: startDate || null,
       target_date: targetDate || null,
@@ -358,6 +372,10 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
       currency,
 
       client_organization_id: resolvedClientOrgId,
+      // V54 : taille d'entreprise appliquée sur l'organisation cliente si
+      // renseignée (y compris lorsqu'on sélectionne une org existante et qu'on
+      // souhaite mettre à jour sa taille).
+      client_organization_stage: clientOrgStage || null,
 
       dirigeant_id: resolvedDirigeantId,
       dirigeant_nom: (() => {
@@ -575,13 +593,18 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                 </div>
               </div>
               <div style={grid2}>
-                <div>
-                  <label style={lbl}>Stade de l&apos;entreprise</label>
-                  <select value={companyStage} onChange={e => setCompanyStage(e.target.value)} style={inp}>
-                    <option value="">— Non renseigné —</option>
-                    {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
+                {/* V54 : Stade startup (seed → growth) réservé au fundraising.
+                    Pour les autres types, la taille d'entreprise se renseigne
+                    sur l'organisation cliente (section suivante). */}
+                {dealType === "fundraising" ? (
+                  <div>
+                    <label style={lbl}>Stade startup</label>
+                    <select value={companyStage} onChange={e => setCompanyStage(e.target.value)} style={inp}>
+                      <option value="">— Non renseigné —</option>
+                      {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
+                ) : <div />}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <div>
                     <label style={lbl}>Date de début</label>
@@ -600,11 +623,11 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
               </div>
             </div>
 
-            {/* Bloc Organisation cliente */}
+            {/* Bloc Organisation cliente — obligatoire (V54) */}
             <div style={sectionCard}>
-              <div style={sectionTitle}>Organisation cliente</div>
+              <div style={sectionTitle}>Organisation cliente (sujet du dossier) *</div>
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                {(["none", "existing", "new"] as const).map(m => (
+                {(["existing", "new"] as const).map(m => (
                   <button key={m} type="button" onClick={() => setClientOrgMode(m)}
                     style={{
                       padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
@@ -612,7 +635,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                       color: clientOrgMode === m ? "#fff" : "var(--text-3)",
                       fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                     }}>
-                    {m === "none" ? "Ne pas renseigner" : m === "existing" ? "Sélectionner existante" : "Créer nouvelle"}
+                    {m === "existing" ? "Sélectionner existante" : "Créer nouvelle"}
                   </button>
                 ))}
               </div>
@@ -643,6 +666,19 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                   </div>
                 </div>
               )}
+              {/* V54 : taille d'entreprise (startup / PME / ETI / grand groupe) */}
+              <div style={{ marginTop: 14 }}>
+                <label style={lbl}>Taille d&apos;entreprise</label>
+                <select value={clientOrgStage} onChange={e => setClientOrgStage(e.target.value)} style={inp}>
+                  <option value="">— Non renseignée —</option>
+                  {ORG_COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+                <div style={hint}>
+                  {clientOrgMode === "existing"
+                    ? "Si renseignée, met à jour la taille sur la fiche organisation."
+                    : "Taille stockée sur l'organisation créée."}
+                </div>
+              </div>
             </div>
 
             {/* Bloc Mandat */}
@@ -673,11 +709,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
               )}
               {mandateMode === "new" && (
                 <>
-                  {clientOrgMode === "none" && (
-                    <div style={{ ...hint, color: "var(--rec-tx)", marginBottom: 10 }}>
-                      Un mandat nécessite une organisation cliente — choisis-en une ci-dessus d&apos;abord.
-                    </div>
-                  )}
                   <div style={{ marginBottom: 10 }}>
                     <label style={lbl}>Nom du mandat *</label>
                     <input value={newMandateName} onChange={e => setNewMandateName(e.target.value)}

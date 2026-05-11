@@ -5,6 +5,7 @@ import { AlertTriangle, Plus } from "lucide-react";
 import { DashboardClient } from "./dashboard-client";
 import { getFeesKpis } from "@/actions/fees";
 import { projectYearEndFromYtd } from "@/lib/crm/fee-calculator";
+import { stageLabel } from "@/lib/crm/matching-maps";
 
 // Les widgets lisent des données mutables (actions, deals, relances) :
 // on force le rendu dynamique pour que revalidatePath depuis les Server
@@ -19,7 +20,8 @@ const DT: Record<string,{label:string;bg:string;tx:string;border:string}> = {
   cfo_advisor:{label:"CFO Advisor",bg:"var(--cfo-bg)", tx:"var(--cfo-tx)", border:"var(--cfo-mid)"},
   recruitment:{label:"Recrutement",bg:"var(--rec-bg)", tx:"var(--rec-tx)", border:"var(--rec-mid)"},
 };
-const STAGE: Record<string,string> = { kickoff:"Kickoff",preparation:"Préparation",outreach:"Outreach",management_meetings:"Mgmt",dd:"Due Diligence",negotiation:"Négociation",closing:"Closing",post_closing:"Post-closing",ongoing_support:"Suivi",search:"Recherche" };
+// V55 : libellés unifiés via stageLabel() depuis matching-maps.
+const STAGE: Record<string,string> = {};
 
 function fmt(v:string|null){ if(!v)return"—"; return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}); }
 function daysSince(v:string){ return Math.floor((Date.now()-new Date(v).getTime())/86400000); }
@@ -64,6 +66,10 @@ async function Content() {
       supabase.from("contacts").select("*",{count:"exact",head:true}),
       supabase.from("organizations").select("*",{count:"exact",head:true}),
       supabase.from("actions").select("*",{count:"exact",head:true}).eq("type","task").not("status","in",'("done","cancelled","completed")'),
+      // V53e : dossiers open non encore prêts pour outreach (not_started + drafting)
+      supabase.from("deals").select("*",{count:"exact",head:true})
+        .eq("deal_status","open")
+        .in("screening_status",["not_started","drafting"]),
     ]),
     supabase.from("contacts")
       .select("id,first_name,last_name,email,organization_contacts(organizations(name))")
@@ -76,7 +82,7 @@ async function Content() {
   const relances   = relancesRes.data ?? [];
   const activities = recentActsRes.data ?? [];
   const events     = upcomingEventsRes.data ?? [];
-  const [cDeals, cContacts, cOrgs, cTasks] = await kpiRes;
+  const [cDeals, cContacts, cOrgs, cTasks, cToScreen] = await kpiRes;
 
   // V52 — KPIs honoraires cabinet (pipeline / facturé / encaissé YTD / projection)
   const feesRaw = await getFeesKpis();
@@ -116,12 +122,13 @@ async function Content() {
     <DashboardClient
       kpis={[
         { label:"Dossiers actifs",  val:cDeals.count??0,    href:"/protected/dossiers",      color:"#3468B0" },
+        { label:"À screener",       val:cToScreen.count??0, href:"/protected/dossiers",      color:(cToScreen.count??0)>0?"#B45309":"#15A348" },
         { label:"Organisations",    val:cOrgs.count??0,     href:"/protected/organisations", color:"#D97706" },
         { label:"Contacts",         val:cContacts.count??0, href:"/protected/contacts",      color:"#A8306A" },
         { label:"Tâches ouvertes",  val:cTasks.count??0,    href:"/protected/dossiers",      color:(cTasks.count??0)>0?"#DC2626":"#15A348" },
       ]}
       feesKpis={feesKpis}
-      deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.fundraising, stageLabel:STAGE[d.deal_stage]??d.deal_stage, prioColor:PRIO[d.priority_level]??PRIO.medium }))}
+      deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.fundraising, stageLabel:stageLabel(d.deal_stage), prioColor:PRIO[d.priority_level]??PRIO.medium }))}
       relances={relances.map(c => { const org=(c.organization_contacts as any[])?.[0]?.organizations; return { id:c.id, firstName:c.first_name, lastName:c.last_name, days:daysSince(c.last_contact_date!), orgName:Array.isArray(org)?org[0]?.name:org?.name }; })}
       tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority ?? "medium", dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority ?? "medium"]??PRIO.medium }; })}
       activities={activities.map(a => { const deal=Array.isArray(a.deals)?a.deals[0]:a.deals as any; return { id:a.id, title:a.title, type:toLegacyType(a.type, a.email_direction), date:(a.start_datetime ?? a.due_date) as string, dealId:a.deal_id, dealName:deal?.name }; })}

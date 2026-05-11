@@ -367,6 +367,174 @@ export const DEAL_STAGES_MAIN: readonly DealStage[] = [
   "dd", "negotiation", "closing",
 ] as const;
 
+// ── Stades par métier (V55) ──────────────────────────────────────────────────
+// Source de vérité unique pour le kanban adaptatif et le sélecteur de stade
+// dans la fiche dossier. Chaque deal_type a sa propre séquence ordonnée.
+// L'ordre = l'ordre d'avancement normal du dossier.
+//
+// Les anciennes valeurs transversales (DEAL_STAGES ci-dessus) sont conservées
+// pour rétro-compat, mais n'alimentent plus les UI de pilotage.
+
+export const STAGE_LABELS_BY_KEY: Record<string, string> = {
+  kickoff:           "Kickoff",
+  preparation:       "Préparation",
+  outreach:          "Outreach",
+  meetings:          "Meetings",
+  term_sheets:       "Term sheets",
+  loi:               "LOI",
+  dd:                "Due Diligence",
+  spa:               "SPA",
+  criteria:          "Critères",
+  sourcing:          "Sourcing",
+  pre_qualification: "Pré-qualification",
+  interviews:        "Entretiens client",
+  offer:             "Offre",
+  placement:         "Placement",
+  probation:         "Période d'essai",
+  onboarding:        "Onboarding",
+  delivery:          "Delivery",
+  support:           "Suivi",
+  closing:           "Closing",
+  post_closing:      "Post-closing",
+};
+
+export type DealTypeKey = "fundraising" | "ma_sell" | "ma_buy" | "recruitment" | "cfo_advisor";
+
+export const DEAL_STAGES_BY_TYPE: Record<DealTypeKey, readonly string[]> = {
+  fundraising: ["kickoff", "preparation", "outreach", "meetings", "term_sheets", "closing", "post_closing"],
+  ma_sell:     ["kickoff", "preparation", "outreach", "meetings", "loi", "dd", "spa", "closing", "post_closing"],
+  ma_buy:      ["kickoff", "criteria", "sourcing", "outreach", "loi", "dd", "spa", "closing"],
+  recruitment: ["kickoff", "sourcing", "pre_qualification", "interviews", "offer", "placement", "probation"],
+  cfo_advisor: ["kickoff", "onboarding", "delivery", "support"],
+} as const;
+
+// Stages affichés par défaut dans le kanban actif (exclut les états "après
+// l'opération" qui polluent le pipeline opérationnel).
+export const DEAL_STAGES_MAIN_BY_TYPE: Record<DealTypeKey, readonly string[]> = {
+  fundraising: ["kickoff", "preparation", "outreach", "meetings", "term_sheets", "closing"],
+  ma_sell:     ["kickoff", "preparation", "outreach", "meetings", "loi", "dd", "spa", "closing"],
+  ma_buy:      ["kickoff", "criteria", "sourcing", "outreach", "loi", "dd", "spa", "closing"],
+  recruitment: ["kickoff", "sourcing", "pre_qualification", "interviews", "offer", "placement"],
+  cfo_advisor: ["kickoff", "onboarding", "delivery", "support"],
+} as const;
+
+export function stagesForDealType(type: string | null | undefined): readonly string[] {
+  if (!type) return DEAL_STAGES_BY_TYPE.fundraising;
+  return DEAL_STAGES_BY_TYPE[type as DealTypeKey] ?? DEAL_STAGES_BY_TYPE.fundraising;
+}
+
+export function stageLabel(stageKey: string | null | undefined): string {
+  if (!stageKey) return "";
+  return STAGE_LABELS_BY_KEY[stageKey] ?? stageKey;
+}
+
+export function isValidStageForType(type: string | null | undefined, stage: string | null | undefined): boolean {
+  if (!stage) return false;
+  return stagesForDealType(type).includes(stage);
+}
+
+// Renvoie le stade suivant dans la séquence du type (ou null si dernier).
+export function nextStageForType(type: string | null | undefined, current: string | null | undefined): string | null {
+  const seq = stagesForDealType(type);
+  if (!current) return seq[0] ?? null;
+  const idx = seq.indexOf(current);
+  if (idx < 0 || idx >= seq.length - 1) return null;
+  return seq[idx + 1] ?? null;
+}
+
+export function prevStageForType(type: string | null | undefined, current: string | null | undefined): string | null {
+  const seq = stagesForDealType(type);
+  if (!current) return null;
+  const idx = seq.indexOf(current);
+  if (idx <= 0) return null;
+  return seq[idx - 1] ?? null;
+}
+
+// ── M2 — Vivier proactif (V56) ───────────────────────────────────────────────
+// Enums pour deal_target_suggestions et connector_runs. Source de vérité pour
+// les filtres UI, les validations Server Actions et les libellés.
+
+export const SUGGESTION_STATUSES = [
+  { value: "suggested", label: "À évaluer",  tone: "neutral" },
+  { value: "approved",  label: "Approuvée",  tone: "success" },
+  { value: "rejected",  label: "Rejetée",    tone: "danger"  },
+  { value: "deferred",  label: "Reportée",   tone: "warning" },
+  { value: "contacted", label: "Contactée",  tone: "info"    },
+] as const;
+
+export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number]["value"];
+
+export const SUGGESTION_ROLES = [
+  { value: "target",    label: "Cible",        context: "ma_sell,ma_buy" },
+  { value: "acquirer",  label: "Acquéreur",    context: "ma_sell"         },
+  { value: "investor",  label: "Investisseur", context: "fundraising"     },
+  { value: "candidate", label: "Candidat",     context: "recruitment"     },
+  { value: "partner",   label: "Partenaire",   context: "cfo_advisor"     },
+  { value: "other",     label: "Autre",        context: "*"                },
+] as const;
+
+export type SuggestionRole = (typeof SUGGESTION_ROLES)[number]["value"];
+
+export const CONNECTOR_SOURCES = [
+  { value: "apollo",   label: "Apollo.io"   },
+  { value: "harmonic", label: "Harmonic"    },
+  { value: "vibe",     label: "Vibe"        },
+  { value: "pappers",  label: "Pappers"     },
+  { value: "insee",    label: "INSEE"       },
+  { value: "manual",   label: "Manuel"      },
+  { value: "ai",       label: "IA"          },
+  { value: "portal",   label: "Portail"     },
+] as const;
+
+export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number]["value"];
+
+export function suggestionStatusLabel(status: string | null | undefined): string {
+  if (!status) return "";
+  return SUGGESTION_STATUSES.find(s => s.value === status)?.label ?? status;
+}
+
+export function suggestionRoleLabel(role: string | null | undefined): string {
+  if (!role) return "";
+  return SUGGESTION_ROLES.find(r => r.value === role)?.label ?? role;
+}
+
+export function connectorSourceLabel(source: string | null | undefined): string {
+  if (!source) return "";
+  return CONNECTOR_SOURCES.find(c => c.value === source)?.label ?? source;
+}
+
+// Rôles par défaut par type de dossier (utilisé à la génération de
+// suggestions pour pré-remplir role_suggested).
+export function defaultSuggestionRoleForDealType(dealType: string | null | undefined): SuggestionRole {
+  switch (dealType) {
+    case "fundraising": return "investor";
+    case "ma_sell":     return "acquirer";
+    case "ma_buy":      return "target";
+    case "recruitment": return "candidate";
+    case "cfo_advisor": return "partner";
+    default:            return "other";
+  }
+}
+
+// ── Screening qualifié du dossier (V53) ──────────────────────────────────────
+// Hard gate : seuls les dossiers en SCREENING_READY déclenchent les
+// suggestions proactives (Module 2) et les campagnes sortantes (Module 3).
+
+export const SCREENING_STATUSES = [
+  { value: "not_started",        label: "À démarrer",         tone: "neutral" },
+  { value: "drafting",           label: "En rédaction",       tone: "warning" },
+  { value: "ready_for_outreach", label: "Prêt pour outreach", tone: "success" },
+  { value: "on_hold",            label: "En pause",           tone: "neutral" },
+] as const;
+
+export type ScreeningStatus = (typeof SCREENING_STATUSES)[number]["value"];
+
+export const SCREENING_READY: ScreeningStatus = "ready_for_outreach";
+
+export function isScreeningReady(status: string | null | undefined): boolean {
+  return status === SCREENING_READY;
+}
+
 /**
  * Compatibilité remote poste → préférence candidat (scoring M4)
  */

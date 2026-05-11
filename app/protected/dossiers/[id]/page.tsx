@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DealDetail } from "./deal-detail";
 import { getMandateByDealId } from "@/actions/mandates";
+import { listSuggestionsForDeal } from "@/lib/crm/suggestions";
 
 export const revalidate = 0;
 
@@ -12,10 +13,20 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal, error: dealError } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,description,start_date,target_date,next_action_date,target_amount,committed_amount,closed_amount,currency,company_stage,company_geography,mandate_id,target_raise_amount,pre_money_valuation,post_money_valuation,round_type,runway_months,use_of_funds,current_investors,asking_price_min,asking_price_max,partial_sale_ok,management_retention,management_retention_notes,deal_timing,ai_financial_score,ai_valuation_low,ai_valuation_high,ai_financial_notes,ai_analyzed_at,target_sectors,excluded_sectors,target_geographies,excluded_geographies,target_revenue_min,target_revenue_max,target_ev_min,target_ev_max,acquisition_budget_min,acquisition_budget_max,full_acquisition_required,strategic_rationale,target_stage,job_title,required_seniority,required_location,required_remote,salary_min,salary_max,dirigeant_id,dirigeant_nom,dirigeant_email,dirigeant_telephone,dirigeant_titre")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,description,start_date,target_date,next_action_date,target_amount,committed_amount,closed_amount,currency,company_stage,company_geography,mandate_id,organization_id,screening_status,screening_score,target_raise_amount,pre_money_valuation,post_money_valuation,round_type,runway_months,use_of_funds,current_investors,asking_price_min,asking_price_max,partial_sale_ok,management_retention,management_retention_notes,deal_timing,ai_financial_score,ai_valuation_low,ai_valuation_high,ai_financial_notes,ai_analyzed_at,target_sectors,excluded_sectors,target_geographies,excluded_geographies,target_revenue_min,target_revenue_max,target_ev_min,target_ev_max,acquisition_budget_min,acquisition_budget_max,full_acquisition_required,strategic_rationale,target_stage,job_title,required_seniority,required_location,required_remote,salary_min,salary_max,dirigeant_id,dirigeant_nom,dirigeant_email,dirigeant_telephone,dirigeant_titre")
     .eq("id", id).maybeSingle();
   if (dealError) throw new Error(dealError.message);
   if (!deal) notFound();
+
+  // V54 : charger l'organisation cliente (sujet du dossier) pour le header
+  // et l'édition de la taille d'entreprise.
+  const clientOrg = deal.organization_id
+    ? (await supabase
+        .from("organizations")
+        .select("id,name,company_stage,organization_type,is_client")
+        .eq("id", deal.organization_id)
+        .maybeSingle()).data
+    : null;
 
   // Les actions (tâches + activités) sont chargées côté client par
   // <ActionTimeline filters={{ deal_id: id }} /> dans DealDetail —
@@ -61,6 +72,12 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   // Mandat lié au dossier (null si deal.mandate_id est null)
   const initialMandate = await getMandateByDealId(id);
 
+  // Suggestions de cibles (Module 2). On charge tout sauf les rejected
+  // pour une vue d'ensemble dans l'onglet Suggestions.
+  const initialSuggestions = await listSuggestionsForDeal(id, {
+    statuses: ["suggested", "approved", "deferred", "contacted"],
+  });
+
   return (
     <DealDetail
       deal={deal}
@@ -69,6 +86,8 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       initialCommitments={comms}
       initialFinancialData={financialRes.data ?? []}
       initialMandate={initialMandate}
+      initialClientOrganization={clientOrg}
+      initialSuggestions={initialSuggestions}
     />
   );
 }

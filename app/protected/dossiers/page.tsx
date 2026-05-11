@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Plus, AlertTriangle, CheckSquare, CalendarDays, Activity } from "lucide-react";
 import { DealsKanban } from "./_components/deals-kanban";
+import { stageLabel } from "@/lib/crm/matching-maps";
 
 export const revalidate = 60;
 
@@ -13,12 +14,9 @@ const DT: Record<string, { label:string; icon:string; bg:string; tx:string; dot:
   cfo_advisor: { label:"CFO Advisor", icon:"💼", bg:"var(--cfo-bg)",  tx:"var(--cfo-tx)",  dot:"var(--cfo-dot)",  border:"var(--cfo-mid)"  },
   recruitment: { label:"Recrutement", icon:"👤", bg:"var(--rec-bg)",  tx:"var(--rec-tx)",  dot:"var(--rec-dot)",  border:"var(--rec-mid)"  },
 };
-const STAGE: Record<string,string> = {
-  kickoff:"Kickoff", preparation:"Préparation", outreach:"Outreach",
-  management_meetings:"Mgmt meetings", dd:"Due Diligence",
-  negotiation:"Négociation", closing:"Closing",
-  post_closing:"Post-closing", ongoing_support:"Suivi", search:"Recherche",
-};
+// V55 : libellés unifiés via stageLabel() depuis matching-maps (legacy map
+// maintenue pour rétro-compat pendant la transition).
+const STAGE: Record<string,string> = {};
 const PRIO: Record<string,string> = { high:"var(--rec-dot)", medium:"var(--sell-dot)", low:"var(--border-2)" };
 
 function fmt(v:string|null) {
@@ -34,7 +32,7 @@ async function Content() {
   // Deals avec stats agrégées
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score")
     .order("priority_level");
 
   if (!deals?.length) {
@@ -198,7 +196,14 @@ async function Content() {
   );
 }
 
-type DealType = { id:string; name:string; deal_type:string; deal_status:string; deal_stage:string; priority_level:string; sector:string|null; location:string|null; target_date:string|null; target_amount:number|null; currency:string|null; description:string|null };
+type DealType = { id:string; name:string; deal_type:string; deal_status:string; deal_stage:string; priority_level:string; sector:string|null; location:string|null; target_date:string|null; target_amount:number|null; currency:string|null; description:string|null; screening_status:string|null };
+
+const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> = {
+  not_started:        { bg: "var(--surface-3)", tx: "var(--text-5)", label: "À screener" },
+  drafting:           { bg: "#FEF3C7",          tx: "#92400E",       label: "Screening…" },
+  ready_for_outreach: { bg: "#D1FAE5",          tx: "#065F46",       label: "Prêt outreach" },
+  on_hold:            { bg: "var(--surface-3)", tx: "var(--text-5)", label: "Pause" },
+};
 type TaskType = { id:string; deal_id:string; task_status:string; due_date:string|null; priority_level:string };
 type EventType = { id:string; deal_id:string; title:string; event_type:string; due_date:string; status:string } | null;
 
@@ -229,9 +234,20 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount }: {
             <div style={{ fontSize:14, fontWeight:700, color:"var(--text-1)", lineHeight:1.3, flex:1, minWidth:0 }}>
               {deal.name}
             </div>
-            <span style={{ fontSize:11, fontWeight:700, borderRadius:6, padding:"2px 8px", background:dt.bg, color:dt.tx, flexShrink:0 }}>
-              {STAGE[deal.deal_stage] ?? deal.deal_stage}
-            </span>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, flexShrink:0 }}>
+              <span style={{ fontSize:11, fontWeight:700, borderRadius:6, padding:"2px 8px", background:dt.bg, color:dt.tx }}>
+                {stageLabel(deal.deal_stage)}
+              </span>
+              {deal.screening_status && SCREENING_PILL[deal.screening_status] && (
+                <span style={{
+                  fontSize:10, fontWeight:600, borderRadius:3, padding:"1px 6px",
+                  background: SCREENING_PILL[deal.screening_status]!.bg,
+                  color: SCREENING_PILL[deal.screening_status]!.tx,
+                }}>
+                  {SCREENING_PILL[deal.screening_status]!.label}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Secteur + localisation */}
@@ -303,7 +319,7 @@ async function KanbanContent() {
   const supabase = await createClient();
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date,screening_status")
     .order("priority_level");
   return <DealsKanban deals={deals ?? []} />;
 }

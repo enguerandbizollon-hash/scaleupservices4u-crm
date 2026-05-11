@@ -4,7 +4,12 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { updateDealStageAction } from "@/actions/deals";
-import { DEAL_STAGES, DEAL_STAGES_MAIN, type DealStage } from "@/lib/crm/matching-maps";
+import {
+  DEAL_STAGES_BY_TYPE,
+  DEAL_STAGES_MAIN_BY_TYPE,
+  stageLabel,
+  type DealTypeKey,
+} from "@/lib/crm/matching-maps";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,7 +25,16 @@ export interface KanbanDeal {
   target_date: string | null;
   currency: string | null;
   next_action_date: string | null;
+  screening_status: string | null;
 }
+
+// Mini pill de statut screening (V53) — non bloquant, purement informatif
+const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> = {
+  not_started:        { bg: "var(--surface-3)", tx: "var(--text-5)", label: "À screener" },
+  drafting:           { bg: "#FEF3C7",          tx: "#92400E",        label: "Screening…" },
+  ready_for_outreach: { bg: "#D1FAE5",          tx: "#065F46",        label: "Prêt outreach" },
+  on_hold:            { bg: "var(--surface-3)", tx: "var(--text-5)", label: "Pause" },
+};
 
 interface Props {
   deals: KanbanDeal[];
@@ -42,7 +56,7 @@ const PRIO_COLOR: Record<string, string> = {
   low:    "var(--border-2)",
 };
 
-const STAGE_LABEL_BY_VALUE = Object.fromEntries(DEAL_STAGES.map(s => [s.value, s.label])) as Record<string, string>;
+// V55 : libellés de stages centralisés dans matching-maps.ts (stageLabel)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,14 +77,22 @@ function fmtAmount(n: number | null, c: string | null): string | null {
 
 export function DealsKanban({ deals: initialDeals }: Props) {
   const [deals, setDeals] = useState<KanbanDeal[]>(initialDeals);
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  // V55 : un kanban = un métier. Par défaut, on sélectionne le premier type
+  // présent dans les dossiers ouverts pour éviter un écran vide.
+  const firstType = useMemo<DealTypeKey>(() => {
+    const open = initialDeals.find(d => d.deal_status === "open");
+    const t = (open?.deal_type ?? initialDeals[0]?.deal_type ?? "fundraising") as DealTypeKey;
+    return (t in DEAL_STAGES_BY_TYPE ? t : "fundraising") as DealTypeKey;
+  }, [initialDeals]);
+  const [typeFilter, setTypeFilter] = useState<DealTypeKey>(firstType);
   const [showClosed, setShowClosed] = useState(false);
   const [, startTransition] = useTransition();
 
-  // Filtrage par type + statut (closed si toggle off)
+  // V55 : filtrage strict par type (un kanban = un métier). Statut closed
+  // toggle (won/lost masqués par défaut).
   const filtered = useMemo(() => {
     return deals.filter(d => {
-      if (typeFilter && d.deal_type !== typeFilter) return false;
+      if (d.deal_type !== typeFilter) return false;
       if (!showClosed && (d.deal_status === "won" || d.deal_status === "lost")) return false;
       return true;
     });
@@ -87,14 +109,16 @@ export function DealsKanban({ deals: initialDeals }: Props) {
     return m;
   }, [filtered]);
 
-  // Stages affichés : les 7 principaux toujours + post_closing/ongoing_support/search si non vides
-  const visibleStages: DealStage[] = useMemo(() => {
-    const base: DealStage[] = [...DEAL_STAGES_MAIN];
-    for (const extra of ["post_closing", "ongoing_support", "search"] as DealStage[]) {
-      if (byStage[extra]?.length) base.push(extra);
+  // V55 : stades du métier sélectionné + stades post-opération si non vides
+  // (ex. post_closing en fundraising/ma_sell, probation en recruitment).
+  const visibleStages: string[] = useMemo(() => {
+    const main = [...DEAL_STAGES_MAIN_BY_TYPE[typeFilter]];
+    const allForType = DEAL_STAGES_BY_TYPE[typeFilter];
+    for (const stage of allForType) {
+      if (!main.includes(stage) && byStage[stage]?.length) main.push(stage);
     }
-    return base;
-  }, [byStage]);
+    return main;
+  }, [byStage, typeFilter]);
 
   // Distribution des deals pour compteurs
   const totalShown = filtered.length;
@@ -110,12 +134,14 @@ export function DealsKanban({ deals: initialDeals }: Props) {
   async function moveDeal(dealId: string, dir: "prev" | "next") {
     const current = deals.find(d => d.id === dealId);
     if (!current) return;
-    const stages: DealStage[] = [...DEAL_STAGES_MAIN]; // on limite les déplacements clavier aux 7 principaux
-    const idx = stages.indexOf(current.deal_stage as DealStage);
+    // V55 : la séquence valide dépend du type du dossier.
+    const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "fundraising") as DealTypeKey;
+    const stages = [...DEAL_STAGES_BY_TYPE[typeKey]];
+    const idx = stages.indexOf(current.deal_stage);
     if (idx === -1) return;
     const newIdx = dir === "prev" ? idx - 1 : idx + 1;
     if (newIdx < 0 || newIdx >= stages.length) return;
-    const newStage = stages[newIdx];
+    const newStage = stages[newIdx]!;
 
     // Optimistic update
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, deal_stage: newStage } : d));
@@ -123,7 +149,6 @@ export function DealsKanban({ deals: initialDeals }: Props) {
     startTransition(async () => {
       const res = await updateDealStageAction(dealId, newStage);
       if (!res.success) {
-        // Revert en cas d'erreur
         setDeals(prev => prev.map(d => d.id === dealId ? { ...d, deal_stage: current.deal_stage } : d));
         // eslint-disable-next-line no-alert
         alert(`Erreur : ${res.error}`);
@@ -160,17 +185,14 @@ export function DealsKanban({ deals: initialDeals }: Props) {
         </div>
       </div>
 
-      {/* Filtres */}
+      {/* V55 : un kanban par métier, un seul type à la fois */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" onClick={() => setTypeFilter(null)} style={pillBtn(typeFilter === null)}>
-          Tous ({Object.values(typeCounts).reduce((s, n) => s + n, 0)})
-        </button>
         {(Object.entries(TYPE_META) as [string, typeof TYPE_META[string]][]).map(([t, meta]) => {
+          if (!(t in DEAL_STAGES_BY_TYPE)) return null;
           const n = typeCounts[t] ?? 0;
-          if (n === 0) return null;
           const active = typeFilter === t;
           return (
-            <button key={t} type="button" onClick={() => setTypeFilter(active ? null : t)}
+            <button key={t} type="button" onClick={() => setTypeFilter(t as DealTypeKey)}
               style={pillBtn(active, meta.tx)}>
               {meta.icon} {meta.label} ({n})
             </button>
@@ -188,7 +210,7 @@ export function DealsKanban({ deals: initialDeals }: Props) {
         <div style={{ display: "flex", gap: 10, minWidth: `${visibleStages.length * 230}px` }}>
           {visibleStages.map(stageValue => {
             const cards = byStage[stageValue] ?? [];
-            const label = STAGE_LABEL_BY_VALUE[stageValue] ?? stageValue;
+            const label = stageLabel(stageValue);
             return (
               <div key={stageValue} style={{ flex: 1, minWidth: 220 }}>
                 {/* Colonne header */}
@@ -238,8 +260,10 @@ function KanbanCard({ deal, onMove }: {
   const meta = TYPE_META[deal.deal_type] ?? TYPE_META.fundraising;
   const prioColor = PRIO_COLOR[deal.priority_level] ?? PRIO_COLOR.low;
   const amount = fmtAmount(deal.target_amount, deal.currency);
-  const stages: DealStage[] = [...DEAL_STAGES_MAIN];
-  const idx = stages.indexOf(deal.deal_stage as DealStage);
+  // V55 : navigation prev/next utilise la séquence du type du dossier
+  const typeKey = (deal.deal_type in DEAL_STAGES_BY_TYPE ? deal.deal_type : "fundraising") as DealTypeKey;
+  const stages = DEAL_STAGES_BY_TYPE[typeKey];
+  const idx = stages.indexOf(deal.deal_stage);
   const hasPrev = idx > 0;
   const hasNext = idx !== -1 && idx < stages.length - 1;
   const inactive = deal.deal_status !== "open";
@@ -278,6 +302,19 @@ function KanbanCard({ deal, onMove }: {
           {deal.next_action_date && deal.target_date && <span style={{ margin: "0 5px" }}>·</span>}
           {deal.target_date && <span>🎯 {fmtDate(deal.target_date)}</span>}
         </div>
+      )}
+
+      {deal.screening_status && SCREENING_PILL[deal.screening_status] && (
+        <span style={{
+          alignSelf: "flex-start",
+          fontSize: 10, fontWeight: 600,
+          padding: "1px 6px",
+          background: SCREENING_PILL[deal.screening_status]!.bg,
+          color: SCREENING_PILL[deal.screening_status]!.tx,
+          borderRadius: 3,
+        }}>
+          {SCREENING_PILL[deal.screening_status]!.label}
+        </span>
       )}
 
       {/* Actions déplacement */}
