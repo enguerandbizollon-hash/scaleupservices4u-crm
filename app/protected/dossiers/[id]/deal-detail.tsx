@@ -16,7 +16,9 @@ import {
   createCommitment, updateCommitment, deleteCommitment,
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
   updateDealOrganizationStage, setDealClientOrganization,
+  updateDealField,
 } from "@/actions/deals";
+import { EditableField } from "@/components/ui/EditableField";
 import { DocumentsTab } from "./documents-tab";
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
@@ -899,7 +901,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             </div>
 
             {/* SPÉCIFICITÉS MISSION — dépend du deal_type, saisies au wizard */}
-            <SpecificsCard deal={deal} expanded={expSpecs} onToggle={()=>setExpSpecs(p=>!p)}/>
+            <SpecificsCard deal={deal} dealId={deal.id} expanded={expSpecs} onToggle={()=>setExpSpecs(p=>!p)}/>
 
             {/* PIPELINE FINANCIER */}
             {isFundraising && (
@@ -1302,11 +1304,9 @@ function hasAnySpec(deal: SpecDeal): boolean {
   }
 }
 
-function SpecificsCard({ deal, expanded, onToggle }: {
-  deal: SpecDeal; expanded: boolean; onToggle: () => void;
+function SpecificsCard({ deal, dealId, expanded, onToggle }: {
+  deal: SpecDeal; dealId: string; expanded: boolean; onToggle: () => void;
 }) {
-  if (!hasAnySpec(deal)) return null;
-
   const title =
     deal.deal_type === "fundraising" ? "Spécificités levée" :
     deal.deal_type === "ma_sell" ? "Spécificités cession" :
@@ -1321,13 +1321,47 @@ function SpecificsCard({ deal, expanded, onToggle }: {
       <SectionHeader icon={Briefcase} title={title} expanded={expanded} onToggle={onToggle} />
       {expanded && (
         <div style={{ padding:"12px 16px", borderTop:"1px solid var(--border)", display:"flex", flexDirection:"column", gap:10 }}>
-          {deal.deal_type === "fundraising" && <FundraisingSpecs deal={deal} />}
-          {deal.deal_type === "ma_sell" && <MaSellSpecs deal={deal} />}
-          {deal.deal_type === "ma_buy" && <MaBuySpecs deal={deal} />}
-          {deal.deal_type === "recruitment" && <RecruitmentSpecs deal={deal} />}
+          {deal.deal_type === "fundraising" && <FundraisingSpecs deal={deal} dealId={dealId} />}
+          {deal.deal_type === "ma_sell" && <MaSellSpecs deal={deal} dealId={dealId} />}
+          {deal.deal_type === "ma_buy" && <MaBuySpecs deal={deal} dealId={dealId} />}
+          {deal.deal_type === "recruitment" && <RecruitmentSpecs deal={deal} dealId={dealId} />}
         </div>
       )}
     </div>
+  );
+}
+
+// ── EditableSpec — wrapper local édition inline d'un champ deal ─────────────
+// Combine EditableField + updateDealField. State local pour persister la
+// valeur entre saves sans refetch complet. Erreurs en alert basique.
+function EditableSpec({
+  dealId, field, initialValue, type = "text", placeholder, formatter, selectOptions,
+}: {
+  dealId: string;
+  field: string;
+  initialValue: string | number | null | undefined;
+  type?: "text" | "number" | "date";
+  placeholder?: string;
+  formatter?: (v: string | number | null) => string;
+  selectOptions?: { value: string; label: string }[];
+}) {
+  const [value, setValue] = useState<string | number | null>(initialValue ?? null);
+  return (
+    <EditableField
+      value={value}
+      type={type}
+      placeholder={placeholder}
+      formatter={formatter}
+      selectOptions={selectOptions}
+      onSave={async (newValue) => {
+        const res = await updateDealField(dealId, field, newValue);
+        if (res.success) {
+          setValue(newValue);
+        } else {
+          alert(res.error);
+        }
+      }}
+    />
   );
 }
 
@@ -1380,30 +1414,41 @@ function rangeFmt(min: number | null, max: number | null, currency: string | nul
 
 // ── Specs par type ────────────────────────────────────────────────────────────
 
-function FundraisingSpecs({ deal }: { deal: SpecDeal }) {
+function FundraisingSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
   const c = deal.currency ?? "EUR";
-  const fm = (n: number) => n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c}` : `${n} ${c}`;
+  const fmMoney = (n: string | number | null) => {
+    if (n == null || n === "") return "";
+    const num = typeof n === "number" ? n : Number(n);
+    if (!Number.isFinite(num)) return "";
+    if (Math.abs(num) >= 1e6) return `${(num / 1e6).toFixed(1)}M ${c}`;
+    if (Math.abs(num) >= 1e3) return `${(num / 1e3).toFixed(0)}k ${c}`;
+    return `${num} ${c}`;
+  };
   return (
     <>
-      {deal.target_raise_amount !== null && (
-        <SpecRow label="Montant cible">{fm(deal.target_raise_amount)}</SpecRow>
-      )}
-      {deal.round_type && (
-        <SpecRow label="Type de round">{ROUND_TYPES.find(r => r.value === deal.round_type)?.label ?? deal.round_type}</SpecRow>
-      )}
-      {(deal.pre_money_valuation !== null || deal.post_money_valuation !== null) && (
-        <SpecRow label="Valorisation">
-          {deal.pre_money_valuation !== null && <span>Pre : <strong>{fm(deal.pre_money_valuation)}</strong></span>}
-          {deal.pre_money_valuation !== null && deal.post_money_valuation !== null && <span style={{ margin:"0 8px" }}>·</span>}
-          {deal.post_money_valuation !== null && <span>Post : <strong>{fm(deal.post_money_valuation)}</strong></span>}
-        </SpecRow>
-      )}
-      {deal.runway_months !== null && (
-        <SpecRow label="Runway">{deal.runway_months} mois</SpecRow>
-      )}
-      {deal.use_of_funds && (
-        <SpecRow label="Utilisation">{deal.use_of_funds}</SpecRow>
-      )}
+      <SpecRow label="Montant cible">
+        <EditableSpec dealId={dealId} field="target_raise_amount" initialValue={deal.target_raise_amount} type="number" formatter={fmMoney} placeholder="Saisir un montant" />
+      </SpecRow>
+      <SpecRow label="Type de round">
+        <EditableSpec
+          dealId={dealId} field="round_type" initialValue={deal.round_type ?? null}
+          selectOptions={ROUND_TYPES.map(r => ({ value: r.value, label: r.label }))}
+          formatter={(v) => v ? (ROUND_TYPES.find(r => r.value === v)?.label ?? String(v)) : ""}
+          placeholder="Choisir un round"
+        />
+      </SpecRow>
+      <SpecRow label="Valorisation pré">
+        <EditableSpec dealId={dealId} field="pre_money_valuation" initialValue={deal.pre_money_valuation} type="number" formatter={fmMoney} placeholder="Saisir valorisation pré" />
+      </SpecRow>
+      <SpecRow label="Valorisation post">
+        <EditableSpec dealId={dealId} field="post_money_valuation" initialValue={deal.post_money_valuation} type="number" formatter={fmMoney} placeholder="Saisir valorisation post" />
+      </SpecRow>
+      <SpecRow label="Runway">
+        <EditableSpec dealId={dealId} field="runway_months" initialValue={deal.runway_months} type="number" formatter={(v) => v == null || v === "" ? "" : `${v} mois`} placeholder="Saisir runway (mois)" />
+      </SpecRow>
+      <SpecRow label="Utilisation">
+        <EditableSpec dealId={dealId} field="use_of_funds" initialValue={deal.use_of_funds ?? null} placeholder="Décrire l'usage des fonds" />
+      </SpecRow>
       {deal.current_investors && deal.current_investors.length > 0 && (
         <SpecRow label="Investisseurs actuels"><Chips values={deal.current_investors} /></SpecRow>
       )}
@@ -1411,38 +1456,58 @@ function FundraisingSpecs({ deal }: { deal: SpecDeal }) {
   );
 }
 
-function MaSellSpecs({ deal }: { deal: SpecDeal }) {
+function MaSellSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
   const c = deal.currency ?? "EUR";
-  const fm = (n: number) => n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c}` : `${n} ${c}`;
-  const askingRange = rangeFmt(deal.asking_price_min, deal.asking_price_max, deal.currency);
+  const fmMoney = (n: string | number | null) => {
+    if (n == null || n === "") return "";
+    const num = typeof n === "number" ? n : Number(n);
+    if (!Number.isFinite(num)) return "";
+    if (Math.abs(num) >= 1e6) return `${(num / 1e6).toFixed(1)}M ${c}`;
+    if (Math.abs(num) >= 1e3) return `${(num / 1e3).toFixed(0)}k ${c}`;
+    return `${num} ${c}`;
+  };
   return (
     <>
-      {deal.target_amount !== null && (
-        <SpecRow label="Valorisation cible">{fm(deal.target_amount)}</SpecRow>
-      )}
-      {askingRange && (
-        <SpecRow label="Asking price">{askingRange}</SpecRow>
-      )}
-      {deal.deal_timing && (
-        <SpecRow label="Timing">{DEAL_TIMING_OPTIONS.find(t => t.value === deal.deal_timing)?.label ?? deal.deal_timing}</SpecRow>
-      )}
+      <SpecRow label="Valorisation cible">
+        <EditableSpec dealId={dealId} field="target_amount" initialValue={deal.target_amount} type="number" formatter={fmMoney} placeholder="Saisir valorisation cible" />
+      </SpecRow>
+      <SpecRow label="Asking price min">
+        <EditableSpec dealId={dealId} field="asking_price_min" initialValue={deal.asking_price_min} type="number" formatter={fmMoney} placeholder="Saisir min" />
+      </SpecRow>
+      <SpecRow label="Asking price max">
+        <EditableSpec dealId={dealId} field="asking_price_max" initialValue={deal.asking_price_max} type="number" formatter={fmMoney} placeholder="Saisir max" />
+      </SpecRow>
+      <SpecRow label="Timing">
+        <EditableSpec
+          dealId={dealId} field="deal_timing" initialValue={deal.deal_timing ?? null}
+          selectOptions={DEAL_TIMING_OPTIONS.map(t => ({ value: t.value, label: t.label }))}
+          formatter={(v) => v ? (DEAL_TIMING_OPTIONS.find(t => t.value === v)?.label ?? String(v)) : ""}
+          placeholder="Choisir un timing"
+        />
+      </SpecRow>
       {deal.partial_sale_ok !== null && (
         <SpecRow label="Cession partielle">{deal.partial_sale_ok ? "Acceptée" : "Refusée"}</SpecRow>
       )}
       {deal.management_retention !== null && (
         <SpecRow label="Rétention management">{deal.management_retention ? "Le management reste" : "Le management part"}</SpecRow>
       )}
-      {deal.management_retention_notes && (
-        <SpecRow label="Conditions / earn-out">{deal.management_retention_notes}</SpecRow>
-      )}
+      <SpecRow label="Conditions / earn-out">
+        <EditableSpec dealId={dealId} field="management_retention_notes" initialValue={deal.management_retention_notes ?? null} placeholder="Conditions, earn-out, mécanismes." />
+      </SpecRow>
     </>
   );
 }
 
-function MaBuySpecs({ deal }: { deal: SpecDeal }) {
-  const revRange = rangeFmt(deal.target_revenue_min, deal.target_revenue_max, deal.currency);
-  const evRange = rangeFmt(deal.target_ev_min, deal.target_ev_max, deal.currency);
-  const budgetRange = rangeFmt(deal.acquisition_budget_min, deal.acquisition_budget_max, deal.currency);
+function MaBuySpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
+  const c = deal.currency ?? "EUR";
+  const fmMoney = (n: string | number | null) => {
+    if (n == null || n === "") return "";
+    const num = typeof n === "number" ? n : Number(n);
+    if (!Number.isFinite(num)) return "";
+    if (Math.abs(num) >= 1e6) return `${(num / 1e6).toFixed(1)}M ${c}`;
+    if (Math.abs(num) >= 1e3) return `${(num / 1e3).toFixed(0)}k ${c}`;
+    return `${num} ${c}`;
+  };
   return (
     <>
       {deal.target_sectors && deal.target_sectors.length > 0 && (
@@ -1457,55 +1522,88 @@ function MaBuySpecs({ deal }: { deal: SpecDeal }) {
       {deal.excluded_geographies && deal.excluded_geographies.length > 0 && (
         <SpecRow label="Géos exclues"><GeoChips values={deal.excluded_geographies} /></SpecRow>
       )}
-      {revRange && (
-        <SpecRow label="Revenue cible">{revRange}</SpecRow>
-      )}
-      {evRange && (
-        <SpecRow label="EV cible">{evRange}</SpecRow>
-      )}
-      {budgetRange && (
-        <SpecRow label="Budget acquisition">{budgetRange}</SpecRow>
-      )}
-      {deal.target_stage && (
-        <SpecRow label="Stade cible">{COMPANY_STAGES.find(s => s.value === deal.target_stage)?.label ?? deal.target_stage}</SpecRow>
-      )}
-      {deal.deal_timing && (
-        <SpecRow label="Timing">{DEAL_TIMING_OPTIONS.find(t => t.value === deal.deal_timing)?.label ?? deal.deal_timing}</SpecRow>
-      )}
+      <SpecRow label="Revenue cible min">
+        <EditableSpec dealId={dealId} field="target_revenue_min" initialValue={deal.target_revenue_min} type="number" formatter={fmMoney} placeholder="Min" />
+      </SpecRow>
+      <SpecRow label="Revenue cible max">
+        <EditableSpec dealId={dealId} field="target_revenue_max" initialValue={deal.target_revenue_max} type="number" formatter={fmMoney} placeholder="Max" />
+      </SpecRow>
+      <SpecRow label="EV cible min">
+        <EditableSpec dealId={dealId} field="target_ev_min" initialValue={deal.target_ev_min} type="number" formatter={fmMoney} placeholder="Min" />
+      </SpecRow>
+      <SpecRow label="EV cible max">
+        <EditableSpec dealId={dealId} field="target_ev_max" initialValue={deal.target_ev_max} type="number" formatter={fmMoney} placeholder="Max" />
+      </SpecRow>
+      <SpecRow label="Budget acquisition min">
+        <EditableSpec dealId={dealId} field="acquisition_budget_min" initialValue={deal.acquisition_budget_min} type="number" formatter={fmMoney} placeholder="Min" />
+      </SpecRow>
+      <SpecRow label="Budget acquisition max">
+        <EditableSpec dealId={dealId} field="acquisition_budget_max" initialValue={deal.acquisition_budget_max} type="number" formatter={fmMoney} placeholder="Max" />
+      </SpecRow>
+      <SpecRow label="Stade cible">
+        <EditableSpec
+          dealId={dealId} field="target_stage" initialValue={deal.target_stage ?? null}
+          selectOptions={COMPANY_STAGES.map(s => ({ value: s.value, label: s.label }))}
+          formatter={(v) => v ? (COMPANY_STAGES.find(s => s.value === v)?.label ?? String(v)) : ""}
+          placeholder="Choisir un stade"
+        />
+      </SpecRow>
+      <SpecRow label="Timing">
+        <EditableSpec
+          dealId={dealId} field="deal_timing" initialValue={deal.deal_timing ?? null}
+          selectOptions={DEAL_TIMING_OPTIONS.map(t => ({ value: t.value, label: t.label }))}
+          formatter={(v) => v ? (DEAL_TIMING_OPTIONS.find(t => t.value === v)?.label ?? String(v)) : ""}
+          placeholder="Choisir un timing"
+        />
+      </SpecRow>
       {deal.full_acquisition_required !== null && deal.full_acquisition_required && (
         <SpecRow label="Acquisition"><strong style={{ color:"var(--rec-tx)" }}>100% requis (deal breaker)</strong></SpecRow>
       )}
-      {deal.strategic_rationale && (
-        <SpecRow label="Rationale">{deal.strategic_rationale}</SpecRow>
-      )}
+      <SpecRow label="Rationale">
+        <EditableSpec dealId={dealId} field="strategic_rationale" initialValue={deal.strategic_rationale ?? null} placeholder="Rationale stratégique" />
+      </SpecRow>
     </>
   );
 }
 
-function RecruitmentSpecs({ deal }: { deal: SpecDeal }) {
+function RecruitmentSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
   const c = deal.currency ?? "EUR";
-  const salaryRange = (() => {
-    if (!deal.salary_min && !deal.salary_max) return null;
-    if (deal.salary_min && deal.salary_max) return `${deal.salary_min.toLocaleString("fr-FR")} – ${deal.salary_max.toLocaleString("fr-FR")} ${c}`;
-    if (deal.salary_min) return `≥ ${deal.salary_min.toLocaleString("fr-FR")} ${c}`;
-    if (deal.salary_max) return `≤ ${deal.salary_max.toLocaleString("fr-FR")} ${c}`;
-    return null;
-  })();
+  const fmSalary = (n: string | number | null) => {
+    if (n == null || n === "") return "";
+    const num = typeof n === "number" ? n : Number(n);
+    if (!Number.isFinite(num)) return "";
+    return `${num.toLocaleString("fr-FR")} ${c}`;
+  };
   return (
     <>
-      {deal.job_title && <SpecRow label="Poste">{deal.job_title}</SpecRow>}
-      {deal.required_seniority && (
-        <SpecRow label="Séniorité">{SENIORITY_OPTIONS.find(s => s.value === deal.required_seniority)?.label ?? deal.required_seniority}</SpecRow>
-      )}
-      {deal.required_remote && (
-        <SpecRow label="Remote">{REMOTE_OPTIONS.find(r => r.value === deal.required_remote)?.label ?? deal.required_remote}</SpecRow>
-      )}
+      <SpecRow label="Poste">
+        <EditableSpec dealId={dealId} field="job_title" initialValue={deal.job_title ?? null} placeholder="Intitulé du poste" />
+      </SpecRow>
+      <SpecRow label="Séniorité">
+        <EditableSpec
+          dealId={dealId} field="required_seniority" initialValue={deal.required_seniority ?? null}
+          selectOptions={SENIORITY_OPTIONS.map(s => ({ value: s.value, label: s.label }))}
+          formatter={(v) => v ? (SENIORITY_OPTIONS.find(s => s.value === v)?.label ?? String(v)) : ""}
+          placeholder="Choisir une séniorité"
+        />
+      </SpecRow>
+      <SpecRow label="Remote">
+        <EditableSpec
+          dealId={dealId} field="required_remote" initialValue={deal.required_remote ?? null}
+          selectOptions={REMOTE_OPTIONS.map(r => ({ value: r.value, label: r.label }))}
+          formatter={(v) => v ? (REMOTE_OPTIONS.find(r => r.value === v)?.label ?? String(v)) : ""}
+          placeholder="Choisir mode remote"
+        />
+      </SpecRow>
       {deal.required_location && (
         <SpecRow label="Localisation">{GEO_LABELS[deal.required_location] ?? deal.required_location}</SpecRow>
       )}
-      {salaryRange && (
-        <SpecRow label="Salaire">{salaryRange}</SpecRow>
-      )}
+      <SpecRow label="Salaire min">
+        <EditableSpec dealId={dealId} field="salary_min" initialValue={deal.salary_min} type="number" formatter={fmSalary} placeholder="Min annuel brut" />
+      </SpecRow>
+      <SpecRow label="Salaire max">
+        <EditableSpec dealId={dealId} field="salary_max" initialValue={deal.salary_max} type="number" formatter={fmSalary} placeholder="Max annuel brut" />
+      </SpecRow>
     </>
   );
 }

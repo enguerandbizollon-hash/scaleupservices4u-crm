@@ -509,3 +509,81 @@ export async function updateDealStageAction(
   revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true };
 }
+
+// ── updateDealField ─────────────────────────────────────────────────────────
+// Mise à jour générique d'un champ unique sur deals. Utilisée par les
+// composants EditableField pour de l'édition inline sécurisée.
+// Whitelist explicite des champs autorisés pour éviter les modifications
+// non prévues. Validation de type minimale par champ.
+
+const NUMBER_FIELDS = new Set<string>([
+  "target_amount",
+  "target_raise_amount", "pre_money_valuation", "post_money_valuation", "runway_months",
+  "asking_price_min", "asking_price_max",
+  "acquisition_budget_min", "acquisition_budget_max",
+  "target_revenue_min", "target_revenue_max",
+  "target_ev_min", "target_ev_max",
+  "salary_min", "salary_max",
+]);
+
+const TEXT_FIELDS = new Set<string>([
+  "name", "description", "sector", "location",
+  "use_of_funds", "management_retention_notes", "strategic_rationale",
+  "job_title", "required_location",
+]);
+
+const DATE_FIELDS = new Set<string>([
+  "start_date", "target_date", "next_action_date",
+]);
+
+const SELECT_FIELDS = new Set<string>([
+  "deal_status", "priority_level", "currency",
+  "round_type", "deal_timing", "company_stage", "company_geography",
+  "required_seniority", "required_remote", "target_stage",
+]);
+
+const EDITABLE_FIELDS = new Set<string>([
+  ...NUMBER_FIELDS, ...TEXT_FIELDS, ...DATE_FIELDS, ...SELECT_FIELDS,
+]);
+
+export async function updateDealField(
+  dealId: string,
+  field: string,
+  value: string | number | null,
+): Promise<{ success: true } | { success: false; error: string }> {
+  if (!EDITABLE_FIELDS.has(field)) {
+    return { success: false, error: `Champ non éditable : ${field}` };
+  }
+
+  // Coercion par type
+  let coerced: string | number | null = null;
+  if (value !== null && value !== "") {
+    if (NUMBER_FIELDS.has(field)) {
+      const n = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(n)) return { success: false, error: "Valeur numérique invalide" };
+      coerced = n;
+    } else if (DATE_FIELDS.has(field)) {
+      const s = String(value).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { success: false, error: "Date invalide (YYYY-MM-DD)" };
+      coerced = s;
+    } else {
+      coerced = String(value);
+    }
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({ [field]: coerced, updated_at: new Date().toISOString() })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/protected/dossiers");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true };
+}
