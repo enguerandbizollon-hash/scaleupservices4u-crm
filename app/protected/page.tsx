@@ -6,6 +6,8 @@ import { DashboardClient } from "./dashboard-client";
 import { getFeesKpis } from "@/actions/fees";
 import { projectYearEndFromYtd } from "@/lib/crm/fee-calculator";
 import { stageLabel } from "@/lib/crm/matching-maps";
+import { AlertsBar, type DashboardAlert } from "@/components/dashboard/AlertsBar";
+import { isDormant } from "@/lib/crm/health-score";
 
 // Les widgets lisent des données mutables (actions, deals, relances) :
 // on force le rendu dynamique pour que revalidatePath depuis les Server
@@ -91,6 +93,64 @@ async function Content() {
     projection: projectYearEndFromYtd(feesRaw.paid_ytd),
   };
 
+  // Alertes proactives : signaux qu'on remonte en haut du dashboard.
+  // 4 signaux en parallèle, agrégation par count.
+  const cutoffFees30 = new Date(Date.now() - 30 * 864e5).toISOString().split("T")[0]!;
+  const [tasksOverdueRes, feesOverdueRes, openDealsForDormantRes, rgpdRes] = await Promise.all([
+    supabase
+      .from("actions")
+      .select("id", { count: "exact", head: true })
+      .eq("type", "task")
+      .not("status", "in", '("done","cancelled","completed")')
+      .lt("due_date", today!),
+    supabase
+      .from("fee_milestones")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .lt("due_date", cutoffFees30),
+    supabase
+      .from("deals")
+      .select("id")
+      .eq("deal_status", "open"),
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .not("rgpd_expiry_date", "is", null)
+      .lte("rgpd_expiry_date", in30!)
+      .gte("rgpd_expiry_date", today!),
+  ]);
+
+  // Calculer dormants : 1 requête pour les open deals, puis joindre avec
+  // la dernière activité (déjà partiellement chargée via recentActsRes mais
+  // limitée à 8). On fait une requête dédiée pour avoir le compte exact.
+  let dormantDealsCount = 0;
+  const openDealIds = (openDealsForDormantRes.data ?? []).map(d => d.id);
+  if (openDealIds.length > 0) {
+    const { data: lastActs } = await supabase
+      .from("actions")
+      .select("deal_id,start_datetime,due_date")
+      .in("deal_id", openDealIds)
+      .neq("type", "task")
+      .order("start_datetime", { ascending: false, nullsFirst: false });
+    const lastByDeal = new Map<string, string | null>();
+    for (const a of lastActs ?? []) {
+      if (!a.deal_id) continue;
+      if (!lastByDeal.has(a.deal_id)) {
+        lastByDeal.set(a.deal_id, a.start_datetime ?? a.due_date ?? null);
+      }
+    }
+    for (const id of openDealIds) {
+      if (isDormant(lastByDeal.get(id) ?? null, "open")) dormantDealsCount++;
+    }
+  }
+
+  const alerts: DashboardAlert[] = [
+    { kind: "tasks_overdue", count: tasksOverdueRes.count ?? 0, href: "/protected/dossiers" },
+    { kind: "fees_overdue",  count: feesOverdueRes.count ?? 0,  href: "/protected/mandats" },
+    { kind: "deals_dormant", count: dormantDealsCount,          href: "/protected/dossiers?view=kanban" },
+    { kind: "rgpd_expiring", count: rgpdRes.count ?? 0,         href: "/protected/contacts" },
+  ];
+
   // Mapping Action.type → clé historique pour ACT_ICON / EVT_COLOR
   // du DashboardClient (qui connaît email_sent, follow_up, etc.).
   const toLegacyType = (t: string, emailDir?: string | null) => {
@@ -119,6 +179,10 @@ async function Content() {
   });
 
   return (
+    <>
+    <div style={{ padding: "24px 24px 0" }}>
+      <AlertsBar alerts={alerts} />
+    </div>
     <DashboardClient
       kpis={[
         { label:"Dossiers actifs",  val:cDeals.count??0,    href:"/protected/dossiers",      color:"#3468B0" },
@@ -139,6 +203,7 @@ async function Content() {
         return { id:c.id, first_name:c.first_name, last_name:c.last_name, email:c.email, org_name:orgName };
       })}
     />
+    </>
   );
 }
 
