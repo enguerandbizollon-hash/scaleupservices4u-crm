@@ -24,6 +24,7 @@ import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
 import { DealOverviewBlock } from "@/components/dossiers/DealOverviewBlock";
 import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
+import { StagePlaybook } from "@/components/dossiers/StagePlaybook";
 import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
 import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
 import { computeDealHealth } from "@/lib/crm/health-score";
@@ -681,6 +682,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             currency: mandate.currency ?? null,
           } : null}
         />
+
+        {/* Playbook actions recommandées par stade */}
+        <StagePlaybook dealId={deal.id} dealType={deal.deal_type} dealStage={deal.deal_stage} />
+
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
 
           {/* ── Colonne gauche ── */}
