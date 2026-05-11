@@ -20,6 +20,7 @@ import {
 import { DocumentsTab } from "./documents-tab";
 import { TagInput } from "@/components/tags/TagInput";
 import { DirigeantSection } from "@/components/dossiers/DirigeantSection";
+import { DealOverviewBlock } from "@/components/dossiers/DealOverviewBlock";
 import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
 import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
 import type { SuggestionWithRelations } from "@/lib/crm/suggestions";
@@ -657,6 +658,17 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             Les autres onglets (Mandat, Matching*, Pipeline RH, Financier) sont
             full-width autonomes, sans sidebar Dirigeant/Orgs/Actions/Docs. */}
         {activeTab === "dossier" && (
+        <>
+        {/* Vue d'ensemble — KPIs métier en première lecture */}
+        <DealOverviewBlock
+          deal={deal}
+          financialData={initialFinancialData}
+          mandate={mandate ? {
+            estimated_fee_amount: mandate.estimated_fee_amount ?? null,
+            confirmed_fee_amount: mandate.confirmed_fee_amount ?? null,
+            currency: mandate.currency ?? null,
+          } : null}
+        />
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
 
           {/* ── Colonne gauche ── */}
@@ -1016,6 +1028,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
           </div>
         </div>
+        </>
         )}
       </div>
 
