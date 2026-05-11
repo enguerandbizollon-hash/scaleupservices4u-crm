@@ -159,11 +159,86 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── Job 3 : alertes RGPD — contacts/candidats avec rgpd_expiry_date < 30j
+  // On notifie quand l'échéance approche (entre today et today + 30j).
+  // Une seule notif par (user_id, kind, source_type, source_id, date)
+  // grâce à l'index unique — donc tant que la date d'expiry ne change pas
+  // et que today reste le même, le cron horaire n'en crée qu'une.
+  const rgpdHorizon = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+
+  let scannedRgpd = 0;
+  let queuedRgpd = 0;
+
+  // 3a. Contacts
+  const { data: contactsRgpd, error: contactsRgpdErr } = await supabase
+    .from("contacts")
+    .select("id, user_id, first_name, last_name, rgpd_expiry_date")
+    .not("rgpd_expiry_date", "is", null)
+    .gte("rgpd_expiry_date", today)
+    .lte("rgpd_expiry_date", rgpdHorizon);
+  if (contactsRgpdErr) {
+    errors.push(`contacts rgpd query: ${contactsRgpdErr.message}`);
+  } else {
+    for (const c of contactsRgpd ?? []) {
+      scannedRgpd++;
+      const expiryDate = c.rgpd_expiry_date as string;
+      const days = daysBetween(today, expiryDate);
+      const fullName = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Contact";
+      const res = await enqueueNotification(supabase, {
+        user_id: c.user_id as string,
+        kind: "rgpd_expiry",
+        title: `RGPD : ${fullName}`,
+        body: days <= 0
+          ? `Échéance atteinte (${expiryDate}). À traiter : prolonger, anonymiser ou archiver.`
+          : `Expiration dans ${days} jour(s) (${expiryDate}). À traiter : prolonger, anonymiser ou archiver.`,
+        link_url: `/protected/contacts/${c.id}`,
+        source_type: "contact",
+        source_id: c.id as string,
+        trigger_date: today,
+      });
+      if (res.error) errors.push(`contact rgpd ${c.id}: ${res.error}`);
+      else queuedRgpd++;
+    }
+  }
+
+  // 3b. Candidats
+  const { data: candidatesRgpd, error: candidatesRgpdErr } = await supabase
+    .from("candidates")
+    .select("id, user_id, first_name, last_name, rgpd_expiry_date")
+    .not("rgpd_expiry_date", "is", null)
+    .gte("rgpd_expiry_date", today)
+    .lte("rgpd_expiry_date", rgpdHorizon);
+  if (candidatesRgpdErr) {
+    errors.push(`candidates rgpd query: ${candidatesRgpdErr.message}`);
+  } else {
+    for (const c of candidatesRgpd ?? []) {
+      scannedRgpd++;
+      const expiryDate = c.rgpd_expiry_date as string;
+      const days = daysBetween(today, expiryDate);
+      const fullName = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Candidat";
+      const res = await enqueueNotification(supabase, {
+        user_id: c.user_id as string,
+        kind: "rgpd_expiry",
+        title: `RGPD candidat : ${fullName}`,
+        body: days <= 0
+          ? `Échéance atteinte (${expiryDate}). À traiter : prolonger, anonymiser ou archiver.`
+          : `Expiration dans ${days} jour(s) (${expiryDate}). À traiter : prolonger, anonymiser ou archiver.`,
+        link_url: `/protected/candidats/${c.id}`,
+        source_type: "candidate",
+        source_id: c.id as string,
+        trigger_date: today,
+      });
+      if (res.error) errors.push(`candidate rgpd ${c.id}: ${res.error}`);
+      else queuedRgpd++;
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     today,
     actions: { scanned: scannedActions, queued: queuedActions },
     milestones: { scanned: scannedMilestones, queued: queuedMilestones },
+    rgpd: { scanned: scannedRgpd, queued: queuedRgpd },
     errors: errors.slice(0, 10),
   });
 }
