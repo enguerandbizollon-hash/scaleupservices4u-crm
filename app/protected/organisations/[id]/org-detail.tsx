@@ -5,6 +5,7 @@ import { ArrowLeft, Globe, MapPin, Mail, Phone, Linkedin, ChevronRight, Sparkles
 import { FinancialTab, type FinancialRow } from "../../dossiers/[id]/financial-tab";
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
+import { EnrichFromInseeButton } from "@/components/organisations/EnrichFromInseeButton";
 import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
@@ -159,9 +160,10 @@ export function OrgDetail({ org, contacts, deals, mandates, financialData, actio
 
           {/* Actions */}
           <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end", flexShrink:0 }}>
-            <div style={{ display:"flex", gap:8 }}>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end" }}>
               <StatusDropdown id={org.id} status={org.base_status} entity="organisations" size="sm"/>
               <EnrichButton id={org.id} type="organisation" name={org.name} size="sm"/>
+              <EnrichFromInseeButton orgId={org.id} orgName={org.name} />
             </div>
             <Link href={`/protected/organisations/${org.id}/modifier`}
               style={{ fontSize:12.5, color:"var(--text-4)", textDecoration:"none", padding:"5px 12px", border:"1px solid var(--border)", borderRadius:8, background:"var(--surface-2)" }}>

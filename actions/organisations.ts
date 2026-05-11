@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { fetchEntrepriseBySiren, searchEntreprisesByName, type NormalizedEntreprise } from "@/lib/connectors/recherche-entreprises";
 
 // ── Type partagé avec OrganisationForm ───────────────────────────────
 
@@ -255,4 +256,155 @@ export async function getAllOrganisationsSimple(): Promise<{ id: string; name: s
     .order("name");
 
   return (data ?? []) as { id: string; name: string }[];
+}
+
+
+// ── Enrichissement INSEE / recherche-entreprises.api.gouv.fr ────────────────
+// API publique gratuite. Récupère les données légales d'une entreprise FR à
+// partir de son SIREN. Met à jour uniquement les champs vides de
+// l'organisation pour ne pas écraser une saisie manuelle. Trace l'origine
+// via les nouvelles infos dans description (workaround : pas de colonne
+// dédiée pour l'instant — à formaliser si besoin via migration).
+
+export interface EnrichmentPreview {
+  siren: string;
+  name: string;
+  short_name: string | null;
+  forme_juridique: string | null;
+  category: string | null;
+  company_stage_crm: string | null;
+  founded_year: number | null;
+  effectif_label: string | null;
+  employee_count: number | null;
+  activite: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  dirigeants: Array<{ name: string; qualite: string | null }>;
+}
+
+function previewFromNormalized(n: NormalizedEntreprise): EnrichmentPreview {
+  return {
+    siren: n.siren,
+    name: n.name,
+    short_name: n.short_name,
+    forme_juridique: n.forme_juridique_label,
+    category: n.category,
+    company_stage_crm: n.company_stage_crm,
+    founded_year: n.founded_year,
+    effectif_label: n.effectif_label,
+    employee_count: n.effectif_midpoint,
+    activite: n.activite_section ?? n.activite_principale_code,
+    address: n.address,
+    city: n.city,
+    country: n.country,
+    dirigeants: n.dirigeants,
+  };
+}
+
+export async function previewEnrichmentBySiren(
+  siren: string,
+): Promise<{ success: true; data: EnrichmentPreview } | { success: false; error: string }> {
+  try {
+    const result = await fetchEntrepriseBySiren(siren);
+    if (!result) return { success: false, error: "Aucune entreprise trouvée pour ce SIREN." };
+    return { success: true, data: previewFromNormalized(result) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erreur API";
+    return { success: false, error: msg };
+  }
+}
+
+export async function searchEnrichmentByName(
+  query: string,
+): Promise<{ success: true; data: EnrichmentPreview[] } | { success: false; error: string }> {
+  try {
+    const results = await searchEntreprisesByName(query, 8);
+    return { success: true, data: results.map(previewFromNormalized) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erreur API";
+    return { success: false, error: msg };
+  }
+}
+
+export async function applyEnrichmentToOrganisation(
+  orgId: string,
+  data: EnrichmentPreview,
+  options: { overwrite?: boolean } = {},
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  // Charger l'org actuelle pour décider quels champs sont vides
+  const { data: org, error: readErr } = await supabase
+    .from("organizations")
+    .select("name, sector, location, country, founded_year, employee_count, company_stage, description")
+    .eq("id", orgId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readErr) return { success: false, error: readErr.message };
+  if (!org) return { success: false, error: "Organisation introuvable." };
+
+  const overwrite = options.overwrite ?? false;
+  const update: Record<string, unknown> = {};
+  const current = org as Record<string, unknown>;
+
+  const setIfEmpty = (field: string, value: unknown) => {
+    if (value == null || value === "") return;
+    if (overwrite || current[field] == null || current[field] === "") {
+      update[field] = value;
+    }
+  };
+
+  setIfEmpty("founded_year", data.founded_year);
+  setIfEmpty("employee_count", data.employee_count);
+  setIfEmpty("company_stage", data.company_stage_crm);
+  setIfEmpty("sector", data.activite);
+  setIfEmpty("country", data.country);
+
+  // Location : "address, postal_code city" si tous présents, sinon city seul
+  if (!current.location || overwrite) {
+    const locParts: string[] = [];
+    if (data.address) locParts.push(data.address);
+    if (data.city) locParts.push(data.city);
+    const loc = locParts.join(", ").trim();
+    if (loc) update.location = loc;
+  }
+
+  // Description : ajouter SIREN + forme juridique + dirigeants en suffixe
+  // tant qu'il n'y a pas de colonne dédiée
+  if (!current.description || overwrite) {
+    const lines: string[] = [];
+    if (data.forme_juridique) lines.push(`Forme juridique : ${data.forme_juridique}`);
+    lines.push(`SIREN : ${data.siren}`);
+    if (data.category) lines.push(`Catégorie INSEE : ${data.category}`);
+    if (data.effectif_label) lines.push(`Effectif : ${data.effectif_label}`);
+    if (data.dirigeants.length > 0) {
+      const dirs = data.dirigeants
+        .slice(0, 3)
+        .map(d => d.qualite ? `${d.name} (${d.qualite})` : d.name)
+        .join(" · ");
+      lines.push(`Dirigeants : ${dirs}`);
+    }
+    if (lines.length > 0) {
+      const existing = current.description ? `${current.description}\n\n` : "";
+      const block = `[Enrichi via INSEE le ${new Date().toLocaleDateString("fr-FR")}]\n${lines.join("\n")}`;
+      update.description = overwrite ? block : existing + block;
+    }
+  }
+
+  if (Object.keys(update).length === 0) {
+    return { success: true }; // rien à mettre à jour
+  }
+
+  const { error: updErr } = await supabase
+    .from("organizations")
+    .update(update)
+    .eq("id", orgId)
+    .eq("user_id", user.id);
+  if (updErr) return { success: false, error: updErr.message };
+
+  revalidatePath(`/protected/organisations/${orgId}`);
+  return { success: true };
 }
