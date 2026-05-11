@@ -59,12 +59,10 @@ export function GlobalSearch() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        const inp = ref.current?.querySelector("input") as HTMLInputElement;
-        inp?.focus();
-        setOpen(true);
-      }
+      // Cmd+K est désormais géré par CommandPalette (palette globale plus
+      // complète : dossiers + orgas + contacts + mandats + actions, nav
+      // clavier, modal central). On garde seulement ESC pour fermer le
+      // dropdown de la sidebar si ouvert.
       if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("keydown", handler);
@@ -95,7 +93,7 @@ export function GlobalSearch() {
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          placeholder="Rechercher… (⌘K)"
+          placeholder="Rechercher rapide…"
           style={{
             width:"100%", paddingLeft:28, paddingRight: query ? 28 : 8,
             paddingTop:7, paddingBottom:7,

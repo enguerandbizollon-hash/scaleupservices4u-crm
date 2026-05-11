@@ -1,4 +1,5 @@
 import { SidebarNav } from "./sidebar-nav";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,6 +24,9 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       <main style={{ marginLeft:250, flex:1, minWidth:0 }}>
         {children}
       </main>
+
+      {/* Palette de recherche globale Cmd+K / Ctrl+K */}
+      <CommandPalette />
     </div>
   );
 }
