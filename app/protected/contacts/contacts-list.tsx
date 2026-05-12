@@ -3,9 +3,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EnrichButton } from "../components/enrich-button";
 import { StatusDropdown } from "../components/status-dropdown";
-import { Search, Mail, Phone, Linkedin, Edit2, Plus, X, Loader2, CheckCircle, Upload, Download } from "lucide-react";
+import { Search, Mail, Phone, Linkedin, Edit2, Plus, X, Loader2, CheckCircle, Upload, Download, Trash2, CheckSquare, Square } from "lucide-react";
 import { ContactsImportModal } from "./contacts-import-modal";
 import { exportRowsAsCSV } from "@/lib/export/csv";
+import { bulkDeleteContacts, bulkUpdateContactStatus } from "@/actions/contacts";
 
 type Contact = { id:string; fullName:string; firstName:string; lastName:string; title:string; email:string; phone:string; linkedinUrl:string|null; sector:string; ticket:string; organisation:string; status:string; notes:string; };
 
@@ -68,11 +69,53 @@ export function ContactsList({contacts:init,stats}:{contacts:Contact[];stats:{to
   const [contacts,setContacts]=useState(init);
   const [search,setSearch]=useState(""); const [statusF,setStatusF]=useState("all"); const [editing,setEditing]=useState<Contact|null>(null);
   const [importOpen,setImportOpen]=useState(false);
+  const [selected,setSelected]=useState<Set<string>>(new Set());
+  const [bulkBusy,setBulkBusy]=useState(false);
+  const [bulkMsg,setBulkMsg]=useState("");
 
   const filtered=contacts.filter(c=>{
     const q=search.toLowerCase();
     return(!q||[c.fullName,c.email,c.organisation,c.sector,c.title].some(v=>v.toLowerCase().includes(q)))&&(statusF==="all"||c.status===statusF);
   });
+
+  const allVisibleSelected=filtered.length>0&&filtered.every(c=>selected.has(c.id));
+  function toggleOne(id:string){
+    setSelected(p=>{const n=new Set(p);if(n.has(id))n.delete(id);else n.add(id);return n;});
+  }
+  function toggleAllVisible(){
+    if(allVisibleSelected){setSelected(p=>{const n=new Set(p);for(const c of filtered)n.delete(c.id);return n;});}
+    else{setSelected(p=>{const n=new Set(p);for(const c of filtered)n.add(c.id);return n;});}
+  }
+  async function doBulkDelete(){
+    if(selected.size===0)return;
+    if(!window.confirm(`Supprimer ${selected.size} contact${selected.size>1?"s":""} ? Cette action est définitive.`))return;
+    setBulkBusy(true);setBulkMsg("");
+    const ids=Array.from(selected);
+    const r=await bulkDeleteContacts(ids);
+    if(r.success){
+      setContacts(p=>p.filter(c=>!selected.has(c.id)));
+      setSelected(new Set());
+      setBulkMsg(`${r.deleted} contact${r.deleted>1?"s":""} supprimé${r.deleted>1?"s":""}`);
+      setTimeout(()=>{setBulkMsg("");router.refresh();},1500);
+    }else{
+      setBulkMsg(r.error??"Erreur lors de la suppression");
+    }
+    setBulkBusy(false);
+  }
+  async function doBulkStatus(status:string){
+    if(selected.size===0)return;
+    setBulkBusy(true);setBulkMsg("");
+    const ids=Array.from(selected);
+    const r=await bulkUpdateContactStatus(ids,status);
+    if(r.success){
+      setContacts(p=>p.map(c=>selected.has(c.id)?{...c,status}:c));
+      setBulkMsg(`${r.updated} contact${r.updated>1?"s":""} mis à jour`);
+      setTimeout(()=>{setBulkMsg("");router.refresh();},1500);
+    }else{
+      setBulkMsg(r.error??"Erreur lors de la mise à jour");
+    }
+    setBulkBusy(false);
+  }
 
   function exportCSV(){
     exportRowsAsCSV("contacts",filtered,[
@@ -125,24 +168,55 @@ export function ContactsList({contacts:init,stats}:{contacts:Contact[];stats:{to
       </div>
 
       {/* Filtre recherche */}
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
+      <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center"}}>
         <div style={{position:"relative",flex:1,maxWidth:400}}>
           <Search size={13} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--text-4)",pointerEvents:"none"}}/>
           <input className="inp" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nom, email, organisation, secteur…" style={{paddingLeft:36}}/>
         </div>
+        {filtered.length>0&&(
+          <button onClick={toggleAllVisible} title={allVisibleSelected?"Tout désélectionner":"Tout sélectionner"} className="btn btn-secondary" style={{fontSize:12,padding:"6px 11px"}}>
+            {allVisibleSelected?<CheckSquare size={13}/>:<Square size={13}/>}
+            {allVisibleSelected?"Tout désélectionner":"Tout sélectionner"}
+          </button>
+        )}
       </div>
 
       <div style={{fontSize:12,color:"var(--text-4)",marginBottom:12}}>{filtered.length} résultat{filtered.length!==1?"s":""}</div>
 
       {/* Liste sans avatars */}
+      {/* Bulk action bar */}
+      {selected.size>0&&(
+        <div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:200,background:"var(--text-1)",color:"var(--bg)",padding:"10px 14px",borderRadius:12,boxShadow:"var(--shadow-xl)",display:"flex",alignItems:"center",gap:12,fontSize:13,fontWeight:600,maxWidth:"calc(100vw - 32px)",flexWrap:"wrap"}}>
+          <span>{selected.size} sélectionné{selected.size>1?"s":""}</span>
+          <span style={{width:1,height:18,background:"var(--text-4)",opacity:.4}}/>
+          <select disabled={bulkBusy} defaultValue="" onChange={e=>{const v=e.target.value;e.target.value="";if(v)doBulkStatus(v);}} style={{background:"transparent",color:"var(--bg)",border:"1px solid var(--text-4)",borderRadius:6,padding:"4px 8px",fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+            <option value="" style={{color:"var(--text-1)"}}>Changer statut…</option>
+            {Object.entries(STATUS).map(([k,v])=><option key={k} value={k} style={{color:"var(--text-1)"}}>{v.label}</option>)}
+          </select>
+          <button onClick={doBulkDelete} disabled={bulkBusy} style={{background:"var(--rec-bg)",color:"var(--rec-tx)",border:"none",borderRadius:6,padding:"5px 11px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"inherit"}}>
+            {bulkBusy?<Loader2 size={12} className="animate-spin"/>:<Trash2 size={12}/>}
+            Supprimer
+          </button>
+          <button onClick={()=>setSelected(new Set())} disabled={bulkBusy} title="Désélectionner tout" style={{background:"transparent",color:"var(--bg)",border:"1px solid var(--text-4)",borderRadius:6,padding:"5px 9px",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",fontFamily:"inherit"}}>
+            <X size={12}/>
+          </button>
+          {bulkMsg&&<span style={{fontSize:11,opacity:.8,marginLeft:6}}>{bulkMsg}</span>}
+        </div>
+      )}
+
       {filtered.length===0 ? (
         <div className="empty-state"><div style={{fontWeight:600,color:"var(--text-3)"}}>Aucun contact trouvé</div></div>
       ) : (
         <div style={{display:"flex",flexDirection:"column",gap:3}}>
           {filtered.map(c=>{
             const st=STATUS[c.status]??STATUS.to_qualify;
+            const isSel=selected.has(c.id);
             return (
-              <div key={c.id} className="card" style={{padding:"11px 18px",display:"flex",alignItems:"center",gap:14}}>
+              <div key={c.id} className="card" style={{padding:"11px 18px",display:"flex",alignItems:"center",gap:14,background:isSel?"var(--surface-2)":undefined,borderColor:isSel?"var(--su-400)":undefined}}>
+                {/* Checkbox sélection */}
+                <button onClick={()=>toggleOne(c.id)} title={isSel?"Désélectionner":"Sélectionner"} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",color:isSel?"var(--su-500)":"var(--text-4)"}}>
+                  {isSel?<CheckSquare size={15}/>:<Square size={15}/>}
+                </button>
                 {/* Status dot */}
                 <div style={{width:8,height:8,borderRadius:"50%",background:st.tx,flexShrink:0,opacity:.7}}/>
                 {/* Infos */}

@@ -110,6 +110,47 @@ export async function deleteContact(id: string): Promise<{ success: boolean; err
   return { success: true };
 }
 
+// ── Bulk actions ──────────────────────────────────────────────────────────────
+
+export async function bulkDeleteContacts(
+  ids: string[],
+): Promise<{ success: boolean; deleted: number; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, deleted: 0, error: "Non autorisé" };
+  if (ids.length === 0) return { success: true, deleted: 0 };
+
+  const { error, count } = await supabase
+    .from("contacts")
+    .delete({ count: "exact" })
+    .in("id", ids)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, deleted: 0, error: error.message };
+  revalidatePath("/protected/contacts");
+  return { success: true, deleted: count ?? ids.length };
+}
+
+export async function bulkUpdateContactStatus(
+  ids: string[],
+  status: string,
+): Promise<{ success: boolean; updated: number; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, updated: 0, error: "Non autorisé" };
+  if (ids.length === 0) return { success: true, updated: 0 };
+
+  const { error, count } = await supabase
+    .from("contacts")
+    .update({ base_status: status }, { count: "exact" })
+    .in("id", ids)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, updated: 0, error: error.message };
+  revalidatePath("/protected/contacts");
+  return { success: true, updated: count ?? ids.length };
+}
+
 export async function getAllContactsSimple(): Promise<{ id: string; first_name: string; last_name: string; email: string | null }[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
