@@ -19,8 +19,9 @@ const NAV = [
   { href:"/protected/connecteurs",    label:"Connecteurs",   dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ taskCounts }: { taskCounts?: { overdue: number; today: number } }) {
   const path = usePathname();
+  const taskBadge = taskCounts && (taskCounts.overdue > 0 || taskCounts.today > 0);
 
   return (
     <>
@@ -35,6 +36,7 @@ export function SidebarNav() {
         {NAV.map(item => {
           const Icon = item.icon;
           const active = path === item.href || (item.href !== "/protected" && path.startsWith(item.href));
+          const isTaches = item.href === "/protected/taches";
           return (
             <Link key={item.href} href={item.href} style={{
               display:"flex", alignItems:"center", gap:10,
@@ -48,7 +50,21 @@ export function SidebarNav() {
               <div style={{ width:26, height:26, borderRadius:7, background:`${item.dot}22`, border:`1px solid ${item.dot}40`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 <Icon size={13} style={{ color: active ? "#fff" : item.dot }} strokeWidth={2}/>
               </div>
-              {item.label}
+              <span style={{ flex:1 }}>{item.label}</span>
+              {isTaches && taskBadge && (
+                <span style={{ display:"flex", gap:4 }}>
+                  {taskCounts.overdue > 0 && (
+                    <span title={`${taskCounts.overdue} tâche${taskCounts.overdue > 1 ? "s" : ""} en retard`} style={{ fontSize:10, fontWeight:800, background:"#DC2626", color:"#fff", borderRadius:4, padding:"1px 6px", letterSpacing:".02em" }}>
+                      {taskCounts.overdue}
+                    </span>
+                  )}
+                  {taskCounts.today > 0 && taskCounts.overdue === 0 && (
+                    <span title={`${taskCounts.today} tâche${taskCounts.today > 1 ? "s" : ""} aujourd'hui`} style={{ fontSize:10, fontWeight:800, background:"#F59E0B", color:"#fff", borderRadius:4, padding:"1px 6px", letterSpacing:".02em" }}>
+                      {taskCounts.today}
+                    </span>
+                  )}
+                </span>
+              )}
             </Link>
           );
         })}

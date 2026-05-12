@@ -1,7 +1,35 @@
 import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette } from "@/components/ui/CommandPalette";
+import { createClient } from "@/lib/supabase/server";
 
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+async function getTaskCounts(): Promise<{ overdue: number; today: number }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { overdue: 0, today: 0 };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().slice(0, 10);
+    const { data } = await supabase
+      .from("actions")
+      .select("due_date")
+      .eq("user_id", user.id)
+      .eq("type", "task")
+      .not("status", "in", '("done","cancelled","completed")');
+    let overdue = 0, todayCount = 0;
+    for (const r of data ?? []) {
+      if (!r.due_date) continue;
+      if (r.due_date < todayStr) overdue++;
+      else if (r.due_date === todayStr) todayCount++;
+    }
+    return { overdue, today: todayCount };
+  } catch {
+    return { overdue: 0, today: 0 };
+  }
+}
+
+export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  const taskCounts = await getTaskCounts();
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"var(--bg)" }}>
       <aside style={{ position:"fixed", left:0, top:0, zIndex:50, width:250, height:"100vh", display:"flex", flexDirection:"column", background:"var(--su-900)", borderRight:"1px solid rgba(255,255,255,0.06)" }}>
@@ -18,7 +46,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Nav — Client Component */}
-        <SidebarNav />
+        <SidebarNav taskCounts={taskCounts} />
       </aside>
 
       <main style={{ marginLeft:250, flex:1, minWidth:0 }}>
