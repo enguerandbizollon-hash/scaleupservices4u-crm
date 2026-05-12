@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getAllMandates } from "@/actions/mandates";
 import { getFeesKpis } from "@/actions/fees";
 import { Plus } from "lucide-react";
+import { ExportCSVButton, type ExportRow } from "@/components/exports/export-csv-button";
 
 const TYPE_LABELS: Record<string, string> = {
   fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
@@ -97,14 +98,43 @@ async function Content() {
               Relations commerciales et honoraires
             </p>
           </div>
-          <Link href="/protected/mandats/nouveau" style={{
-            display: "flex", alignItems: "center", gap: 7,
-            padding: "9px 18px", borderRadius: 10,
-            background: "var(--text-1)", color: "var(--bg)",
-            fontSize: 13, fontWeight: 700, textDecoration: "none",
-          }}>
-            <Plus size={14} /> Nouveau mandat
-          </Link>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <ExportCSVButton
+              filenamePrefix="mandats"
+              rows={mandates.map<ExportRow>(m => ({
+                "Nom": m.name,
+                "Type": TYPE_LABELS[m.type] ?? m.type,
+                "Statut": STATUS_LABELS[m.status] ?? m.status,
+                "Priorité": m.priority ?? "",
+                "Client": m.client_name ?? "",
+                "Honoraires estimés": m.estimated_fee_amount ?? "",
+                "Honoraires confirmés": (m as { confirmed_fee_amount?: number | null }).confirmed_fee_amount ?? "",
+                "Devise": m.currency ?? "EUR",
+                "Date de début": m.start_date ?? "",
+                "Date cible closing": m.target_close_date ?? "",
+              }))}
+              columns={[
+                { key: "Nom", label: "Nom" },
+                { key: "Type", label: "Type" },
+                { key: "Statut", label: "Statut" },
+                { key: "Priorité", label: "Priorité" },
+                { key: "Client", label: "Client" },
+                { key: "Honoraires estimés", label: "Honoraires estimés" },
+                { key: "Honoraires confirmés", label: "Honoraires confirmés" },
+                { key: "Devise", label: "Devise" },
+                { key: "Date de début", label: "Date de début" },
+                { key: "Date cible closing", label: "Date cible closing" },
+              ]}
+            />
+            <Link href="/protected/mandats/nouveau" style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "9px 18px", borderRadius: 10,
+              background: "var(--text-1)", color: "var(--bg)",
+              fontSize: 13, fontWeight: 700, textDecoration: "none",
+            }}>
+              <Plus size={14} /> Nouveau mandat
+            </Link>
+          </div>
         </div>
 
         {/* KPIs — ligne 1 : volume */}

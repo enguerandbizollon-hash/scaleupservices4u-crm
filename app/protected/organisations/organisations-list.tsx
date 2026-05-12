@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Mail, Phone, Globe, AlertTriangle, CheckSquare, Activity, ChevronRight } from "lucide-react";
+import { Plus, Search, Mail, Phone, Globe, AlertTriangle, CheckSquare, Activity, ChevronRight, Download } from "lucide-react";
 import { StatusDropdown } from "../components/status-dropdown";
+import { exportRowsAsCSV } from "@/lib/export/csv";
 
 type Contact = { id:string; first_name:string; last_name:string; title?:string; email?:string; phone?:string; base_status?:string; last_contact_date?:string; role_label?:string; is_primary?:boolean };
 type Org = {
@@ -81,10 +82,35 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
             {filtered.some(o=>o.contacts.length>0) && ` · ${filtered.reduce((s,o)=>s+o.contacts.length,0)} contacts`}
           </div>
         </div>
-        <Link href="/protected/organisations/nouveau"
-          style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-          <Plus size={14}/> Nouvelle
-        </Link>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <button
+            onClick={()=>exportRowsAsCSV("organisations",filtered,[
+              { key:"name", label:"Nom" },
+              { key:"typeLabel", label:"Type" },
+              { key:"status", label:"Statut", format:r=>STATUS_LABELS[r.status]?.label??r.status },
+              { key:"sector", label:"Secteur" },
+              { key:"location", label:"Localisation" },
+              { key:"website", label:"Site web" },
+              { key:"investmentTicket", label:"Ticket" },
+              { key:"investmentStage", label:"Stade investissement" },
+              { key:"contactsCount", label:"Nb contacts", format:r=>r.contacts.length },
+              { key:"primaryContact", label:"Contact principal", format:r=>{const p=r.contacts.find(c=>c.is_primary)??r.contacts[0];return p?`${p.first_name} ${p.last_name}`.trim():"";} },
+              { key:"primaryEmail", label:"Email principal", format:r=>{const p=r.contacts.find(c=>c.is_primary)??r.contacts[0];return p?.email??"";} },
+              { key:"openTasks", label:"Tâches ouvertes" },
+              { key:"lastActivity", label:"Dernière activité" },
+              { key:"description", label:"Description" },
+              { key:"notes", label:"Notes" },
+            ])}
+            disabled={filtered.length===0}
+            title={`Exporter ${filtered.length} organisation${filtered.length>1?"s":""}`}
+            style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 14px", borderRadius:9, background:"var(--surface)", color:"var(--text-2)", border:"1px solid var(--border)", cursor: filtered.length===0?"not-allowed":"pointer", opacity: filtered.length===0?.5:1, fontSize:13, fontWeight:600 }}>
+            <Download size={14}/> Exporter
+          </button>
+          <Link href="/protected/organisations/nouveau"
+            style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+            <Plus size={14}/> Nouvelle
+          </Link>
+        </div>
       </div>
 
       {/* Filtres */}

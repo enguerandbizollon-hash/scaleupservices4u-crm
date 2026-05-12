@@ -1,8 +1,11 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { EnrichButton } from "../components/enrich-button";
 import { StatusDropdown } from "../components/status-dropdown";
-import { Search, Mail, Phone, Linkedin, Edit2, Plus, X, Loader2, CheckCircle } from "lucide-react";
+import { Search, Mail, Phone, Linkedin, Edit2, Plus, X, Loader2, CheckCircle, Upload, Download } from "lucide-react";
+import { ContactsImportModal } from "./contacts-import-modal";
+import { exportRowsAsCSV } from "@/lib/export/csv";
 
 type Contact = { id:string; fullName:string; firstName:string; lastName:string; title:string; email:string; phone:string; linkedinUrl:string|null; sector:string; ticket:string; organisation:string; status:string; notes:string; };
 
@@ -61,17 +64,36 @@ function EditModal({c,onClose,onSaved}:{c:Contact;onClose:()=>void;onSaved:(u:Pa
 }
 
 export function ContactsList({contacts:init,stats}:{contacts:Contact[];stats:{total:number;bystatus:Record<string,number>}}) {
+  const router=useRouter();
   const [contacts,setContacts]=useState(init);
   const [search,setSearch]=useState(""); const [statusF,setStatusF]=useState("all"); const [editing,setEditing]=useState<Contact|null>(null);
+  const [importOpen,setImportOpen]=useState(false);
 
   const filtered=contacts.filter(c=>{
     const q=search.toLowerCase();
     return(!q||[c.fullName,c.email,c.organisation,c.sector,c.title].some(v=>v.toLowerCase().includes(q)))&&(statusF==="all"||c.status===statusF);
   });
 
+  function exportCSV(){
+    exportRowsAsCSV("contacts",filtered,[
+      {key:"lastName",label:"Nom"},
+      {key:"firstName",label:"Prénom"},
+      {key:"email",label:"Email"},
+      {key:"phone",label:"Téléphone"},
+      {key:"title",label:"Fonction"},
+      {key:"organisation",label:"Organisation"},
+      {key:"sector",label:"Secteur"},
+      {key:"linkedinUrl",label:"LinkedIn"},
+      {key:"ticket",label:"Ticket"},
+      {key:"status",label:"Statut",format:r=>STATUS[r.status]?.label??r.status},
+      {key:"notes",label:"Notes"},
+    ]);
+  }
+
   return (
     <div style={{padding:32,minHeight:"100vh",background:"var(--bg)"}}>
       {editing&&<EditModal c={editing} onClose={()=>setEditing(null)} onSaved={u=>{setContacts(p=>p.map(c=>c.id===editing.id?{...c,...u}:c));}}/>}
+      {importOpen&&<ContactsImportModal onClose={()=>setImportOpen(false)} onImported={()=>{setImportOpen(false);router.refresh();}}/>}
 
       {/* Header */}
       <div className="page-header">
@@ -80,7 +102,11 @@ export function ContactsList({contacts:init,stats}:{contacts:Contact[];stats:{to
           <h1 style={{margin:0}}>Contacts</h1>
           <div style={{marginTop:8,fontSize:12,color:"var(--text-4)"}}>{stats.total} contacts au total</div>
         </div>
-        <a href="/protected/contacts/nouveau" className="btn btn-primary"><Plus size={14}/>Nouveau contact</a>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button className="btn btn-secondary" onClick={()=>setImportOpen(true)} title="Importer CSV ou Excel"><Upload size={14}/>Importer</button>
+          <button className="btn btn-secondary" onClick={exportCSV} disabled={filtered.length===0} title={`Exporter ${filtered.length} contact${filtered.length>1?"s":""} (filtrés)`}><Download size={14}/>Exporter</button>
+          <a href="/protected/contacts/nouveau" className="btn btn-primary"><Plus size={14}/>Nouveau contact</a>
+        </div>
       </div>
 
       {/* Compteurs statuts */}

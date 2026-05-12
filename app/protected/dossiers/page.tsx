@@ -5,6 +5,7 @@ import { Plus, AlertTriangle, CheckSquare, CalendarDays, Activity } from "lucide
 import { DealsKanban } from "./_components/deals-kanban";
 import { ViewToggle } from "@/components/dossiers/ViewToggle";
 import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
+import { ExportCSVButton, type ExportRow } from "@/components/exports/export-csv-button";
 import { stageLabel } from "@/lib/crm/matching-maps";
 import { computeDealHealth, isDormant, DORMANT_THRESHOLD_DAYS, type DealHealthResult } from "@/lib/crm/health-score";
 
@@ -153,6 +154,39 @@ async function Content() {
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           <ViewToggle current="list" />
+          <ExportCSVButton
+            filenamePrefix="dossiers"
+            rows={deals.map<ExportRow>(d => ({
+              "Nom": d.name,
+              "Type": DT[d.deal_type]?.label ?? d.deal_type,
+              "Stade": stageLabel(d.deal_stage),
+              "Statut": d.deal_status,
+              "Priorité": d.priority_level,
+              "Secteur": d.sector ?? "",
+              "Localisation": d.location ?? "",
+              "Montant cible": d.target_amount ?? "",
+              "Devise": d.currency ?? "",
+              "Date cible": d.target_date ?? "",
+              "Screening": d.screening_status ?? "",
+              "Score": d.screening_score ?? "",
+              "Description": d.description ?? "",
+            }))}
+            columns={[
+              { key:"Nom", label:"Nom" },
+              { key:"Type", label:"Type" },
+              { key:"Stade", label:"Stade" },
+              { key:"Statut", label:"Statut" },
+              { key:"Priorité", label:"Priorité" },
+              { key:"Secteur", label:"Secteur" },
+              { key:"Localisation", label:"Localisation" },
+              { key:"Montant cible", label:"Montant cible" },
+              { key:"Devise", label:"Devise" },
+              { key:"Date cible", label:"Date cible" },
+              { key:"Screening", label:"Screening" },
+              { key:"Score", label:"Score" },
+              { key:"Description", label:"Description" },
+            ]}
+          />
           <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
             <Plus size={14}/> Nouveau dossier
           </Link>
