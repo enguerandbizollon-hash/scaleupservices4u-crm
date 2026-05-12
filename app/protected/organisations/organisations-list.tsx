@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Mail, Phone, Globe, AlertTriangle, CheckSquare, Activity, ChevronRight, Download } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Search, Mail, Phone, Globe, AlertTriangle, CheckSquare, Activity, ChevronRight, Download, Upload } from "lucide-react";
 import { StatusDropdown } from "../components/status-dropdown";
 import { exportRowsAsCSV } from "@/lib/export/csv";
+import { OrganisationsImportModal } from "./organisations-import-modal";
 
 type Contact = { id:string; first_name:string; last_name:string; title?:string; email?:string; phone?:string; base_status?:string; last_contact_date?:string; role_label?:string; is_primary?:boolean };
 type Org = {
@@ -45,9 +47,11 @@ function fmtDate(v:string|null) {
 }
 
 export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total: number } }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [importOpen, setImportOpen] = useState(false);
 
   const types = ["all", ...Array.from(new Set(orgs.map(o => o.typeKey)))];
 
@@ -72,6 +76,7 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
 
   return (
     <div style={{ padding:"28px 24px", minHeight:"100vh", background:"var(--bg)" }}>
+      {importOpen && <OrganisationsImportModal onClose={()=>setImportOpen(false)} onImported={()=>{setImportOpen(false);router.refresh();}}/>}
 
       {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
@@ -83,6 +88,12 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
           </div>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <button
+            onClick={()=>setImportOpen(true)}
+            title="Importer CSV ou Excel"
+            style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 14px", borderRadius:9, background:"var(--surface)", color:"var(--text-2)", border:"1px solid var(--border)", cursor:"pointer", fontSize:13, fontWeight:600 }}>
+            <Upload size={14}/> Importer
+          </button>
           <button
             onClick={()=>exportRowsAsCSV("organisations",filtered,[
               { key:"name", label:"Nom" },
