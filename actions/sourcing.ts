@@ -44,15 +44,29 @@ import {
   isScreeningReady,
 } from "@/lib/crm/matching-maps";
 
-// Réexport des actions workflow déjà livrées (suggestions.ts reste la vérité)
-export {
-  approveSuggestion,
-  rejectSuggestion,
-  deferSuggestion,
-  markSuggestionContacted,
-  scoreSuggestionAI,
-  generateOutreachBriefForSuggestion,
-} from "./suggestions";
+// Réexport des actions workflow déjà livrées (suggestions.ts reste la vérité).
+// Next.js interdit `export { ... } from` depuis un fichier `"use server"` :
+// chaque export doit être une fonction async définie sur place. On wrappe.
+import * as Sug from "./suggestions";
+
+export async function approveSuggestion(...args: Parameters<typeof Sug.approveSuggestion>) {
+  return Sug.approveSuggestion(...args);
+}
+export async function rejectSuggestion(...args: Parameters<typeof Sug.rejectSuggestion>) {
+  return Sug.rejectSuggestion(...args);
+}
+export async function deferSuggestion(...args: Parameters<typeof Sug.deferSuggestion>) {
+  return Sug.deferSuggestion(...args);
+}
+export async function markSuggestionContacted(...args: Parameters<typeof Sug.markSuggestionContacted>) {
+  return Sug.markSuggestionContacted(...args);
+}
+export async function scoreSuggestionAI(...args: Parameters<typeof Sug.scoreSuggestionAI>) {
+  return Sug.scoreSuggestionAI(...args);
+}
+export async function generateOutreachBriefForSuggestion(...args: Parameters<typeof Sug.generateOutreachBriefForSuggestion>) {
+  return Sug.generateOutreachBriefForSuggestion(...args);
+}
 
 // ── Types de retour ──────────────────────────────────────────────────────────
 
