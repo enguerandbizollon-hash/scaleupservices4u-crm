@@ -150,11 +150,13 @@ export function checkMaDealBreakers(
       }
     }
 
-    // Taille hors fourchette × 0.5 / × 2
-    if (deal.asking_price_min && org.target_revenue_min && org.target_revenue_max) {
-      const price = deal.asking_price_min;
-      if (price < org.target_revenue_min * 0.5 || price > org.target_revenue_max * 2) {
-        return `Taille deal (${(price/1e6).toFixed(1)}M€) hors fourchette acquéreur`;
+    // Taille hors fourchette × 0.5 / × 2 — CA du deal vs fourchette de CA
+    // cible du buyer (mêmes unités). Le prix demandé (asking_price) n'est
+    // pas comparable à une fourchette de chiffre d'affaires.
+    if (deal.financial?.revenue && org.target_revenue_min && org.target_revenue_max) {
+      const rev = deal.financial.revenue;
+      if (rev < org.target_revenue_min * 0.5 || rev > org.target_revenue_max * 2) {
+        return `CA du deal (${(rev/1e6).toFixed(1)}M€) hors fourchette acquéreur`;
       }
     }
 
@@ -188,10 +190,12 @@ export function checkMaDealBreakers(
       }
     }
 
-    // full_acquisition_required : buyer veut 100% mais la cible n'accepte que partiel
-    if (deal.full_acquisition_required === true && org.partial_sale_ok === true) {
-      return `Acquisition 100% requise mais ${org.name} n'accepte que la cession partielle`;
-    }
+    // full_acquisition_required : pas de deal breaker sur partial_sale_ok.
+    // partial_sale_ok = true signifie "cession partielle acceptée", pas
+    // "cession totale refusée" : éliminer sur ce signal excluait des cibles
+    // parfaitement compatibles avec une acquisition à 100%. Aucun champ
+    // n'exprime aujourd'hui le refus d'une cession totale ; à réintroduire
+    // en breaker quand un champ dédié existera.
   }
 
   return null;
@@ -234,16 +238,19 @@ function scoreSector(deal: MaDealProfile, org: MaOrganisationProfile): { earned:
 
 function scoreSize(deal: MaDealProfile, org: MaOrganisationProfile): { earned: number; reason: string } {
   if (deal.deal_type === "ma_sell") {
-    // Vérifier si le deal (asking_price) rentre dans le budget du buyer
-    const price = deal.asking_price_min ?? deal.asking_price_max;
-    if (!price) return { earned: 12, reason: "Prix demandé non renseigné — neutre" };
-    if (!org.target_revenue_min && !org.target_revenue_max) return { earned: 12, reason: "Budget buyer non renseigné — neutre" };
+    // Comparer le CA de l'entreprise à vendre à la fourchette de CA cible
+    // du buyer (mêmes unités). L'ancien code comparait asking_price à
+    // target_revenue_min/max : un prix n'est pas un chiffre d'affaires.
+    // Les critères buyer (v23) n'ont pas de fourchette budget/EV dédiée.
+    const rev = deal.financial?.revenue;
+    if (!rev) return { earned: 12, reason: "CA du deal non renseigné — neutre" };
+    if (!org.target_revenue_min && !org.target_revenue_max) return { earned: 12, reason: "Critères de taille buyer non renseignés — neutre" };
 
     const lo = org.target_revenue_min ?? 0;
     const hi = org.target_revenue_max ?? Infinity;
-    if (price >= lo && price <= hi)  return { earned: 25, reason: `Prix ${(price/1e6).toFixed(1)}M€ dans le budget buyer` };
-    if (price >= lo * 0.7 && price <= hi * 1.5) return { earned: 12, reason: `Prix proche du budget buyer` };
-    return { earned: 0, reason: `Prix ${(price/1e6).toFixed(1)}M€ hors budget buyer` };
+    if (rev >= lo && rev <= hi)  return { earned: 25, reason: `CA ${(rev/1e6).toFixed(1)}M€ dans la fourchette du buyer` };
+    if (rev >= lo * 0.7 && rev <= hi * 1.5) return { earned: 12, reason: `CA proche de la fourchette du buyer` };
+    return { earned: 0, reason: `CA ${(rev/1e6).toFixed(1)}M€ hors fourchette du buyer` };
   }
 
   // ma_buy : vérifier si le CA / EV de la cible rentre dans les critères du deal
@@ -378,17 +385,27 @@ export function computeMaFinancialScore(
     else                          { marginEarned = 0;  marginReason = `EBITDA négatif ${ebitda_margin.toFixed(0)}%`; }
   }
 
-  // Bilan : net_debt / equity (25 pts)
+  // Bilan (25 pts) : levier net_debt / EBITDA (standard M&A, seuils 1x/3x).
+  // Repli sur le gearing net_debt / capitaux propres si l'EBITDA manque,
+  // avec un libellé exact (l'ancien code calculait le gearing mais
+  // l'affichait "x EBITDA").
   let balanceEarned = 0;
   let balanceReason = "Bilan inconnu";
-  if (equity != null && equity > 0) {
-    if (net_debt == null || net_debt <= 0)             { balanceEarned = 25; balanceReason = "Bilan net positif, dette nulle ou cash net"; }
-    else {
-      const leverage = net_debt / equity;
-      if (leverage <= 1)      { balanceEarned = 20; balanceReason = `Levier modéré ${leverage.toFixed(1)}x EBITDA`; }
-      else if (leverage <= 3) { balanceEarned = 10; balanceReason = `Levier élevé ${leverage.toFixed(1)}x EBITDA`; }
-      else                    { balanceEarned = 2;  balanceReason = `Levier très élevé ${leverage.toFixed(1)}x EBITDA`; }
-    }
+  const ebitda = financial.ebitda;
+  if (net_debt != null && net_debt <= 0) {
+    balanceEarned = 25; balanceReason = "Dette nulle ou cash net";
+  } else if (net_debt != null && net_debt > 0 && ebitda != null && ebitda > 0) {
+    const leverage = net_debt / ebitda;
+    if (leverage <= 1)      { balanceEarned = 20; balanceReason = `Levier modéré ${leverage.toFixed(1)}x EBITDA`; }
+    else if (leverage <= 3) { balanceEarned = 10; balanceReason = `Levier élevé ${leverage.toFixed(1)}x EBITDA`; }
+    else                    { balanceEarned = 2;  balanceReason = `Levier très élevé ${leverage.toFixed(1)}x EBITDA`; }
+  } else if (net_debt != null && net_debt > 0 && equity != null && equity > 0) {
+    const gearing = net_debt / equity;
+    if (gearing <= 1)      { balanceEarned = 20; balanceReason = `Gearing modéré ${gearing.toFixed(1)}x (dette nette / capitaux propres)`; }
+    else if (gearing <= 3) { balanceEarned = 10; balanceReason = `Gearing élevé ${gearing.toFixed(1)}x (dette nette / capitaux propres)`; }
+    else                   { balanceEarned = 2;  balanceReason = `Gearing très élevé ${gearing.toFixed(1)}x (dette nette / capitaux propres)`; }
+  } else if (net_debt == null && equity != null && equity > 0) {
+    balanceEarned = 25; balanceReason = "Bilan net positif, dette nulle ou cash net";
   }
 
   // Comparables valorisation (25 pts)
