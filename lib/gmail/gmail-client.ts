@@ -1,7 +1,10 @@
 // Client Gmail — toutes les fonctions reçoivent userId
 // Auth partagée avec GCal via getValidToken (mêmes scopes Google OAuth).
 // Pas de token global, isolation stricte par utilisateur.
+// Le paramètre optionnel `client` (Supabase) est requis en contexte cron
+// (pas de session SSR) : y passer le client admin.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getValidToken } from "@/lib/gcal/gcal-client";
 
 // =============================================================================
@@ -59,9 +62,10 @@ export interface ParsedGmailMessage {
  */
 export async function getGmailThreadPreview(
   userId: string,
-  threadId: string
+  threadId: string,
+  client?: SupabaseClient
 ): Promise<{ subject: string; snippet: string } | null> {
-  const token = await getValidToken(userId);
+  const token = await getValidToken(userId, client);
   if (!token) return null;
 
   const res = await fetch(
@@ -82,9 +86,10 @@ export async function getGmailThreadPreview(
  */
 export async function createGmailDraft(
   userId: string,
-  draft: { to: string[]; subject: string; body: string }
+  draft: { to: string[]; subject: string; body: string },
+  client?: SupabaseClient
 ): Promise<string | null> {
-  const token = await getValidToken(userId);
+  const token = await getValidToken(userId, client);
   if (!token) return null;
 
   const message = [
@@ -121,9 +126,10 @@ export async function createGmailDraft(
  */
 export async function listGmailMessageIds(
   userId: string,
-  opts: { query: string; maxResults?: number }
+  opts: { query: string; maxResults?: number },
+  client?: SupabaseClient
 ): Promise<{ id: string; threadId: string }[]> {
-  const token = await getValidToken(userId);
+  const token = await getValidToken(userId, client);
   if (!token) return [];
 
   const limit = opts.maxResults ?? 100;
@@ -160,9 +166,10 @@ export async function listGmailMessageIds(
  */
 export async function getGmailMessage(
   userId: string,
-  messageId: string
+  messageId: string,
+  client?: SupabaseClient
 ): Promise<ParsedGmailMessage | null> {
-  const token = await getValidToken(userId);
+  const token = await getValidToken(userId, client);
   if (!token) return null;
 
   const res = await fetch(

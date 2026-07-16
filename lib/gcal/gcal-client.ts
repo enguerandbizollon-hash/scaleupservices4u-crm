@@ -1,15 +1,24 @@
 // Client Google Calendar — toutes les fonctions reçoivent userId
 // Jamais de token global — isolation stricte par utilisateur
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Récupère un access token GCal valide pour l'utilisateur.
  * Rafraîchit automatiquement si expiré.
  * Retourne null si pas connecté.
+ *
+ * `client` : client Supabase à utiliser pour lire/écrire user_settings.
+ * Par défaut le client SSR (session requise, RLS). En contexte cron il n'y a
+ * pas de session : passer le client admin, sinon la lecture renvoie null en
+ * silence et aucun token n'est jamais résolu.
  */
-export async function getValidToken(userId: string): Promise<string | null> {
-  const supabase = await createClient();
+export async function getValidToken(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<string | null> {
+  const supabase = client ?? (await createClient());
   const { data } = await supabase
     .from("user_settings")
     .select("gcal_access_token, gcal_refresh_token, gcal_token_expiry")

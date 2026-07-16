@@ -383,10 +383,11 @@ export async function syncGmailForUser(
   const query = `(in:inbox OR in:sent) ${dateQuery} -in:spam -in:trash`;
 
   // 1. Liste des IDs candidats
-  const ids = await listGmailMessageIds(userId, {
-    query,
-    maxResults: MAX_MESSAGES_PER_RUN,
-  });
+  const ids = await listGmailMessageIds(
+    userId,
+    { query, maxResults: MAX_MESSAGES_PER_RUN },
+    admin, // contexte cron sans session : le token doit se lire via le client admin
+  );
   result.fetched = ids.length;
 
   if (ids.length === 0) {
@@ -428,7 +429,7 @@ export async function syncGmailForUser(
   // 4. Boucle de traitement
   for (const ref of fresh) {
     try {
-      const parsed = await getGmailMessage(userId, ref.id);
+      const parsed = await getGmailMessage(userId, ref.id, admin);
       if (!parsed) {
         await admin.from("gmail_processed_messages").insert({
           user_id: userId,
