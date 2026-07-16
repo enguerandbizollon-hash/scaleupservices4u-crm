@@ -17,6 +17,16 @@ function sub(a: N, b: N): number | null {
   if (na == null || nb == null) return null;
   return na - nb;
 }
+// sub0 : variante cascade. Retourne null seulement si le minuende est null.
+// Le terme soustrait est traité comme 0 s'il est absent — utile pour les
+// charges optionnelles (D&A, charges financières, impôts, capex) qu'un
+// utilisateur peut légitimement ne pas saisir sans casser la propagation
+// jusqu'au résultat net et au cash EBITDA.
+function sub0(a: N, b: N): number | null {
+  const na = n(a);
+  if (na == null) return null;
+  return na - (n(b) ?? 0);
+}
 function mul(a: N, b: N): number | null {
   const na = n(a), nb = n(b);
   if (na == null || nb == null) return null;
@@ -40,6 +50,12 @@ export interface FinancialInputs {
   wacc?: N; terminal_growth_rate?: N;
   fcf_n1?: N; fcf_n2?: N; fcf_n3?: N; fcf_n4?: N; fcf_n5?: N;
   misc_adjustments?: N; contingent_liabilities?: N; excess_cash?: N;
+  // Retraitements EBITDA normatif (M&A) — signe positif augmente l'EBITDA
+  addback_owner_compensation?: N;
+  addback_exceptional_charges?: N;
+  addback_property_rent?: N;
+  addback_one_off_fees?: N;
+  addback_other?: N;
 }
 
 export function computeFinancials(d: FinancialInputs) {
@@ -51,13 +67,28 @@ export function computeFinancials(d: FinancialInputs) {
   const total_opex = sum(payroll_effective, d.marketing, d.rent, d.other_opex);
   const ebitda = sub(gross_profit, total_opex);
   const ebitda_margin = div(ebitda, d.revenue);
-  const ebit = sub(ebitda, d.da);
+  const ebit = sub0(ebitda, d.da);
   const ebit_margin = div(ebit, d.revenue);
-  const ebt = sub(ebit, d.financial_charges);
-  const net_income = sub(ebt, d.taxes);
+  const ebt = sub0(ebit, d.financial_charges);
+  const net_income = sub0(ebt, d.taxes);
   const net_margin = div(net_income, d.revenue);
-  const cash_ebitda = sub(ebitda, d.capex);
+  const cash_ebitda = sub0(ebitda, d.capex);
   const recurring_rate = div(d.revenue_recurring, d.revenue);
+
+  // EBITDA normatif — somme des retraitements ajoutée à l'EBITDA reporté.
+  // Si l'EBITDA reporté est null mais qu'on a au moins un retraitement,
+  // l'EBITDA normatif reste null (on ne valorise pas du vide).
+  const addbacks_total = sum(
+    d.addback_owner_compensation,
+    d.addback_exceptional_charges,
+    d.addback_property_rent,
+    d.addback_one_off_fees,
+    d.addback_other,
+  );
+  const ebitda_normative = ebitda !== null
+    ? ebitda + (addbacks_total ?? 0)
+    : null;
+  const ebitda_normative_margin = div(ebitda_normative, d.revenue);
 
   // Récurrent
   const mrr = div(d.arr, 12);
@@ -102,6 +133,7 @@ export function computeFinancials(d: FinancialInputs) {
   }
 
   const valo_ebitda  = evMethod(ebitda, d.multiple_ev_ebitda_low, d.multiple_ev_ebitda_mid, d.multiple_ev_ebitda_high);
+  const valo_ebitda_normative = evMethod(ebitda_normative, d.multiple_ev_ebitda_low, d.multiple_ev_ebitda_mid, d.multiple_ev_ebitda_high);
   const valo_ebit    = evMethod(ebit, d.multiple_ev_ebit_low, d.multiple_ev_ebit_mid, d.multiple_ev_ebit_high);
   const valo_revenue = evMethod(n(d.revenue), d.multiple_ev_revenue_low, d.multiple_ev_revenue_mid, d.multiple_ev_revenue_high);
   const valo_arr     = evMethod(n(d.arr), d.multiple_ev_arr_low, d.multiple_ev_arr_mid, d.multiple_ev_arr_high);
@@ -131,6 +163,8 @@ export function computeFinancials(d: FinancialInputs) {
     gross_profit, gross_margin, total_payroll: payroll_effective, total_opex,
     ebitda, ebitda_margin, ebit, ebit_margin, ebt, net_income, net_margin,
     cash_ebitda, recurring_rate,
+    // EBITDA normatif
+    addbacks_total, ebitda_normative, ebitda_normative_margin,
     // Récurrent
     mrr, ltv, ltv_cac, rule_of_40,
     // Bilan
@@ -139,7 +173,7 @@ export function computeFinancials(d: FinancialInputs) {
     // Dette & BFR
     net_debt, bfr, dso, dio, dpo, ccc, fcf, fcf_conversion,
     // Valorisation
-    valo_ebitda, valo_ebit, valo_revenue, valo_arr,
+    valo_ebitda, valo_ebitda_normative, valo_ebit, valo_revenue, valo_arr,
     ev_dcf, equity_dcf,
     // Ratios
     leverage, gearing, current_ratio, roce,

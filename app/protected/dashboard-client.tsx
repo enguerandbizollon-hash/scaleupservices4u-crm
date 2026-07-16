@@ -16,6 +16,38 @@ export interface ContactOption {
 const ACT_ICON: Record<string,string> = { email_sent:"✉️", email_received:"📩", call:"📞", meeting:"🤝", follow_up:"🔔", note:"📝", other:"📌", deck_sent:"📊", nda:"📋", task:"☑️" };
 const EVT_COLOR: Record<string,string> = { follow_up:"#D97706", meeting:"#3468B0", call:"#7C3AED", deadline:"#DC2626", email:"#059669", task:"#6B7280", other:"#6B7280" };
 
+export interface DashboardAnalytics {
+  pipeline: {
+    stage: string;
+    label: string;
+    count: number;
+    amount_total: number;
+    dominant_type: string;
+  }[];
+  conversion: {
+    type: string;
+    label: string;
+    color: string;
+    won: number;
+    lost: number;
+    total: number;
+    rate: number;
+  }[];
+  top_deals: {
+    id: string;
+    name: string;
+    type: string;
+    stage: string;
+    priority: string;
+    target_amount: number | null;
+    currency: string;
+    type_label: string;
+    type_color: string;
+    stage_label: string;
+    next_action: { title: string; date: string } | null;
+  }[];
+}
+
 interface DashboardClientProps {
   kpis: { label:string; val:number; href:string; color:string }[];
   feesKpis?: { pending:number; invoiced:number; paid_ytd:number; projection:number|null; currency:string };
@@ -25,6 +57,7 @@ interface DashboardClientProps {
   activities: { id:string; title:string; type:string; date:string; dealId:string|null; dealName?:string }[];
   calendarItems: { id:string; title:string; date:string; type:string; dealName?:string|null; contactName?:string|null }[];
   allContacts?: ContactOption[];
+  analytics?: DashboardAnalytics;
 }
 
 function fmt(v:string|null){ if(!v)return"—"; return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}); }
@@ -37,7 +70,7 @@ function fmtMoney(n: number, currency: string): string {
   return `${Math.round(n)} ${cur}`;
 }
 
-export function DashboardClient({ kpis, feesKpis, deals, relances, tasks, activities, calendarItems, allContacts }: DashboardClientProps) {
+export function DashboardClient({ kpis, feesKpis, deals, relances, tasks, activities, calendarItems, allContacts, analytics }: DashboardClientProps) {
   const router = useRouter();
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [actionModalDefaultType, setActionModalDefaultType] = useState<string | undefined>(undefined);
@@ -106,6 +139,15 @@ export function DashboardClient({ kpis, feesKpis, deals, relances, tasks, activi
               </div>
             </div>
           </Link>
+        )}
+
+        {/* V58 — Bande analytique : Pipeline / Conversion / Top dossiers */}
+        {analytics && (analytics.pipeline.length > 0 || analytics.conversion.length > 0 || analytics.top_deals.length > 0) && (
+          <div style={{ display:"grid", gridTemplateColumns:"1.1fr 1fr 1.2fr", gap:10, marginBottom:14 }}>
+            <AnalyticsPipelineBlock pipeline={analytics.pipeline} currency={feesKpis?.currency ?? "EUR"} />
+            <AnalyticsConversionBlock conversion={analytics.conversion} />
+            <AnalyticsTopDealsBlock topDeals={analytics.top_deals} currency={feesKpis?.currency ?? "EUR"} />
+          </div>
         )}
 
         {/* Layout 3 colonnes */}
@@ -285,6 +327,145 @@ export function DashboardClient({ kpis, feesKpis, deals, relances, tasks, activi
         onSaved={() => { setActionModalOpen(false); router.refresh(); }}
         defaultType={actionModalDefaultType}
       />
+    </div>
+  );
+}
+
+// ── V58 — Bande analytique du dashboard ──────────────────────────────────────
+
+const TYPE_COLOR_BY_KEY: Record<string, string> = {
+  fundraising: "var(--fund-tx)",
+  ma_sell:     "var(--sell-tx)",
+  ma_buy:      "var(--buy-tx)",
+  cfo_advisor: "var(--cfo-tx)",
+  recruitment: "var(--rec-tx)",
+};
+const TYPE_BG_BY_KEY: Record<string, string> = {
+  fundraising: "var(--fund-bg)",
+  ma_sell:     "var(--sell-bg)",
+  ma_buy:      "var(--buy-bg)",
+  cfo_advisor: "var(--cfo-bg)",
+  recruitment: "var(--rec-bg)",
+};
+
+function blockHeader(label: string) {
+  return (
+    <div style={{ padding:"11px 14px", borderBottom:"1px solid var(--border)" }}>
+      <span style={{ fontSize:11.5, fontWeight:700, color:"var(--text-3)", textTransform:"uppercase", letterSpacing:".06em" }}>{label}</span>
+    </div>
+  );
+}
+
+function AnalyticsPipelineBlock({ pipeline, currency }: { pipeline: DashboardAnalytics["pipeline"]; currency: string }) {
+  const maxCount = pipeline.reduce((m, s) => Math.max(m, s.count), 0);
+  const totalAmount = pipeline.reduce((s, x) => s + x.amount_total, 0);
+
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+      {blockHeader("Pipeline par stade")}
+      <div style={{ padding:"10px 14px", display:"flex", flexDirection:"column", gap:6 }}>
+        {pipeline.length === 0 && (
+          <div style={{ fontSize:12, color:"var(--text-5)", textAlign:"center", padding:"12px 0" }}>
+            Aucun dossier actif
+          </div>
+        )}
+        {pipeline.slice(0, 6).map(s => {
+          const ratio = maxCount > 0 ? (s.count / maxCount) * 100 : 0;
+          const color = TYPE_COLOR_BY_KEY[s.dominant_type] ?? "var(--text-2)";
+          return (
+            <div key={s.stage}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:3 }}>
+                <span style={{ fontSize:11.5, fontWeight:600, color:"var(--text-2)", textTransform:"capitalize" }}>{s.label}</span>
+                <span style={{ fontSize:10.5, color:"var(--text-5)" }}>
+                  {s.count} dossier{s.count > 1 ? "s" : ""}
+                  {s.amount_total > 0 && (
+                    <span style={{ marginLeft:5, fontWeight:700, color }}>· {fmtMoney(s.amount_total, currency)}</span>
+                  )}
+                </span>
+              </div>
+              <div style={{ height:6, background:"var(--surface-3)", borderRadius:3, overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${ratio}%`, background:color, transition:"width .2s" }}/>
+              </div>
+            </div>
+          );
+        })}
+        {totalAmount > 0 && (
+          <div style={{ marginTop:4, paddingTop:8, borderTop:"1px solid var(--border)", display:"flex", justifyContent:"space-between", fontSize:11 }}>
+            <span style={{ color:"var(--text-5)" }}>Total pipeline</span>
+            <span style={{ fontWeight:700, color:"var(--text-2)" }}>{fmtMoney(totalAmount, currency)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsConversionBlock({ conversion }: { conversion: DashboardAnalytics["conversion"] }) {
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+      {blockHeader("Conversion par métier (12 mois)")}
+      <div style={{ padding:"10px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+        {conversion.length === 0 && (
+          <div style={{ fontSize:12, color:"var(--text-5)", textAlign:"center", padding:"12px 0" }}>
+            Aucun dossier clôturé sur 12 mois
+          </div>
+        )}
+        {conversion.map(c => (
+          <div key={c.type}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:3 }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:c.color }}>{c.label}</span>
+              <span style={{ fontSize:11, fontWeight:700, color:c.color }}>
+                {c.rate}%
+                <span style={{ marginLeft:5, fontWeight:500, color:"var(--text-5)" }}>· {c.won}/{c.total}</span>
+              </span>
+            </div>
+            <div style={{ height:8, background:"var(--surface-3)", borderRadius:3, overflow:"hidden", display:"flex" }}>
+              <div style={{ height:"100%", width:`${c.rate}%`, background:c.color }} title={`${c.won} gagnés`}/>
+              <div style={{ height:"100%", width:`${100 - c.rate}%`, background:"var(--rec-dot)", opacity:.4 }} title={`${c.lost} perdus`}/>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsTopDealsBlock({ topDeals, currency }: { topDeals: DashboardAnalytics["top_deals"]; currency: string }) {
+  return (
+    <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
+      {blockHeader("Top dossiers actifs")}
+      <div>
+        {topDeals.length === 0 && (
+          <div style={{ fontSize:12, color:"var(--text-5)", textAlign:"center", padding:"20px 0" }}>
+            Aucun dossier actif
+          </div>
+        )}
+        {topDeals.map((d, i) => (
+          <Link key={d.id} href={`/protected/dossiers/${d.id}`}
+            style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px", borderBottom:i < topDeals.length - 1 ? "1px solid var(--border)" : "none", textDecoration:"none" }}>
+            <div style={{ width:6, height:6, borderRadius:3, background:d.type_color, flexShrink:0 }}/>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:600, color:"var(--text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.name}</div>
+              <div style={{ display:"flex", gap:6, fontSize:11, color:"var(--text-5)", marginTop:2 }}>
+                <span style={{ padding:"0 6px", borderRadius:3, background:TYPE_BG_BY_KEY[d.type] ?? "var(--surface-3)", color:d.type_color, fontWeight:600 }}>
+                  {d.type_label}
+                </span>
+                <span>· {d.stage_label}</span>
+              </div>
+              {d.next_action && (
+                <div style={{ fontSize:10.5, color:"var(--text-4)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  ↻ {fmt(d.next_action.date)} — {d.next_action.title}
+                </div>
+              )}
+            </div>
+            {d.target_amount && (
+              <span style={{ fontSize:11, fontWeight:700, color:d.type_color, flexShrink:0 }}>
+                {fmtMoney(d.target_amount, d.currency || currency)}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

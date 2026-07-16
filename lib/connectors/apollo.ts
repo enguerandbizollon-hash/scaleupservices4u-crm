@@ -406,11 +406,146 @@ async function ensureContactLinkedToOrg(
     });
 }
 
+// ── Enrichissement d'une organisation existante (bouton fiche orga) ─────────
+
+export interface ApolloOrgEnrichmentResult {
+  found: boolean;
+  updated_fields: string[];
+  external_id: string | null;
+  error?: string;
+}
+
+/**
+ * Enrichit une organisation existante par appel Apollo (organizations/enrich
+ * par domaine en priorité, fallback search par nom). N'écrase JAMAIS un champ
+ * déjà rempli. Trace dans connector_runs.
+ *
+ * Différent de `runApolloSearchForDeal` qui fait du sourcing deal-driven.
+ */
+export async function enrichExistingOrganizationWithApollo(params: {
+  userId: string;
+  orgId: string;
+}): Promise<ApolloOrgEnrichmentResult> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return { found: false, updated_fields: [], external_id: null, error: "APOLLO_API_KEY manquante" };
+
+  const supabase = createAdminClient();
+
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("id, name, website, linkedin_url, sector, description, employee_count, location, external_ids")
+    .eq("id", params.orgId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!org) return { found: false, updated_fields: [], external_id: null, error: "Organisation introuvable" };
+
+  const runId = await startConnectorRun(supabase, {
+    userId: params.userId,
+    sourceConnector: "apollo",
+    triggeredBy: "manual",
+    queryParams: { mode: "enrich_single", org_id: params.orgId },
+  });
+
+  const domain = extractDomain(org.website);
+  let raw: ApolloOrganizationRaw | null = null;
+
+  // 1. Enrichissement par domaine (Apollo organizations/enrich GET)
+  if (domain) {
+    try {
+      const res = await fetch(
+        `https://api.apollo.io/v1/organizations/enrich?domain=${encodeURIComponent(domain)}`,
+        { headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" } },
+      );
+      if (res.ok) {
+        const json = await res.json() as { organization?: ApolloOrganizationRaw };
+        raw = json.organization ?? null;
+      }
+    } catch {
+      // fallback vers search par nom
+    }
+  }
+
+  // 2. Fallback recherche par nom
+  if (!raw) {
+    try {
+      const orgs = await searchOrganizations({ keywords: [org.name], per_page: 1 });
+      raw = orgs[0] ?? null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur Apollo";
+      if (runId) await finishConnectorRun(supabase, { runId, status: "failure", errorMessage: msg });
+      return { found: false, updated_fields: [], external_id: null, error: msg };
+    }
+  }
+
+  if (!raw || !raw.id) {
+    if (runId) await finishConnectorRun(supabase, { runId, status: "success", recordsFetched: 0 });
+    return { found: false, updated_fields: [], external_id: null };
+  }
+
+  // 3. Préparation des updates : ne pas écraser les champs déjà remplis
+  const updates: Record<string, unknown> = {};
+  if (!org.website && raw.website_url)            updates.website = raw.website_url;
+  if (!org.linkedin_url && raw.linkedin_url)      updates.linkedin_url = raw.linkedin_url;
+  if (!org.sector && raw.industry)                updates.sector = raw.industry;
+  if (!org.description && raw.short_description) updates.description = raw.short_description;
+  if (!org.employee_count && raw.estimated_num_employees) {
+    updates.employee_count = raw.estimated_num_employees;
+  }
+  if (!org.location) {
+    const loc = [raw.city, raw.country].filter(Boolean).join(", ");
+    if (loc) updates.location = loc;
+  }
+
+  // 4. Mettre à jour external_ids.apollo (idempotent)
+  const currentExtIds = (org.external_ids as Record<string, unknown> | null) ?? {};
+  if (currentExtIds.apollo !== raw.id) {
+    updates.external_ids = { ...currentExtIds, apollo: raw.id };
+  }
+
+  // 5. Marquer l'enrichissement
+  if (Object.keys(updates).length > 0) {
+    updates.enriched_at = new Date().toISOString();
+    updates.enriched_by_source = "apollo";
+    await supabase.from("organizations").update(updates).eq("id", params.orgId);
+  }
+
+  if (runId) {
+    await finishConnectorRun(supabase, {
+      runId,
+      status: "success",
+      recordsFetched: 1,
+      recordsUpdated: Object.keys(updates).length > 0 ? 1 : 0,
+    });
+  }
+
+  // updated_fields lisible (sans external_ids/enriched_*)
+  const updatedFields = Object.keys(updates).filter(
+    (k) => k !== "external_ids" && k !== "enriched_at" && k !== "enriched_by_source",
+  );
+
+  return {
+    found: true,
+    updated_fields: updatedFields,
+    external_id: raw.id,
+  };
+}
+
 // ── Entry point principal ───────────────────────────────────────────────────
 
 // Exécute une recherche Apollo complète pour un dossier. Trace dans
 // connector_runs. Retourne la liste des orgs/contacts upsertés pour que
 // l'orchestrateur (M2e) puisse créer les deal_target_suggestions.
+/**
+ * Vérifie que la clé API Apollo est configurée. Permet aux callers de
+ * remonter un warning lisible côté UI au lieu de retourner silencieusement
+ * 0 résultats. Le gating doit être fait AVANT l'appel à
+ * runApolloSearchForDeal ou runApolloEnrichment.
+ */
+export function isApolloConfigured(): boolean {
+  return !!process.env.APOLLO_API_KEY;
+}
+
 export async function runApolloSearchForDeal(params: {
   userId: string;
   dealId: string;

@@ -106,6 +106,14 @@ export interface FinancialDataInput {
   contingent_liabilities?: number;
   excess_cash?: number;
 
+  // Retraitements EBITDA normatif (M&A)
+  addback_owner_compensation?: number;
+  addback_exceptional_charges?: number;
+  addback_property_rent?: number;
+  addback_one_off_fees?: number;
+  addback_other?: number;
+  addback_notes?: string;
+
   // Métadonnées
   sector?: string;
   source: string;

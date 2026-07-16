@@ -11,7 +11,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { runApolloSearchForDeal } from "@/lib/connectors/apollo";
+import { runApolloSearchForDeal, isApolloConfigured } from "@/lib/connectors/apollo";
 import { normalizeOrganizationName, extractDomain } from "@/lib/connectors/base";
 import {
   computeUniqueKey,
@@ -25,6 +25,13 @@ export async function executeApolloSource(
   segment: SourcingSegment,
   context: SourcingExecutionContext,
 ): Promise<SourcingCandidate[]> {
+  // Gate explicite : si la clé API Apollo n'est pas configurée, on remonte
+  // une erreur lisible au lieu de retourner silencieusement [] (ce qui
+  // donnait l'impression que le sourcing fonctionnait sans Apollo).
+  if (!isApolloConfigured()) {
+    throw new Error("APOLLO_API_KEY absente — ajoute la clé dans .env.local pour activer la source Apollo");
+  }
+
   const supabase = createAdminClient();
 
   // 1. Appel Apollo via le connecteur (upsert orgs + contacts décideurs)

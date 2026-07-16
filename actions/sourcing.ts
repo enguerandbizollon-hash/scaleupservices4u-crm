@@ -222,10 +222,105 @@ export async function generateSourcingPlanAction(
   }
 
   const strategyInput = toSourcingStrategyInput(deal);
-  const plan = await generateSourcingPlan(strategyInput);
+  const aiPlan = await generateSourcingPlan(strategyInput);
+  const plan = aiPlan ?? buildFallbackPlan(strategyInput);
+  const fromAi = !!aiPlan;
 
-  if (plan) return { success: true, plan, from_ai: true };
-  return { success: true, plan: buildFallbackPlan(strategyInput), from_ai: false };
+  // Persistance du plan pour éviter de resolliciter l'IA à chaque ouverture.
+  // Source 'edited' n'est possible que via updateSourcingPlanAction (édition
+  // manuelle après génération).
+  await supabase
+    .from("deals")
+    .update({
+      sourcing_plan_json: plan,
+      sourcing_plan_generated_at: new Date().toISOString(),
+      sourcing_plan_source: fromAi ? "ai" : "fallback",
+    })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  return { success: true, plan, from_ai: fromAi };
+}
+
+/**
+ * Persiste un plan retouché manuellement par l'utilisateur. Conserve
+ * l'horodatage de génération initial — on tracke seulement la dernière
+ * édition via updated_at de la row deals.
+ */
+export async function updateSourcingPlanAction(
+  dealId: string,
+  plan: SourcingPlan,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({
+      sourcing_plan_json: plan,
+      sourcing_plan_source: "edited",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+/**
+ * Met à jour la liste des URLs spécifiques que l'utilisateur veut faire
+ * consulter pour ce dossier (sites sectoriels, annuaires, etc.).
+ */
+export async function updateSourcingUrlsAction(
+  dealId: string,
+  urls: string[],
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  // Normalisation : trim, retire vides, déduplique
+  const cleaned = Array.from(new Set(urls.map(u => u.trim()).filter(Boolean)));
+
+  const { error } = await supabase
+    .from("deals")
+    .update({
+      sourcing_urls_to_consult: cleaned.length > 0 ? cleaned : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+/**
+ * Charge le plan de sourcing persisté + les URLs à consulter pour un deal.
+ * Renvoie null si aucun plan n'a encore été généré.
+ */
+export async function getSourcingPlanAction(
+  dealId: string,
+): Promise<{ plan: SourcingPlan | null; generated_at: string | null; source: string | null; urls_to_consult: string[] }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { plan: null, generated_at: null, source: null, urls_to_consult: [] };
+
+  const { data } = await supabase
+    .from("deals")
+    .select("sourcing_plan_json, sourcing_plan_generated_at, sourcing_plan_source, sourcing_urls_to_consult")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return {
+    plan: (data?.sourcing_plan_json ?? null) as SourcingPlan | null,
+    generated_at: data?.sourcing_plan_generated_at ?? null,
+    source: data?.sourcing_plan_source ?? null,
+    urls_to_consult: data?.sourcing_urls_to_consult ?? [],
+  };
 }
 
 // ── Étape 2 : exécuter le plan (CRM + Apollo) ───────────────────────────────

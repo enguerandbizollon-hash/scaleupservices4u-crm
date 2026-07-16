@@ -24,6 +24,8 @@ const DB_FIELDS = new Set([
   "multiple_ev_revenue_low", "multiple_ev_revenue_mid", "multiple_ev_revenue_high",
   "multiple_ev_arr_low", "multiple_ev_arr_mid", "multiple_ev_arr_high",
   "wacc", "terminal_growth_rate", "fcf_n1", "fcf_n2", "fcf_n3", "fcf_n4", "fcf_n5",
+  "addback_owner_compensation", "addback_exceptional_charges",
+  "addback_property_rent", "addback_one_off_fees", "addback_other", "addback_notes",
 ]);
 
 // Alias manuels (priorité 2 : correspondance sur alias FR/EN)
@@ -65,6 +67,29 @@ const ALIAS_MAP: Record<string, string> = {
   "taux croissance terminal": "terminal_growth_rate",
   "annee": "fiscal_year", "année": "fiscal_year", "year": "fiscal_year",
   "type": "_type", "devise": "currency",
+  // Retraitements EBITDA normatif
+  "remuneration dirigeant excedentaire": "addback_owner_compensation",
+  "rémunération dirigeant excédentaire": "addback_owner_compensation",
+  "rémunération dirigeant": "addback_owner_compensation",
+  "salaire dirigeant excedentaire": "addback_owner_compensation",
+  "charges exceptionnelles non recurrentes": "addback_exceptional_charges",
+  "charges exceptionnelles non récurrentes": "addback_exceptional_charges",
+  "charges exceptionnelles": "addback_exceptional_charges",
+  "exceptionnels": "addback_exceptional_charges",
+  "loyer marche": "addback_property_rent",
+  "loyer marché": "addback_property_rent",
+  "loyer marche (proprietaire)": "addback_property_rent",
+  "loyer marché (propriétaire)": "addback_property_rent",
+  "retraitement loyer": "addback_property_rent",
+  "frais ponctuels": "addback_one_off_fees",
+  "frais ponctuels (audit, conseil, restructuration)": "addback_one_off_fees",
+  "frais audit conseil restructuration": "addback_one_off_fees",
+  "one-off": "addback_one_off_fees", "one off fees": "addback_one_off_fees",
+  "autres ajustements normatifs": "addback_other",
+  "autres retraitements": "addback_other",
+  "autres addbacks": "addback_other",
+  "notes retraitements": "addback_notes",
+  "notes addback": "addback_notes",
 };
 
 /** Résout un header CSV vers un champ BDD. Priorité : exact BDD name → alias → null */

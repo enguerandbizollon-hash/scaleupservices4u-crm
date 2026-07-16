@@ -25,7 +25,32 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     return { ...o, role_label: oc.role_label, is_primary: oc.is_primary };
   }).filter(Boolean);
 
-  return <ContactDetail contact={contact} orgs={orgs} />;
+  // Stat email : nombre d'emails échangés + date du dernier. On passe via la
+  // table de liaison action_contacts en filtrant type=email côté actions.
+  const { data: emailLinks } = await supabase
+    .from("action_contacts")
+    .select("actions!inner(id, due_date, email_direction)")
+    .eq("contact_id", id)
+    .eq("actions.type", "email");
+
+  type EmailRel = { id: string; due_date: string | null; email_direction: string | null };
+  const emailActions: EmailRel[] = (emailLinks ?? []).flatMap((row) => {
+    const acts = (row as { actions: EmailRel | EmailRel[] | null }).actions;
+    if (!acts) return [] as EmailRel[];
+    return Array.isArray(acts) ? acts : [acts];
+  });
+  const emailStats = {
+    total: emailActions.length,
+    inbound: emailActions.filter((a) => a.email_direction !== "outbound").length,
+    outbound: emailActions.filter((a) => a.email_direction === "outbound").length,
+    lastDate: emailActions
+      .map((a) => a.due_date)
+      .filter((d): d is string => !!d)
+      .sort()
+      .reverse()[0] ?? null,
+  };
+
+  return <ContactDetail contact={contact} orgs={orgs} emailStats={emailStats} />;
 }
 
 export default function ContactPage({ params }: { params: Promise<{ id: string }> }) {

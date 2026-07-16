@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Clock, Moon, FileWarning, ArrowRight } from "lucide-react";
+import { AlertTriangle, Clock, Moon, FileWarning, ArrowRight, Inbox } from "lucide-react";
 
 export interface DashboardAlert {
-  kind: "tasks_overdue" | "fees_overdue" | "deals_dormant" | "rgpd_expiring";
+  kind: "tasks_overdue" | "fees_overdue" | "deals_dormant" | "rgpd_expiring" | "inbox_to_review";
   count: number;
   href: string;
 }
@@ -16,6 +16,11 @@ const META: Record<DashboardAlert["kind"], {
   tx: string;
   border: string;
 }> = {
+  inbox_to_review: {
+    label: (n) => `${n} email${n > 1 ? "s" : ""} à trier`,
+    icon: Inbox,
+    bg: "#FFE4E6", tx: "#9F1239", border: "#FECDD3",
+  },
   tasks_overdue: {
     label: (n) => `${n} tâche${n > 1 ? "s" : ""} en retard`,
     icon: Clock,

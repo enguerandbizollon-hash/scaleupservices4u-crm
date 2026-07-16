@@ -36,7 +36,7 @@ async function Content() {
   // Deals avec stats agrégées
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score")
+    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score")
     .order("priority_level");
 
   if (!deals?.length) {
@@ -157,6 +157,7 @@ async function Content() {
           <ExportCSVButton
             filenamePrefix="dossiers"
             rows={deals.map<ExportRow>(d => ({
+              "Code": d.code ?? "",
               "Nom": d.name,
               "Type": DT[d.deal_type]?.label ?? d.deal_type,
               "Stade": stageLabel(d.deal_stage),
@@ -172,6 +173,7 @@ async function Content() {
               "Description": d.description ?? "",
             }))}
             columns={[
+              { key:"Code", label:"Code" },
               { key:"Nom", label:"Nom" },
               { key:"Type", label:"Type" },
               { key:"Stade", label:"Stade" },
@@ -249,7 +251,7 @@ async function Content() {
   );
 }
 
-type DealType = { id:string; name:string; deal_type:string; deal_status:string; deal_stage:string; priority_level:string; sector:string|null; location:string|null; target_date:string|null; target_amount:number|null; currency:string|null; description:string|null; screening_status:string|null };
+type DealType = { id:string; code:string|null; name:string; deal_type:string; deal_status:string; deal_stage:string; priority_level:string; sector:string|null; location:string|null; target_date:string|null; target_amount:number|null; currency:string|null; description:string|null; screening_status:string|null };
 
 const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> = {
   not_started:        { bg: "var(--surface-3)", tx: "var(--text-5)", label: "À screener" },
@@ -287,6 +289,11 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount, health }
           {/* Titre + statut */}
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:6 }}>
             <div style={{ flex:1, minWidth:0 }}>
+              {deal.code && (
+                <div style={{ fontSize:10.5, fontWeight:700, color:"var(--text-5)", letterSpacing:".04em", fontFamily:"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", marginBottom:3 }}>
+                  {deal.code}
+                </div>
+              )}
               <div style={{ fontSize:14, fontWeight:700, color:"var(--text-1)", lineHeight:1.3 }}>
                 {deal.name}
               </div>

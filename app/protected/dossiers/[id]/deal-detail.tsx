@@ -521,6 +521,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
                 />
                 {deal.target_date && <span style={{ fontSize:11.5, color:"var(--text-5)", padding:"3px 8px" }}>🎯 {fmt(deal.target_date)}</span>}
               </div>
+              {deal.code && (
+                <div style={{ fontSize:11.5, fontWeight:700, color:"var(--text-4)", letterSpacing:".05em", fontFamily:"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", marginBottom:4 }}>
+                  {deal.code}
+                </div>
+              )}
               <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>{deal.name}</h1>
               {deal.description && <p style={{ margin:"6px 0 0", fontSize:13, color:"var(--text-4)", lineHeight:1.5, maxWidth:600 }}>{deal.description}</p>}
 
@@ -568,7 +573,18 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
               <div style={{ marginTop:10 }}><TagInput objectType="deal" objectId={deal.id} /></div>
             </div>
-            <Link href={`/protected/dossiers/${deal.id}/modifier`} style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}>Modifier</Link>
+            <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+              <a
+                href={`/protected/dossiers/${deal.id}/export?print=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Aperçu PDF imprimable de la synthèse dossier"
+                style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}
+              >
+                Exporter PDF
+              </a>
+              <Link href={`/protected/dossiers/${deal.id}/modifier`} style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}>Modifier</Link>
+            </div>
           </div>
         </div>
 
@@ -618,6 +634,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               ai_valuation_high: deal.ai_valuation_high ?? null,
               ai_financial_notes: deal.ai_financial_notes ?? null,
               ai_analyzed_at: deal.ai_analyzed_at ?? null,
+              ai_score_growth: deal.ai_score_growth ?? null,
+              ai_score_margin: deal.ai_score_margin ?? null,
+              ai_score_balance: deal.ai_score_balance ?? null,
+              ai_score_comparables: deal.ai_score_comparables ?? null,
+              ai_anomalies: deal.ai_anomalies ?? null,
             }}
           />
         )}
@@ -652,6 +673,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             dealId={deal.id}
             screeningReady={isScreeningReady(deal.screening_status)}
             initialSuggestions={initialSuggestions}
+            initialPlan={(deal.sourcing_plan_json ?? null) as Parameters<typeof SourcingWizard>[0]["initialPlan"]}
+            initialPlanGeneratedAt={deal.sourcing_plan_generated_at ?? null}
+            initialPlanSource={deal.sourcing_plan_source ?? null}
+            initialUrlsToConsult={deal.sourcing_urls_to_consult ?? []}
           />
         )}
 

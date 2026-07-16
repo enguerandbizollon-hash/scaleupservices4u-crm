@@ -49,6 +49,12 @@ export const TEMPLATE_SHEETS: TemplateSheet[] = [
       { label: "Charges financières", field: "financial_charges" },
       { label: "Impôts", field: "taxes" },
       { label: "Capex", field: "capex" },
+      { label: "RETRAITEMENTS (EBITDA NORMATIF)", isSection: true },
+      { label: "Rémunération dirigeant excédentaire", field: "addback_owner_compensation" },
+      { label: "Charges exceptionnelles non récurrentes", field: "addback_exceptional_charges" },
+      { label: "Loyer marché (propriétaire)", field: "addback_property_rent" },
+      { label: "Frais ponctuels (audit, conseil, restructuration)", field: "addback_one_off_fees" },
+      { label: "Autres ajustements normatifs", field: "addback_other" },
     ],
   },
   {

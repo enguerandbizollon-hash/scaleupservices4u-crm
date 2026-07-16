@@ -1,11 +1,19 @@
 "use client";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2, Sparkles } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2, Sparkles, TrendingUp } from "lucide-react";
 import { computeFinancials, type FinancialInputs } from "@/lib/crm/financial-calcs";
 import { getBenchmark, getRatingColor } from "@/lib/crm/financial-benchmarks";
 import { upsertFinancialData, getFinancialDataByDeal, deleteFinancialData } from "@/actions/financial-data";
 import { FinancialImport } from "@/components/financials/FinancialImport";
+import { FinancialKpiBanner } from "@/components/financials/FinancialKpiBanner";
 import { analyzeFinancialDataAction } from "@/actions/ai/financial";
+import {
+  getAssumptions,
+  upsertAssumptions,
+  generateProjections,
+  clearProjections,
+  type AssumptionsRow,
+} from "@/actions/financial-projections";
 
 // ── Exported type ──────────────────────────────────────────────────────────────
 
@@ -102,6 +110,13 @@ export interface FinancialRow {
   // Opérationnel
   headcount?: number | null;
   revenue_per_employee?: number | null;
+  // Retraitements EBITDA normatif
+  addback_owner_compensation?: number | null;
+  addback_exceptional_charges?: number | null;
+  addback_property_rent?: number | null;
+  addback_one_off_fees?: number | null;
+  addback_other?: number | null;
+  addback_notes?: string | null;
 }
 
 export interface InitialAiAnalysis {
@@ -110,6 +125,11 @@ export interface InitialAiAnalysis {
   ai_valuation_high: number | null;
   ai_financial_notes: string | null;
   ai_analyzed_at: string | null;
+  ai_score_growth?: number | null;
+  ai_score_margin?: number | null;
+  ai_score_balance?: number | null;
+  ai_score_comparables?: number | null;
+  ai_anomalies?: string[] | null;
 }
 
 interface Props {
@@ -159,10 +179,98 @@ function varDelta(
   return { text: (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%", favorable: pct >= 0 };
 }
 
+// Parse permissif. Accepte espaces fines / non-cassables, virgules décimales,
+// symbole €, et raccourcis de magnitude : "624k" → 624 000, "1.2M" → 1 200 000,
+// "1,5 m€" → 1 500 000. Tolère le "%" muet (le contexte de la ligne décide du sens).
 function parseNum(v: string): number | undefined {
   if (!v || v.trim() === "") return undefined;
-  const n = parseFloat(v.replace(/\s/g, "").replace(",", "."));
-  return isNaN(n) ? undefined : n;
+  let body = v
+    .replace(/ | /g, "")     // espaces insécables
+    .replace(/\s/g, "")
+    .replace(/€|\$|CHF/gi, "")
+    .replace(/%/g, "")
+    .replace(",", ".")
+    .trim()
+    .toLowerCase();
+  let mult = 1;
+  if (body.endsWith("m")) { mult = 1_000_000; body = body.slice(0, -1); }
+  else if (body.endsWith("k")) { mult = 1_000; body = body.slice(0, -1); }
+  const n = parseFloat(body);
+  return isNaN(n) ? undefined : n * mult;
+}
+
+// Champ d'hypothèse de projection : libellé + input avec suffixe (%, pp, ans).
+function ProjAssumptionField({ label, suffix, value, onCommit }: {
+  label: string;
+  suffix: string;
+  value: number | null | undefined;
+  onCommit: (raw: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 10.5, fontWeight: 600, color: "#6D28D9", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <input
+          type="text"
+          defaultValue={value != null ? String(value) : ""}
+          placeholder="—"
+          onBlur={e => onCommit(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          style={{
+            flex: 1, width: 60, padding: "5px 8px", border: "1px solid #DDD6FE", borderRadius: 6,
+            fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff",
+            color: "var(--text-1)", textAlign: "right", boxSizing: "border-box",
+          }}
+        />
+        <span style={{ fontSize: 11, color: "#6D28D9", fontWeight: 600, whiteSpace: "nowrap" }}>{suffix}</span>
+      </div>
+    </div>
+  );
+}
+
+// Input numérique formaté. Affichage compact au repos (k€/M€ en mode "money",
+// nombre brut en mode "raw" pour les multiples/ratios/%) ; bascule en valeur
+// brute sélectionnée au focus pour permettre un override en 1 frappe.
+// Accepte les raccourcis k/M via parseNum au blur.
+function MoneyInput({ value, onCommit, width = 100, placeholder = "—", format = "money", suffix }: {
+  value: number | null | undefined;
+  onCommit: (raw: string) => void;
+  width?: number;
+  placeholder?: string;
+  format?: "money" | "raw";
+  suffix?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const display = value == null
+    ? ""
+    : format === "raw"
+      ? `${value}${suffix ?? ""}`
+      : fmtM(value);
+  return (
+    <input
+      type="text"
+      style={{ ...S.input, width }}
+      value={editing ? draft : display}
+      placeholder={placeholder}
+      onFocus={e => {
+        setEditing(true);
+        setDraft(value != null ? String(value) : "");
+        setTimeout(() => e.target.select(), 0);
+      }}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={() => {
+        onCommit(draft);
+        setEditing(false);
+      }}
+      onKeyDown={e => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        else if (e.key === "Escape") { setEditing(false); (e.target as HTMLInputElement).blur(); }
+      }}
+    />
+  );
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -269,6 +377,11 @@ function rowToInputs(r: FinancialRow): FinancialInputs {
     fcf_n1: r.fcf_n1, fcf_n2: r.fcf_n2, fcf_n3: r.fcf_n3, fcf_n4: r.fcf_n4, fcf_n5: r.fcf_n5,
     misc_adjustments: r.misc_adjustments, contingent_liabilities: r.contingent_liabilities,
     excess_cash: r.excess_cash,
+    addback_owner_compensation: r.addback_owner_compensation,
+    addback_exceptional_charges: r.addback_exceptional_charges,
+    addback_property_rent: r.addback_property_rent,
+    addback_one_off_fees: r.addback_one_off_fees,
+    addback_other: r.addback_other,
   };
 }
 
@@ -297,8 +410,18 @@ const PL_ROWS: RowDef[] = [
   { key: "rent", label: "Loyers", field: "rent", fmt: fmtM, invertDelta: true },
   { key: "other_opex", label: "Autres charges", field: "other_opex", fmt: fmtM, invertDelta: true },
   { key: "_s_res", label: "", section: "RÉSULTAT", field: undefined, fmt: fmtM },
-  { key: "ebitda", label: "EBITDA", calc: true, getValue: r => calcVal(r, "ebitda"), fmt: fmtM },
+  { key: "ebitda", label: "EBITDA reporté", calc: true, getValue: r => calcVal(r, "ebitda"), fmt: fmtM },
   { key: "ebitda_margin", label: "Marge EBITDA", calc: true, getValue: r => calcVal(r, "ebitda_margin"), fmt: fmtPct, isMargin: true },
+  { key: "_s_norm", label: "", section: "RETRAITEMENTS (EBITDA NORMATIF)", field: undefined, fmt: fmtM },
+  { key: "addback_owner_compensation", label: "Rémunération dirigeant excédentaire", field: "addback_owner_compensation", fmt: fmtM },
+  { key: "addback_exceptional_charges", label: "Charges exceptionnelles non récurrentes", field: "addback_exceptional_charges", fmt: fmtM },
+  { key: "addback_property_rent", label: "Loyer marché (propriétaire)", field: "addback_property_rent", fmt: fmtM },
+  { key: "addback_one_off_fees", label: "Frais ponctuels (audit, conseil, restructuration)", field: "addback_one_off_fees", fmt: fmtM },
+  { key: "addback_other", label: "Autres ajustements", field: "addback_other", fmt: fmtM },
+  { key: "addbacks_total", label: "Σ retraitements", calc: true, getValue: r => calcVal(r, "addbacks_total"), fmt: fmtM },
+  { key: "ebitda_normative", label: "EBITDA NORMATIF", calc: true, getValue: r => calcVal(r, "ebitda_normative"), fmt: fmtM },
+  { key: "ebitda_normative_margin", label: "Marge EBITDA normative", calc: true, getValue: r => calcVal(r, "ebitda_normative_margin"), fmt: fmtPct, isMargin: true },
+  { key: "_s_post_ebitda", label: "", section: "RÉSULTAT (suite)", field: undefined, fmt: fmtM },
   { key: "da", label: "D&A (amortissements)", field: "da", fmt: fmtM, invertDelta: true },
   { key: "ebit", label: "EBIT", calc: true, getValue: r => calcVal(r, "ebit"), fmt: fmtM },
   { key: "ebit_margin", label: "Marge EBIT", calc: true, getValue: r => calcVal(r, "ebit_margin"), fmt: fmtPct, isMargin: true },
@@ -390,6 +513,8 @@ const EDITABLE_FIELDS: (keyof FinancialRow)[] = [
   "fcf_n1", "fcf_n2", "fcf_n3", "fcf_n4", "fcf_n5",
   "misc_adjustments", "contingent_liabilities", "excess_cash",
   "headcount", "nrr", "grr",
+  "addback_owner_compensation", "addback_exceptional_charges",
+  "addback_property_rent", "addback_one_off_fees", "addback_other",
 ];
 
 export function FinancialTab({ dealId, organizationId, dealType = "", currency = "EUR", initialData, initialAi }: Props) {
@@ -412,6 +537,14 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
   const [aiExpanded, setAiExpanded] = useState(true);
   const [aiState, setAiState] = useState<InitialAiAnalysis | null>(initialAi ?? null);
 
+  // Projections (V60) — hypothèses de croissance + génération N+1..N+x
+  const [showProjections, setShowProjections] = useState(false);
+  const [assumptions, setAssumptions] = useState<AssumptionsRow | null>(null);
+  const [savingAssumptions, setSavingAssumptions] = useState(false);
+  const [projecting, setProjecting] = useState(false);
+  const [projectionError, setProjectionError] = useState<string | null>(null);
+  const [projectionMessage, setProjectionMessage] = useState<string | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasRecurrent = rows.some(r => (r.revenue_recurring ?? 0) > 0 || (r.arr ?? 0) > 0);
@@ -423,10 +556,112 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
     setRows([...(refreshed as FinancialRow[])].sort((a, b) => b.fiscal_year - a.fiscal_year));
   }, [dealId, organizationId]);
 
+  // Charge les hypothèses de projection à l'ouverture (1 fois)
+  useEffect(() => {
+    if (!dealId) return;
+    let cancelled = false;
+    (async () => {
+      const a = await getAssumptions(dealId);
+      if (!cancelled) setAssumptions(a);
+    })();
+    return () => { cancelled = true; };
+  }, [dealId]);
+
+  function patchAssumption(field: keyof AssumptionsRow, value: number | null) {
+    if (!dealId) return;
+    setAssumptions(prev => {
+      const next = { ...(prev ?? {} as AssumptionsRow), [field]: value };
+      return next as AssumptionsRow;
+    });
+    // Debounced save (réutilise le pattern autoSave)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSavingAssumptions(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await upsertAssumptions({
+          deal_id: dealId,
+          base_fiscal_year: assumptions?.base_fiscal_year ?? null,
+          projection_years: assumptions?.projection_years ?? 3,
+          revenue_growth_pct: assumptions?.revenue_growth_pct ?? null,
+          gross_margin_evolution_pp: assumptions?.gross_margin_evolution_pp ?? null,
+          opex_growth_pct: assumptions?.opex_growth_pct ?? null,
+          capex_pct_revenue: assumptions?.capex_pct_revenue ?? null,
+          da_pct_revenue: assumptions?.da_pct_revenue ?? null,
+          tax_rate_pct: assumptions?.tax_rate_pct ?? 25,
+          arr_growth_pct: assumptions?.arr_growth_pct ?? null,
+          notes: assumptions?.notes ?? null,
+          [field]: value,
+        } as Parameters<typeof upsertAssumptions>[0]);
+      } catch (e) {
+        console.error("Save assumptions failed:", e);
+      }
+      setSavingAssumptions(false);
+    }, 600);
+  }
+
+  async function handleGenerateProjections() {
+    if (!dealId) return;
+    setProjecting(true);
+    setProjectionError(null);
+    setProjectionMessage(null);
+    // Sauvegarde immédiate des hypothèses avant génération
+    if (assumptions) {
+      await upsertAssumptions({
+        deal_id: dealId,
+        base_fiscal_year: assumptions.base_fiscal_year ?? null,
+        projection_years: assumptions.projection_years ?? 3,
+        revenue_growth_pct: assumptions.revenue_growth_pct ?? null,
+        gross_margin_evolution_pp: assumptions.gross_margin_evolution_pp ?? null,
+        opex_growth_pct: assumptions.opex_growth_pct ?? null,
+        capex_pct_revenue: assumptions.capex_pct_revenue ?? null,
+        da_pct_revenue: assumptions.da_pct_revenue ?? null,
+        tax_rate_pct: assumptions.tax_rate_pct ?? 25,
+        arr_growth_pct: assumptions.arr_growth_pct ?? null,
+        notes: assumptions.notes ?? null,
+      });
+    }
+    const res = await generateProjections(dealId);
+    if (!res.success) {
+      setProjectionError(res.error);
+    } else {
+      setProjectionMessage(`${res.count} exercice${res.count > 1 ? "s" : ""} prévisionnel${res.count > 1 ? "s" : ""} généré${res.count > 1 ? "s" : ""}`);
+      await refreshRows();
+    }
+    setProjecting(false);
+  }
+
+  async function handleClearProjections() {
+    if (!dealId) return;
+    if (!confirm("Supprimer toutes les projections de ce dossier ?")) return;
+    setProjecting(true);
+    setProjectionError(null);
+    setProjectionMessage(null);
+    const res = await clearProjections(dealId);
+    if (!res.success) {
+      setProjectionError(res.error);
+    } else {
+      setProjectionMessage(`${res.count} exercice${res.count > 1 ? "s" : ""} supprimé${res.count > 1 ? "s" : ""}`);
+      await refreshRows();
+    }
+    setProjecting(false);
+  }
+
   // Get 3 years: selected, selected+1, selected+2
   const sel = rows[selectedYearIdx];
   const prev1 = rows[selectedYearIdx + 1];
   const prev2 = rows[selectedYearIdx + 2];
+
+  // Libellé colonne dynamique : offset par rapport à l'année réelle la plus
+  // récente. (N) = dernier réel, (N+x) = projection, (N-x) = historique.
+  const realYears = rows.filter(r => !r.is_forecast).map(r => r.fiscal_year);
+  const mostRecentReal = realYears.length > 0 ? Math.max(...realYears) : null;
+  function yearOffsetLabel(year: number | undefined): string {
+    if (year == null || mostRecentReal == null) return "";
+    const offset = year - mostRecentReal;
+    if (offset === 0) return "(N)";
+    if (offset > 0) return `(N+${offset})`;
+    return `(N${offset})`;
+  }
 
   // ── Auto-save with debounce ────────────────────────────────────────────────
 
@@ -526,6 +761,11 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
       ai_valuation_high: res.result.valuation_high,
       ai_financial_notes: res.result.notes,
       ai_analyzed_at: res.result.analyzed_at,
+      ai_score_growth: res.result.breakdown.growth,
+      ai_score_margin: res.result.breakdown.margin,
+      ai_score_balance: res.result.breakdown.balance,
+      ai_score_comparables: res.result.breakdown.comparables,
+      ai_anomalies: res.result.anomalies,
     });
     setAiExpanded(true);
   }
@@ -568,10 +808,17 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           <thead>
             <tr style={{ background: "var(--surface-2)" }}>
               <th style={{ ...S.th, textAlign: "left", minWidth: 180, borderRight: "1px solid var(--border)" }}>Indicateur</th>
-              <th style={S.th}>{sel?.fiscal_year ?? "—"} (N)</th>
-              <th style={{ ...S.th, color: "var(--text-5)" }}>{prev1?.fiscal_year ?? "—"} (N-1)</th>
-              <th style={{ ...S.th, color: "var(--text-5)" }}>{prev2?.fiscal_year ?? "—"} (N-2)</th>
-              <th style={S.th}>Δ N/N-1</th>
+              <th style={{ ...S.th, color: sel?.is_forecast ? "#5B21B6" : undefined }}>
+                {sel?.fiscal_year ?? "—"} {yearOffsetLabel(sel?.fiscal_year)}
+                {sel?.is_forecast && <span style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, padding: "1px 5px", background: "#EDE9FE", color: "#6D28D9", borderRadius: 6 }}>PRÉV.</span>}
+              </th>
+              <th style={{ ...S.th, color: prev1?.is_forecast ? "#7C3AED" : "var(--text-5)" }}>
+                {prev1?.fiscal_year ?? "—"} {yearOffsetLabel(prev1?.fiscal_year)}
+              </th>
+              <th style={{ ...S.th, color: prev2?.is_forecast ? "#7C3AED" : "var(--text-5)" }}>
+                {prev2?.fiscal_year ?? "—"} {yearOffsetLabel(prev2?.fiscal_year)}
+              </th>
+              <th style={S.th}>Δ</th>
             </tr>
           </thead>
           <tbody>
@@ -596,13 +843,9 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                   <td style={{ ...S.cellLabel, paddingLeft: def.indent ? 28 : 12 }}>{def.label}</td>
                   <td style={S.cellVal(true)}>
                     {isEditable && sel ? (
-                      <input
-                        type="text"
-                        style={S.input}
-                        defaultValue={vN != null ? String(vN) : ""}
-                        placeholder="—"
-                        onBlur={e => updateField(selectedYearIdx, def.field!, e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      <MoneyInput
+                        value={vN}
+                        onCommit={raw => updateField(selectedYearIdx, def.field!, raw)}
                       />
                     ) : (
                       <span style={{ fontWeight: isCalc ? 700 : 400 }}>{def.fmt(vN)}</span>
@@ -645,11 +888,19 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
   function renderValorisationTab() {
     if (!sel) return null;
     const c = computeFinancials(rowToInputs(sel));
-    const methods = [
-      { label: "EV / EBITDA", fields: ["multiple_ev_ebitda_low", "multiple_ev_ebitda_mid", "multiple_ev_ebitda_high"] as const, valo: c.valo_ebitda },
-      { label: "EV / EBIT", fields: ["multiple_ev_ebit_low", "multiple_ev_ebit_mid", "multiple_ev_ebit_high"] as const, valo: c.valo_ebit },
-      { label: "EV / Revenue", fields: ["multiple_ev_revenue_low", "multiple_ev_revenue_mid", "multiple_ev_revenue_high"] as const, valo: c.valo_revenue },
-      { label: "EV / ARR", fields: ["multiple_ev_arr_low", "multiple_ev_arr_mid", "multiple_ev_arr_high"] as const, valo: c.valo_arr },
+    type ValoMethod = {
+      label: string;
+      fields: readonly [keyof FinancialRow, keyof FinancialRow, keyof FinancialRow];
+      valo: ReturnType<typeof computeFinancials>["valo_ebitda"];
+      readonlyMultiples?: boolean;
+      highlight?: boolean;
+    };
+    const methods: ValoMethod[] = [
+      { label: "EV / EBITDA reporté", fields: ["multiple_ev_ebitda_low", "multiple_ev_ebitda_mid", "multiple_ev_ebitda_high"], valo: c.valo_ebitda },
+      { label: "EV / EBITDA normatif", fields: ["multiple_ev_ebitda_low", "multiple_ev_ebitda_mid", "multiple_ev_ebitda_high"], valo: c.valo_ebitda_normative, readonlyMultiples: true, highlight: true },
+      { label: "EV / EBIT", fields: ["multiple_ev_ebit_low", "multiple_ev_ebit_mid", "multiple_ev_ebit_high"], valo: c.valo_ebit },
+      { label: "EV / Revenue", fields: ["multiple_ev_revenue_low", "multiple_ev_revenue_mid", "multiple_ev_revenue_high"], valo: c.valo_revenue },
+      { label: "EV / ARR", fields: ["multiple_ev_arr_low", "multiple_ev_arr_mid", "multiple_ev_arr_high"], valo: c.valo_arr },
     ];
 
     return (
@@ -669,17 +920,23 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
             </thead>
             <tbody>
               {methods.map(m => (
-                <tr key={m.label}>
-                  <td style={S.cellLabel}>{m.label}</td>
-                  {m.fields.map((f, i) => (
+                <tr key={m.label} style={m.highlight ? { background: "#EFF6FF" } : {}}>
+                  <td style={{ ...S.cellLabel, fontWeight: m.highlight ? 700 : 500, color: m.highlight ? "var(--text-1)" : S.cellLabel.color }}>{m.label}</td>
+                  {m.fields.map(f => (
                     <td key={f} style={S.cellVal(false)}>
-                      <input
-                        type="text"
-                        style={{ ...S.input, width: 70 }}
-                        defaultValue={sel[f] != null ? String(sel[f]) : ""}
-                        placeholder="—"
-                        onBlur={e => updateField(selectedYearIdx, f, e.target.value)}
-                      />
+                      {m.readonlyMultiples ? (
+                        <span style={{ fontSize: 12, color: "var(--text-4)" }}>
+                          {sel[f] != null ? `${sel[f]}x` : "—"}
+                        </span>
+                      ) : (
+                        <MoneyInput
+                          value={sel[f] as number | null | undefined}
+                          onCommit={raw => updateField(selectedYearIdx, f, raw)}
+                          width={70}
+                          format="raw"
+                          suffix="x"
+                        />
+                      )}
                     </td>
                   ))}
                   <td style={S.cellVal(true)}>{fmtM(m.valo?.ev_mid)}</td>
@@ -703,12 +960,9 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
             ].map(item => (
               <div key={item.field}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>{item.label}</div>
-                <input
-                  type="text"
-                  style={S.input}
-                  defaultValue={sel[item.field] != null ? String(sel[item.field]) : ""}
-                  placeholder="—"
-                  onBlur={e => updateField(selectedYearIdx, item.field, e.target.value)}
+                <MoneyInput
+                  value={sel[item.field] as number | null | undefined}
+                  onCommit={raw => updateField(selectedYearIdx, item.field, raw)}
                 />
               </div>
             ))}
@@ -733,11 +987,21 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>WACC (%)</div>
-                  <input type="text" style={S.input} defaultValue={sel.wacc != null ? String(sel.wacc) : ""} placeholder="—" onBlur={e => updateField(selectedYearIdx, "wacc", e.target.value)} />
+                  <MoneyInput
+                    value={sel.wacc}
+                    onCommit={raw => updateField(selectedYearIdx, "wacc", raw)}
+                    format="raw"
+                    suffix="%"
+                  />
                 </div>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 4 }}>Taux de croissance terminal (%)</div>
-                  <input type="text" style={S.input} defaultValue={sel.terminal_growth_rate != null ? String(sel.terminal_growth_rate) : ""} placeholder="—" onBlur={e => updateField(selectedYearIdx, "terminal_growth_rate", e.target.value)} />
+                  <MoneyInput
+                    value={sel.terminal_growth_rate}
+                    onCommit={raw => updateField(selectedYearIdx, "terminal_growth_rate", raw)}
+                    format="raw"
+                    suffix="%"
+                  />
                 </div>
               </div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 6 }}>FCF projetés (N+1 à N+5)</div>
@@ -745,7 +1009,10 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
                 {(["fcf_n1", "fcf_n2", "fcf_n3", "fcf_n4", "fcf_n5"] as const).map((f, i) => (
                   <div key={f}>
                     <div style={{ fontSize: 10, color: "var(--text-5)", marginBottom: 2 }}>N+{i + 1}</div>
-                    <input type="text" style={S.input} defaultValue={sel[f] != null ? String(sel[f]) : ""} placeholder="—" onBlur={e => updateField(selectedYearIdx, f, e.target.value)} />
+                    <MoneyInput
+                      value={sel[f]}
+                      onCommit={raw => updateField(selectedYearIdx, f, raw)}
+                    />
                   </div>
                 ))}
               </div>
@@ -852,6 +1119,9 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
         )}
       </div>
 
+      {/* Bandeau KPIs (vue d'ensemble) */}
+      {rows.length > 0 && <FinancialKpiBanner rows={rows} currency={currency} />}
+
       {/* Panel résultat IA */}
       {(aiState?.ai_financial_score !== null && aiState?.ai_financial_score !== undefined) && (
         <AiAnalysisPanel
@@ -869,16 +1139,27 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
 
       {/* Year pills */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {rows.map((r, i) => (
+        {rows.map((r, i) => {
+          const active = i === selectedYearIdx;
+          const forecast = !!r.is_forecast;
+          const pillStyle: React.CSSProperties = forecast
+            ? {
+                ...S.yearPill(active),
+                background: active ? "#7C3AED" : "#F5F3FF",
+                color: active ? "#fff" : "#5B21B6",
+                border: active ? "none" : "1px dashed #C4B5FD",
+              }
+            : S.yearPill(active);
+          return (
           <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <button onClick={() => setSelectedYearIdx(i)} style={S.yearPill(i === selectedYearIdx)}>
+            <button onClick={() => setSelectedYearIdx(i)} style={pillStyle}>
               {r.fiscal_year}
               <span style={{
                 fontSize: 9.5, padding: "1px 5px", borderRadius: 8, fontWeight: 600,
-                background: r.is_forecast ? "#EDE9FE" : (i === selectedYearIdx ? "rgba(255,255,255,.2)" : "var(--surface-3)"),
-                color: r.is_forecast ? "#6D28D9" : (i === selectedYearIdx ? "#fff" : "var(--text-5)"),
+                background: forecast ? (active ? "rgba(255,255,255,.2)" : "#EDE9FE") : (active ? "rgba(255,255,255,.2)" : "var(--surface-3)"),
+                color: forecast ? (active ? "#fff" : "#6D28D9") : (active ? "#fff" : "var(--text-5)"),
               }}>
-                {r.is_forecast ? "Prévision" : "Réel"}
+                {forecast ? "Prévision" : "Réel"}
               </span>
             </button>
             <button
@@ -890,7 +1171,8 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
               <Trash2 size={11} />
             </button>
           </div>
-        ))}
+          );
+        })}
         <button
           onClick={() => {
             const next = rows.length > 0 ? rows[0].fiscal_year + 1 : CURRENT_YEAR;
@@ -908,7 +1190,114 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
         >
           {showImport ? "✕ Fermer import" : "↑ Importer CSV / Excel"}
         </button>
+        {dealId && (
+          <button
+            onClick={() => setShowProjections(p => !p)}
+            style={{
+              ...S.yearPill(showProjections),
+              background: showProjections ? "#6D28D9" : "none",
+              border: showProjections ? "none" : "1px dashed #8B5CF6",
+              color: showProjections ? "#fff" : "#6D28D9",
+              fontSize: 12,
+            }}
+          >
+            <TrendingUp size={12} /> {showProjections ? "✕ Fermer projections" : "Projections"}
+          </button>
+        )}
       </div>
+
+      {/* Panel Projections — hypothèses + génération */}
+      {showProjections && dealId && (
+        <div style={{ marginBottom: 16, padding: 18, background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#5B21B6" }}>
+              Hypothèses de projection
+              {savingAssumptions && <span style={{ marginLeft: 8, fontSize: 11, color: "#7C3AED", fontWeight: 500 }}>Enregistrement…</span>}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#6D28D9" }}>
+              Les valeurs déjà saisies manuellement sur les exercices prévisionnels sont préservées.
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, marginBottom: 14 }}>
+            <ProjAssumptionField
+              label="Croissance CA"
+              suffix="%/an"
+              value={assumptions?.revenue_growth_pct}
+              onCommit={raw => patchAssumption("revenue_growth_pct", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="Évolution marge brute"
+              suffix="pp/an"
+              value={assumptions?.gross_margin_evolution_pp}
+              onCommit={raw => patchAssumption("gross_margin_evolution_pp", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="Croissance Opex"
+              suffix="%/an"
+              value={assumptions?.opex_growth_pct}
+              onCommit={raw => patchAssumption("opex_growth_pct", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="Capex"
+              suffix="% CA"
+              value={assumptions?.capex_pct_revenue}
+              onCommit={raw => patchAssumption("capex_pct_revenue", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="D&A"
+              suffix="% CA"
+              value={assumptions?.da_pct_revenue}
+              onCommit={raw => patchAssumption("da_pct_revenue", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="Taux IS"
+              suffix="%"
+              value={assumptions?.tax_rate_pct ?? 25}
+              onCommit={raw => patchAssumption("tax_rate_pct", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="Croissance ARR"
+              suffix="%/an"
+              value={assumptions?.arr_growth_pct}
+              onCommit={raw => patchAssumption("arr_growth_pct", parseNum(raw) ?? null)}
+            />
+            <ProjAssumptionField
+              label="Nombre d'années"
+              suffix="ans"
+              value={assumptions?.projection_years ?? 3}
+              onCommit={raw => {
+                const n = parseNum(raw);
+                if (n != null && n >= 1 && n <= 10) patchAssumption("projection_years", Math.round(n));
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={handleGenerateProjections}
+              disabled={projecting}
+              style={{ padding: "8px 16px", borderRadius: 8, background: "#6D28D9", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: projecting ? "wait" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              {projecting ? <Loader2 size={13} className="animate-spin" /> : <TrendingUp size={13} />}
+              Générer {assumptions?.projection_years ?? 3} projection{(assumptions?.projection_years ?? 3) > 1 ? "s" : ""}
+            </button>
+            <button
+              onClick={handleClearProjections}
+              disabled={projecting}
+              style={{ padding: "8px 14px", borderRadius: 8, background: "transparent", color: "#6D28D9", border: "1px solid #8B5CF6", fontSize: 12.5, fontWeight: 600, cursor: projecting ? "wait" : "pointer", fontFamily: "inherit" }}
+            >
+              Effacer les projections
+            </button>
+            {projectionMessage && (
+              <span style={{ fontSize: 12, color: "#065F46", fontWeight: 600 }}>{projectionMessage}</span>
+            )}
+            {projectionError && (
+              <span style={{ fontSize: 12, color: "#991B1B", fontWeight: 600 }}>{projectionError}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Import CSV/Excel */}
       {showImport && (
@@ -1084,6 +1473,50 @@ function AiAnalysisPanel({ ai, currency, expanded, onToggle }: {
               }} />
             </div>
           </div>
+
+          {/* Score décomposé en 4 sous-critères */}
+          {(ai.ai_score_growth != null || ai.ai_score_margin != null || ai.ai_score_balance != null || ai.ai_score_comparables != null) && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
+              {[
+                { label: "Croissance", value: ai.ai_score_growth, hint: "Évolution YoY du CA" },
+                { label: "Marge", value: ai.ai_score_margin, hint: "Rentabilité EBITDA vs secteur" },
+                { label: "Bilan", value: ai.ai_score_balance, hint: "Solidité financière, dette nette" },
+                { label: "Comparables", value: ai.ai_score_comparables, hint: "Positionnement vs multiples sectoriels" },
+              ].map(b => {
+                const v = b.value ?? 0;
+                const pct = (v / 25) * 100;
+                const c = v >= 18 ? "#15A348" : v >= 12 ? "#D97706" : "#B91C1C";
+                return (
+                  <div key={b.label} title={b.hint} style={{
+                    padding: "8px 10px", background: "var(--surface-2)", borderRadius: 8,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-4)", textTransform: "uppercase", letterSpacing: ".04em" }}>{b.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: c }}>{v}<span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-5)" }}>/25</span></span>
+                    </div>
+                    <div style={{ height: 4, background: "var(--surface-3)", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.max(0, Math.min(100, pct))}%`, background: c, transition: "width .3s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Anomalies détectées */}
+          {ai.ai_anomalies && ai.ai_anomalies.length > 0 && (
+            <div style={{
+              marginBottom: 12, padding: "10px 12px", background: "#FEF3C7",
+              border: "1px solid #FCD34D", borderRadius: 8,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>
+                ⚠ Anomalies détectées
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "#78350F", lineHeight: 1.55 }}>
+                {ai.ai_anomalies.map((a, i) => <li key={i}>{a}</li>)}
+              </ul>
+            </div>
+          )}
 
           {/* Fourchette valorisation */}
           {(ai.ai_valuation_low !== null || ai.ai_valuation_high !== null) && (

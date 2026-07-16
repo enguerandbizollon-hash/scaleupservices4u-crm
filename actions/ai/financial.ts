@@ -7,6 +7,7 @@ import {
   type FinancialYear,
   type FinancialScoringResult,
 } from "@/lib/ai/financial-scoring";
+import { computeFinancials, type FinancialInputs } from "@/lib/crm/financial-calcs";
 
 export type AnalyzeFinancialResult =
   | { success: true; result: FinancialScoringResult & { analyzed_at: string } }
@@ -35,10 +36,12 @@ export async function analyzeFinancialDataAction(
   if (dealErr) return { success: false, error: dealErr.message };
   if (!deal) return { success: false, error: "Dossier introuvable" };
 
-  // 2. Récupère les 3 exercices les plus récents
+  // 2. Récupère les 3 exercices les plus récents (toutes colonnes pour permettre
+  //    le recalcul des dérivés — ebitda, marges, equity, net_debt — depuis les
+  //    composantes, cohérent avec l'affichage UI via computeFinancials).
   const { data: finRows, error: finErr } = await supabase
     .from("financial_data")
-    .select("fiscal_year,revenue,gross_margin,ebitda,ebitda_margin,net_debt,equity,cash,headcount,arr,mrr,nrr,churn_rate")
+    .select("*")
     .eq("deal_id", dealId)
     .eq("user_id", user.id)
     .eq("is_forecast", false)
@@ -50,21 +53,36 @@ export async function analyzeFinancialDataAction(
     return { success: false, error: "Aucune donnée financière — renseigne au moins un exercice avant d'analyser." };
   }
 
-  const years: FinancialYear[] = finRows.map(r => ({
-    fiscal_year: r.fiscal_year,
-    revenue: r.revenue,
-    gross_margin: r.gross_margin,
-    ebitda: r.ebitda,
-    ebitda_margin: r.ebitda_margin,
-    net_debt: r.net_debt,
-    equity: r.equity,
-    cash: r.cash,
-    headcount: r.headcount,
-    arr: r.arr,
-    mrr: r.mrr,
-    nrr: r.nrr,
-    churn_rate: r.churn_rate,
-  }));
+  // Recalcule les dérivés depuis les composantes saisies. Les champs ebitda,
+  // gross_margin, ebitda_margin, net_debt, equity sont calc-only côté UI et
+  // ne sont jamais persistés en saisie manuelle — sans ce recalcul, le LLM
+  // les voit comme null et répond "EBITDA manquant".
+  // Note : computeFinancials retourne les marges en ratio (0.15) ; le prompt
+  // les formate avec "%" donc on multiplie par 100 quand on prend le calc.
+  const years: FinancialYear[] = finRows.map(r => {
+    const c = computeFinancials(r as FinancialInputs);
+    const grossMarginPct = c.gross_margin !== null ? c.gross_margin * 100 : r.gross_margin;
+    const ebitdaMarginPct = c.ebitda_margin !== null ? c.ebitda_margin * 100 : r.ebitda_margin;
+    const ebitdaNormativeMarginPct = c.ebitda_normative_margin !== null ? c.ebitda_normative_margin * 100 : null;
+    return {
+      fiscal_year: r.fiscal_year,
+      revenue: r.revenue,
+      gross_margin: grossMarginPct,
+      ebitda: c.ebitda ?? r.ebitda,
+      ebitda_margin: ebitdaMarginPct,
+      ebitda_normative: c.ebitda_normative,
+      ebitda_normative_margin: ebitdaNormativeMarginPct,
+      addbacks_total: c.addbacks_total,
+      net_debt: c.net_debt ?? r.net_debt,
+      equity: c.equity ?? r.equity,
+      cash: r.cash,
+      headcount: r.headcount,
+      arr: r.arr,
+      mrr: c.mrr ?? r.mrr,
+      nrr: r.nrr,
+      churn_rate: r.churn_rate,
+    };
+  });
 
   // 3. Appel IA
   const scoring = await analyzeDealFinancials({
@@ -90,6 +108,11 @@ export async function analyzeFinancialDataAction(
       ai_valuation_high: scoring.valuation_high,
       ai_financial_notes: scoring.notes,
       ai_analyzed_at: analyzedAt,
+      ai_score_growth: scoring.breakdown.growth,
+      ai_score_margin: scoring.breakdown.margin,
+      ai_score_balance: scoring.breakdown.balance,
+      ai_score_comparables: scoring.breakdown.comparables,
+      ai_anomalies: scoring.anomalies,
     })
     .eq("id", dealId)
     .eq("user_id", user.id);

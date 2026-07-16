@@ -84,7 +84,7 @@ export function EnrichButton({
       title={
         type === "contact"
           ? "Chercher email pro et LinkedIn via Hunter.io / Apollo"
-          : "Enrichir via Pappers (SIRET, CA, effectif)"
+          : "Enrichir via Pappers, Apollo et Harmonic (légal, employés, secteur, levées)"
       }
       style={{
         display: "inline-flex", alignItems: "center", gap: 5,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Upload, FileText, Download, Trash2, RefreshCw, Eye, EyeOff, Pencil } from "lucide-react";
+import { Upload, FileText, Download, Trash2, RefreshCw, Eye, EyeOff, Pencil, Sparkles, Loader2 } from "lucide-react";
 import {
   listDealDocuments,
   createDealDocument,
@@ -9,6 +9,7 @@ import {
   deleteDealDocument,
   updateDealDocumentMeta,
 } from "@/actions/documents";
+import { extractDocumentAction } from "@/actions/ai/extract-document";
 import {
   DOCUMENT_TYPES,
   DOCUMENT_TYPE_LABELS,
@@ -163,6 +164,33 @@ export function DocumentsTab({ dealId, dealName }: Props) {
     window.open(res.url, "_blank", "noopener,noreferrer");
   }
 
+  // ── Analyse IA ────────────────────────────────────────────────────────────
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+
+  async function handleAnalyze(docId: string) {
+    setAnalyzingId(docId);
+    setError(null);
+    try {
+      const res = await extractDocumentAction(docId);
+      if (!res.success) {
+        setError(`Analyse échouée : ${res.error ?? "inconnu"}`);
+      } else {
+        const parts: string[] = [];
+        if (res.summary)                 parts.push(res.summary);
+        if (res.confidence != null)      parts.push(`Confiance IA : ${res.confidence}%`);
+        if (res.years_imported && res.years_imported > 0) parts.push(`${res.years_imported} exercice(s) importé(s) dans financial_data`);
+        if (res.inconsistencies && res.inconsistencies.length > 0) parts.push(`Incohérences détectées : ${res.inconsistencies.join("; ")}`);
+        // eslint-disable-next-line no-alert
+        alert(parts.join("\n\n") || "Analyse terminée");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur analyse IA");
+    } finally {
+      setAnalyzingId(null);
+      await loadDocs();
+    }
+  }
+
   // ── Suppression ───────────────────────────────────────────────────────────
   async function handleDelete(docId: string) {
     if (!confirm("Supprimer ce document ?")) return;
@@ -278,6 +306,8 @@ export function DocumentsTab({ dealId, dealName }: Props) {
             onUpdateStatus={handleUpdateStatus}
             onToggleConfidential={handleToggleConfidential}
             onRename={handleRename}
+            onAnalyze={handleAnalyze}
+            analyzingId={analyzingId}
           />
           <CategorySection title={CATEGORY_LABELS.operation} docs={operation}
             onDownload={handleDownload} onDelete={handleDelete}
@@ -286,6 +316,8 @@ export function DocumentsTab({ dealId, dealName }: Props) {
             onUpdateStatus={handleUpdateStatus}
             onToggleConfidential={handleToggleConfidential}
             onRename={handleRename}
+            onAnalyze={handleAnalyze}
+            analyzingId={analyzingId}
           />
         </>
       )}
@@ -296,7 +328,7 @@ export function DocumentsTab({ dealId, dealName }: Props) {
 // ── Sous-composant : section par catégorie ─────────────────────────────────
 
 function CategorySection({
-  title, docs, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential, onRename,
+  title, docs, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential, onRename, onAnalyze, analyzingId,
 }: {
   title: string;
   docs: DealDocumentRow[];
@@ -307,6 +339,8 @@ function CategorySection({
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
   onToggleConfidential: (id: string, current: boolean) => void;
   onRename: (id: string, newName: string) => void;
+  onAnalyze: (id: string) => void;
+  analyzingId: string | null;
 }) {
   return (
     <div style={{ marginBottom: 24 }}>
@@ -325,6 +359,8 @@ function CategorySection({
               onUpdateType={onUpdateType} onUpdateStatus={onUpdateStatus}
               onToggleConfidential={onToggleConfidential}
               onRename={onRename}
+              onAnalyze={onAnalyze}
+              isAnalyzing={analyzingId === d.id}
             />
           ))}
         </div>
@@ -336,7 +372,7 @@ function CategorySection({
 // ── Sous-composant : ligne document ─────────────────────────────────────────
 
 function DocRow({
-  doc, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential, onRename,
+  doc, onDownload, onDelete, onReplace, onUpdateType, onUpdateStatus, onToggleConfidential, onRename, onAnalyze, isAnalyzing,
 }: {
   doc: DealDocumentRow;
   onDownload: (path: string | null) => void;
@@ -346,6 +382,8 @@ function DocRow({
   onUpdateStatus: (id: string, newStatus: DocumentStatus) => void;
   onToggleConfidential: (id: string, current: boolean) => void;
   onRename: (id: string, newName: string) => void;
+  onAnalyze: (id: string) => void;
+  isAnalyzing: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(doc.file_name ?? "");

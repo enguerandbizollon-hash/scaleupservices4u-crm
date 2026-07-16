@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   Sparkles, Brain, Mail, Check, X, Clock, Loader2, AlertCircle,
   ChevronDown, ChevronUp, ExternalLink, Trash2, Plus, Pencil,
@@ -20,6 +20,8 @@ import {
 import {
   generateSourcingPlanAction,
   executeSourcingPlanAction,
+  updateSourcingPlanAction,
+  updateSourcingUrlsAction,
   approveSuggestion,
   rejectSuggestion,
   deferSuggestion,
@@ -39,6 +41,12 @@ interface Props {
   dealId: string;
   screeningReady: boolean;
   initialSuggestions: SuggestionWithRelations[];
+  // Plan persisté (V63) — chargé côté server pour ne pas re-générer à l'IA
+  // à chaque ouverture. null si jamais généré.
+  initialPlan?: SourcingPlan | null;
+  initialPlanGeneratedAt?: string | null;
+  initialPlanSource?: string | null;
+  initialUrlsToConsult?: string[];
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -121,10 +129,17 @@ const STATUS_META: Record<string, { bg: string; tx: string }> = {
 
 // ── Composant principal ─────────────────────────────────────────────────────
 
-export function SourcingWizard({ dealId, screeningReady, initialSuggestions }: Props) {
+export function SourcingWizard({
+  dealId, screeningReady, initialSuggestions,
+  initialPlan = null, initialPlanGeneratedAt = null, initialPlanSource = null,
+  initialUrlsToConsult = [],
+}: Props) {
   const [suggestions, setSuggestions] = useState<SuggestionWithRelations[]>(initialSuggestions);
-  const [plan, setPlan] = useState<SourcingPlan | null>(null);
-  const [planFromAI, setPlanFromAI] = useState<boolean>(false);
+  const [plan, setPlan] = useState<SourcingPlan | null>(initialPlan);
+  const [planFromAI, setPlanFromAI] = useState<boolean>(initialPlanSource === "ai" || initialPlanSource === "edited");
+  const [planGeneratedAt, setPlanGeneratedAt] = useState<string | null>(initialPlanGeneratedAt);
+  const [urlsToConsult, setUrlsToConsult] = useState<string[]>(initialUrlsToConsult);
+  const [urlInput, setUrlInput] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [withAI, setWithAI] = useState(true);
@@ -148,10 +163,52 @@ export function SourcingWizard({ dealId, screeningReady, initialSuggestions }: P
     }
     setPlan(res.plan);
     setPlanFromAI(res.from_ai);
+    setPlanGeneratedAt(new Date().toISOString());
     if (!res.from_ai) {
       setInfo("Plan par défaut affiché (IA non disponible). Ajuste les segments avant d'exécuter.");
+    } else {
+      setInfo("Plan généré et sauvegardé. Tu peux ajuster avant d'exécuter.");
     }
   }, [dealId]);
+
+  // Auto-save du plan édité (debounce 800ms). Ne déclenche pas le 1er render
+  // qui injecte le plan persisté chargé côté serveur.
+  const planMountedRef = useRef(false);
+  useEffect(() => {
+    if (!plan) return;
+    if (!planMountedRef.current) {
+      planMountedRef.current = true;
+      return;
+    }
+    const handle = setTimeout(() => {
+      updateSourcingPlanAction(dealId, plan).catch(() => {});
+    }, 800);
+    return () => clearTimeout(handle);
+  }, [dealId, plan]);
+
+  // Auto-save des URLs à consulter (debounce 800ms).
+  const urlsMountedRef = useRef(false);
+  useEffect(() => {
+    if (!urlsMountedRef.current) {
+      urlsMountedRef.current = true;
+      return;
+    }
+    const handle = setTimeout(() => {
+      updateSourcingUrlsAction(dealId, urlsToConsult).catch(() => {});
+    }, 800);
+    return () => clearTimeout(handle);
+  }, [dealId, urlsToConsult]);
+
+  function addUrl() {
+    const u = urlInput.trim();
+    if (!u) return;
+    if (urlsToConsult.includes(u)) { setUrlInput(""); return; }
+    setUrlsToConsult([...urlsToConsult, u]);
+    setUrlInput("");
+  }
+  function removeUrl(u: string) {
+    setUrlsToConsult(urlsToConsult.filter(x => x !== u));
+  }
 
   const handleExecute = useCallback(async () => {
     if (!plan) return;
@@ -266,11 +323,23 @@ export function SourcingWizard({ dealId, screeningReady, initialSuggestions }: P
                   Confiance : {plan.confidence}/100
                 </span>
               )}
+              {planGeneratedAt && (
+                <span style={{ fontSize: 10.5, color: "var(--text-5)" }}>
+                  · généré {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(planGeneratedAt))}
+                </span>
+              )}
               <button
-                onClick={() => { setPlan(null); setEditingIdx(null); }}
+                onClick={handleGeneratePlan}
+                disabled={isGenerating}
                 style={{ ...btnBase, marginLeft: "auto", fontSize: 11 }}
               >
-                Recommencer
+                {isGenerating ? "Régénération…" : "Régénérer"}
+              </button>
+              <button
+                onClick={() => { setPlan(null); setEditingIdx(null); }}
+                style={{ ...btnBase, fontSize: 11 }}
+              >
+                Vider
               </button>
             </div>
 
@@ -285,6 +354,43 @@ export function SourcingWizard({ dealId, screeningReady, initialSuggestions }: P
                 {plan.notes}
               </div>
             )}
+
+            {/* Sites web spécifiques à consulter (V63) */}
+            <div style={{ padding: "10px 12px", background: "var(--surface-2)", borderRadius: 8, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                Sites web à consulter ({urlsToConsult.length})
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {urlsToConsult.map(u => (
+                  <span key={u} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "3px 8px", borderRadius: 14, background: "#EFF6FF",
+                    border: "1px solid #BFDBFE", fontSize: 11.5, color: "#1E40AF",
+                  }}>
+                    <a href={u.startsWith("http") ? u : `https://${u}`} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>
+                      {u.replace(/^https?:\/\//, "").slice(0, 40)}
+                    </a>
+                    <button onClick={() => removeUrl(u)} title="Retirer" style={{ background: "none", border: "none", color: "#1E40AF", cursor: "pointer", padding: 0, fontSize: 12, lineHeight: 1 }}>×</button>
+                  </span>
+                ))}
+                {urlsToConsult.length === 0 && (
+                  <span style={{ fontSize: 11.5, color: "var(--text-5)" }}>
+                    Aucun site spécifié. Ajoute des annuaires, sites sectoriels, listes d'acquéreurs, etc.
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={e => setUrlInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
+                  placeholder="https://exemple.com/annuaire-sectoriel"
+                  style={{ flex: 1, padding: "5px 9px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, fontFamily: "inherit", background: "var(--surface)" }}
+                />
+                <button onClick={addUrl} style={{ ...btnBase, fontSize: 11 }}>Ajouter</button>
+              </div>
+            </div>
 
             {/* Segments */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

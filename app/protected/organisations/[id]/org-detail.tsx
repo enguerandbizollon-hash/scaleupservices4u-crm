@@ -9,6 +9,7 @@ import { EnrichFromInseeButton } from "@/components/organisations/EnrichFromInse
 import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES } from "@/lib/crm/matching-maps";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
+import { OrganisationAddressBlock } from "@/components/organisations/OrganisationAddressBlock";
 
 const INVESTOR_TYPES = ["investor", "business_angel", "family_office", "corporate"];
 const COMPANY_PROFILE_TYPES = ["client","prospect_client","target","buyer","bank","advisor","law_firm","accounting_firm","consulting_firm","other"];
@@ -212,6 +213,22 @@ export function OrgDetail({ org, contacts, deals, mandates, financialData, actio
       {/* Onglet Profil */}
       {tab === "profil" && (
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+          {/* Adresse structurée (foundation sourcing géographique M&A) */}
+          <OrganisationAddressBlock
+            organisationId={org.id}
+            initial={{
+              street: org.street ?? null,
+              postal_code: org.postal_code ?? null,
+              city: org.city ?? null,
+              region: org.region ?? null,
+              country: org.country ?? null,
+              latitude: org.latitude ?? null,
+              longitude: org.longitude ?? null,
+              address_formatted: org.address_formatted ?? null,
+              geocoded_at: org.geocoded_at ?? null,
+            }}
+          />
 
           {/* Profil investisseur */}
           {INVESTOR_TYPES.includes(org.organization_type) && (

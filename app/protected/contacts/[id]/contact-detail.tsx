@@ -34,7 +34,14 @@ function fmtDate(d: string | null) {
   return new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"short", year:"numeric" }).format(new Date(d));
 }
 
-export function ContactDetail({ contact, orgs }: { contact: any; orgs: any[] }) {
+interface EmailStats {
+  total: number;
+  inbound: number;
+  outbound: number;
+  lastDate: string | null;
+}
+
+export function ContactDetail({ contact, orgs, emailStats }: { contact: any; orgs: any[]; emailStats?: EmailStats }) {
   const sc = STATUS_COLORS[contact.base_status] ?? STATUS_COLORS.to_qualify;
   const days = daysSince(contact.last_contact_date);
   const initials = `${contact.first_name?.[0] ?? ""}${contact.last_name?.[0] ?? ""}`.toUpperCase();
@@ -79,6 +86,28 @@ export function ContactDetail({ contact, orgs }: { contact: any; orgs: any[] }) 
             {contact.last_contact_date && (
               <div style={{ fontSize:12.5, color:"var(--text-5)", marginTop:6 }}>
                 Dernier contact : {fmtDate(contact.last_contact_date)}
+              </div>
+            )}
+
+            {emailStats && emailStats.total > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:8, flexWrap:"wrap" }}>
+                <span style={{
+                  display:"inline-flex", alignItems:"center", gap:6,
+                  fontSize:11.5, fontWeight:600,
+                  padding:"3px 10px", borderRadius:20,
+                  background:"var(--surface-3)", color:"var(--text-3)",
+                }}>
+                  <Mail size={11}/>
+                  {emailStats.total} email{emailStats.total > 1 ? "s" : ""} échangé{emailStats.total > 1 ? "s" : ""}
+                  <span style={{ color:"var(--text-5)", fontWeight:500 }}>
+                    {" "}({emailStats.inbound} reçu{emailStats.inbound > 1 ? "s" : ""} · {emailStats.outbound} envoyé{emailStats.outbound > 1 ? "s" : ""})
+                  </span>
+                </span>
+                {emailStats.lastDate && (
+                  <span style={{ fontSize:11.5, color:"var(--text-5)" }}>
+                    Dernier le {fmtDate(emailStats.lastDate)}
+                  </span>
+                )}
               </div>
             )}
           </div>

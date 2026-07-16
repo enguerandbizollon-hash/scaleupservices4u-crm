@@ -172,6 +172,40 @@ function renderAction(action: ActionRow, ctx: {
           </div>
         )}
 
+        {/* Bouton "Répondre dans Gmail" — action de type email, ouvre Gmail compose pré-rempli.
+            On répond à l'expéditeur si reçu, sinon au premier destinataire (refaire suivre). */}
+        {action.type === "email" && (() => {
+          const replyTo = action.email_direction === "outbound"
+            ? (action.email_to?.[0] ?? "")
+            : (action.email_from ?? "");
+          if (!replyTo) return null;
+          const subject = action.email_subject ?? action.title ?? "";
+          const replySubject = /^re:/i.test(subject) ? subject : `Re: ${subject}`;
+          const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(replyTo)}&su=${encodeURIComponent(replySubject)}`;
+          return (
+            <a
+              href={composeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: 12, color: "var(--su-500)", textDecoration: "none", marginBottom: 3, display: "inline-block" }}>
+              ✉️ Répondre dans Gmail
+            </a>
+          );
+        })()}
+
+        {/* Lien thread Gmail — accès rapide au fil original */}
+        {action.type === "email" && action.gmail_thread_id && (
+          <a
+            href={`https://mail.google.com/mail/u/0/#inbox/${action.gmail_thread_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{ fontSize: 12, color: "var(--text-4)", textDecoration: "none", marginLeft: 12, marginBottom: 3, display: "inline-block" }}>
+            ↗ Ouvrir le fil
+          </a>
+        )}
+
         {/* Meet link — action de type meeting */}
         {action.type === "meeting" && action.meet_link && (
           <a

@@ -28,8 +28,25 @@ async function getTaskCounts(): Promise<{ overdue: number; today: number }> {
   }
 }
 
+async function getInboxCount(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 0;
+    const { count } = await supabase
+      .from("actions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("type", "email")
+      .eq("needs_review", true);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const taskCounts = await getTaskCounts();
+  const [taskCounts, inboxCount] = await Promise.all([getTaskCounts(), getInboxCount()]);
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"var(--bg)" }}>
       <aside style={{ position:"fixed", left:0, top:0, zIndex:50, width:250, height:"100vh", display:"flex", flexDirection:"column", background:"var(--su-900)", borderRight:"1px solid rgba(255,255,255,0.06)" }}>
@@ -46,7 +63,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
 
         {/* Nav — Client Component */}
-        <SidebarNav taskCounts={taskCounts} />
+        <SidebarNav taskCounts={taskCounts} inboxCount={inboxCount} />
       </aside>
 
       <main style={{ marginLeft:250, flex:1, minWidth:0 }}>

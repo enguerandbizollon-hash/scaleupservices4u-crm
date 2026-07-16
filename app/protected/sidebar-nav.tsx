@@ -3,7 +3,7 @@ import { GlobalSearch } from "./components/global-search";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, UserSearch, FileCheck, BarChart2, CalendarDays, CheckSquare } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, UserSearch, FileCheck, BarChart2, CalendarDays, CheckSquare, Inbox } from "lucide-react";
 
 const NAV = [
   { href:"/protected",               label:"Dashboard",     dot:"#3468B0", bg:"rgba(52,104,176,.18)",  icon:LayoutDashboard },
@@ -13,15 +13,17 @@ const NAV = [
   { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
   { href:"/protected/candidats",     label:"Candidats",     dot:"#0891B2", bg:"rgba(8,145,178,.18)",   icon:UserSearch },
   { href:"/protected/taches",        label:"Tâches",        dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },
+  { href:"/protected/inbox",         label:"Boîte de tri",  dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
   { href:"/protected/agenda",        label:"Agenda",        dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:CalendarDays },
   { href:"/protected/statistiques",  label:"Statistiques",  dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:BarChart2 },
   { href:"/protected/import",        label:"Import",        dot:"#1E7A4A", bg:"rgba(30,122,74,.18)",   icon:Upload },
   { href:"/protected/connecteurs",    label:"Connecteurs",   dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
 ];
 
-export function SidebarNav({ taskCounts }: { taskCounts?: { overdue: number; today: number } }) {
+export function SidebarNav({ taskCounts, inboxCount }: { taskCounts?: { overdue: number; today: number }; inboxCount?: number }) {
   const path = usePathname();
   const taskBadge = taskCounts && (taskCounts.overdue > 0 || taskCounts.today > 0);
+  const inboxBadge = (inboxCount ?? 0) > 0;
 
   return (
     <>
@@ -37,6 +39,7 @@ export function SidebarNav({ taskCounts }: { taskCounts?: { overdue: number; tod
           const Icon = item.icon;
           const active = path === item.href || (item.href !== "/protected" && path.startsWith(item.href));
           const isTaches = item.href === "/protected/taches";
+          const isInbox = item.href === "/protected/inbox";
           return (
             <Link key={item.href} href={item.href} style={{
               display:"flex", alignItems:"center", gap:10,
@@ -51,6 +54,11 @@ export function SidebarNav({ taskCounts }: { taskCounts?: { overdue: number; tod
                 <Icon size={13} style={{ color: active ? "#fff" : item.dot }} strokeWidth={2}/>
               </div>
               <span style={{ flex:1 }}>{item.label}</span>
+              {isInbox && inboxBadge && (
+                <span title={`${inboxCount} email${(inboxCount ?? 0) > 1 ? "s" : ""} à trier`} style={{ fontSize:10, fontWeight:800, background:"#E11D48", color:"#fff", borderRadius:4, padding:"1px 6px", letterSpacing:".02em" }}>
+                  {inboxCount}
+                </span>
+              )}
               {isTaches && taskBadge && (
                 <span style={{ display:"flex", gap:4 }}>
                   {taskCounts.overdue > 0 && (
