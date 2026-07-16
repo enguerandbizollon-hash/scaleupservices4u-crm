@@ -545,7 +545,11 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
   const [projectionError, setProjectionError] = useState<string | null>(null);
   const [projectionMessage, setProjectionMessage] = useState<string | null>(null);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Deux debounces distincts : données financières et hypothèses de projection
+  // peuvent être éditées dans la même fenêtre, un ref partagé annulerait
+  // silencieusement la sauvegarde de l'autre.
+  const dataDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assumptionsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasRecurrent = rows.some(r => (r.revenue_recurring ?? 0) > 0 || (r.arr ?? 0) > 0);
 
@@ -574,9 +578,9 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
       return next as AssumptionsRow;
     });
     // Debounced save (réutilise le pattern autoSave)
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (assumptionsDebounceRef.current) clearTimeout(assumptionsDebounceRef.current);
     setSavingAssumptions(true);
-    debounceRef.current = setTimeout(async () => {
+    assumptionsDebounceRef.current = setTimeout(async () => {
       try {
         await upsertAssumptions({
           deal_id: dealId,
@@ -667,8 +671,8 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
 
   const autoSave = useCallback(
     (updatedRow: FinancialRow) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(async () => {
+      if (dataDebounceRef.current) clearTimeout(dataDebounceRef.current);
+      dataDebounceRef.current = setTimeout(async () => {
         setSaving(true);
         try {
           const payload: Record<string, unknown> = {
