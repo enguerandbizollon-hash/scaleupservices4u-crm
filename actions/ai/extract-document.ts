@@ -192,7 +192,7 @@ async function upsertFinancialYear(params: {
       .maybeSingle();
     if (!current) return false;
     for (const f of allFields) {
-      const cur = (current as Record<string, unknown>)[f];
+      const cur = (current as unknown as Record<string, unknown>)[f];
       const newVal = params.year[f];
       if ((cur === null || cur === undefined) && newVal != null) {
         payload[f] = newVal;
