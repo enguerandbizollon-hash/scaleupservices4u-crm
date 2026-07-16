@@ -226,16 +226,21 @@ async function upsertOrganizationFromApollo(
     }
   }
 
-  // 3. Par domaine website
+  // 3. Par domaine website — ilike comme pré-filtre, puis égalité stricte
+  // de domaine normalisé : le substring seul matchait "fabc.fr" ou
+  // "abc.fr.uk" pour le domaine "abc.fr" et corrompait la mauvaise fiche.
   const domain = extractDomain(raw.website_url ?? raw.primary_domain ?? null);
   if (domain) {
-    const { data: byDomain } = await supabase
+    const { data: byDomainRows } = await supabase
       .from("organizations")
-      .select("id, external_ids")
+      .select("id, external_ids, website")
       .eq("user_id", userId)
       .ilike("website", `%${domain}%`)
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
+
+    const byDomain = (byDomainRows ?? []).find(
+      (row) => extractDomain(row.website) === domain,
+    );
 
     if (byDomain) {
       await mergeApolloIdIntoOrg(supabase, byDomain.id, byDomain.external_ids, raw);
