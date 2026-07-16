@@ -391,6 +391,32 @@ export async function executeSourcingPlanAction(
   const aiLimit = opts.withAI ? Math.min(opts.maxAiScorings ?? 15, scored.length) : 0;
   const aiScores = new Map<string, { score: number; explanation: string; red_flags: string[]; confidence: number }>();
 
+  // Charger les profils réels des orgs candidates avant scoring IA
+  // (company_stage et investor_* étaient auparavant codés à null :
+  // l'IA scorait sans jamais voir la thèse ni le ticket des fonds).
+  // Même colonnes que scoreSuggestionAI dans actions/suggestions.ts.
+  type LoadedOrgProfile = MatchingBrainOrgProfile & { id: string };
+  const aiOrgIds = scored
+    .slice(0, aiLimit)
+    .map((e) => e.candidate.existing_org_id)
+    .filter((v): v is string => Boolean(v));
+  const orgProfiles = new Map<string, LoadedOrgProfile>();
+  if (aiOrgIds.length > 0) {
+    const { data: orgRows } = await supabase
+      .from("organizations")
+      .select(`
+        id, name, organization_type, sector, description,
+        employee_count, company_stage, location, website,
+        investor_sectors, investor_stages,
+        investor_ticket_min, investor_ticket_max
+      `)
+      .in("id", aiOrgIds)
+      .eq("user_id", user.id);
+    for (const o of (orgRows ?? []) as LoadedOrgProfile[]) {
+      orgProfiles.set(o.id, o);
+    }
+  }
+
   for (let i = 0; i < aiLimit; i++) {
     const entry = scored[i];
     if (!entry || !entry.candidate.existing_org_id) continue;
@@ -413,19 +439,20 @@ export async function executeSourcingPlanAction(
       latest_ebitda: deal.latest_ebitda,
       currency: deal.currency,
     };
+    const loaded = orgProfiles.get(entry.candidate.existing_org_id) ?? null;
     const orgProfile: MatchingBrainOrgProfile = {
-      name: entry.candidate.name,
-      organization_type: entry.candidate.organization_type,
-      sector: entry.candidate.sector,
-      description: entry.candidate.description,
-      employee_count: entry.candidate.employee_count,
-      company_stage: null,
-      location: entry.candidate.location,
-      website: entry.candidate.website,
-      investor_sectors: null,
-      investor_stages: null,
-      investor_ticket_min: null,
-      investor_ticket_max: null,
+      name: loaded?.name ?? entry.candidate.name,
+      organization_type: loaded?.organization_type ?? entry.candidate.organization_type,
+      sector: loaded?.sector ?? entry.candidate.sector,
+      description: loaded?.description ?? entry.candidate.description,
+      employee_count: loaded?.employee_count ?? entry.candidate.employee_count,
+      company_stage: loaded?.company_stage ?? null,
+      location: loaded?.location ?? entry.candidate.location,
+      website: loaded?.website ?? entry.candidate.website,
+      investor_sectors: loaded?.investor_sectors ?? null,
+      investor_stages: loaded?.investor_stages ?? null,
+      investor_ticket_min: loaded?.investor_ticket_min ?? null,
+      investor_ticket_max: loaded?.investor_ticket_max ?? null,
     };
     const role = defaultSuggestionRoleForDealType(deal.deal_type);
     try {
