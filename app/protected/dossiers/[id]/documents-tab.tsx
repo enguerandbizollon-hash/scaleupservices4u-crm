@@ -455,6 +455,13 @@ function DocRow({
         </div>
       </div>
       <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}>
+        {(doc.mime_type === null || doc.mime_type === "application/pdf") && (
+          <button type="button" onClick={() => onAnalyze(doc.id)} disabled={isAnalyzing}
+            title="Analyser avec l'IA (extraction des données financières)"
+            style={{ padding: 4, border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", color: "var(--su-500, #1a56db)", cursor: isAnalyzing ? "default" : "pointer", opacity: isAnalyzing ? 0.6 : 1, display: "flex", alignItems: "center" }}>
+            {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          </button>
+        )}
         <button type="button" onClick={() => onToggleConfidential(doc.id, doc.is_confidential)}
           title={doc.is_confidential ? "Confidentiel — non partagé en rapport client" : "Partageable"}
           style={{ padding: 4, border: "1px solid var(--border)", borderRadius: 6, background: doc.is_confidential ? "var(--surface-2)" : "#D1FAE5", color: doc.is_confidential ? "var(--text-5)" : "#065F46", cursor: "pointer", display: "flex", alignItems: "center" }}>

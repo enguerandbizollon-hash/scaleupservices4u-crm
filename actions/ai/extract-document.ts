@@ -5,7 +5,7 @@
  *
  * Pipeline :
  *   1. Lit `ma_documents` pour récupérer storage_path + métadonnées
- *   2. Télécharge le PDF depuis Supabase Storage (bucket: documents)
+ *   2. Télécharge le PDF depuis Supabase Storage (bucket: deal-documents)
  *   3. Appelle `extractDataFromPdf` (Claude Sonnet 4 tool_use)
  *   4. Persiste dans `ma_documents` : ai_extracted_data, ai_summary,
  *      ai_processed_at, ai_confidence_score
@@ -23,7 +23,8 @@ import {
   type ExtractedFinancialYear,
 } from "@/lib/ai/document-extraction";
 
-const STORAGE_BUCKET = "documents";
+// Doit rester aligné sur BUCKET de lib/storage/documents.ts (lieu d'upload)
+const STORAGE_BUCKET = "deal-documents";
 
 export interface ExtractDocumentResponse {
   success: boolean;
