@@ -718,7 +718,10 @@ is_confidential → interne uniquement
 
 ### Deal breakers éliminatoires
 Secteur dans excluded_sectors · Revenue hors fourchette ×0.5/×2
-full_acquisition_required = true ET org.partial_sale_ok = false
+(comparaison CA vs CA — jamais asking_price vs fourchette de CA)
+Pas de breaker sur partial_sale_ok : ce champ signifie "cession
+partielle acceptée", pas "cession totale refusée". À réintroduire
+seulement si un champ dédié exprime le refus d'une cession à 100%.
 
 ### Scoring stratégique (100pts)
 Secteur 30 · Taille 25 · Géographie 15 · Profil stratég. 20 · Timing 10
