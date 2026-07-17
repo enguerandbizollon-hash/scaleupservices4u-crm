@@ -54,10 +54,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         {/* Logo — Server Component, pas d'event handlers */}
         <div style={{ padding:"20px 18px 16px", borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,var(--su-500),var(--su-400))", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:"#fff", letterSpacing:"-.01em", flexShrink:0 }}>SU</div>
+            <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,var(--su-500),var(--su-400))", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:"#fff", letterSpacing:"-.01em", flexShrink:0 }}>VF</div>
             <div style={{ lineHeight:1.2 }}>
-              <div style={{ fontSize:12, fontWeight:800, color:"rgba(255,255,255,.9)", letterSpacing:".01em" }}>Scale Up Service 4U</div>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,.3)", marginTop:2 }}>CRM Platform</div>
+              <div style={{ fontSize:12, fontWeight:800, color:"rgba(255,255,255,.9)", letterSpacing:".01em" }}>VF Tool</div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,.3)", marginTop:2 }}>Vectis Finance</div>
             </div>
           </div>
         </div>

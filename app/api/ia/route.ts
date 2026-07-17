@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     const userId = user?.id ?? "";
     const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-    const systemPrompt = `Tu es l'assistant CRM de Scale Up Services 4U, spécialisé en M&A, venture et advisory.
+    const systemPrompt = `Tu es l'assistant de VF Tool, l'outil M&A interne de Vectis Finance, spécialisé en M&A small cap.
 Aujourd'hui : ${today}.
 
 Base de données actuelle :

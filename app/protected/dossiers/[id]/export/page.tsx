@@ -370,7 +370,7 @@ async function Content({ params, searchParams }: {
 
         {/* Footer */}
         <footer style={{ marginTop: 28, paddingTop: 8, borderTop: "1px solid #e5e7eb", fontSize: 9, color: "#9ca3af", display: "flex", justifyContent: "space-between" }}>
-          <span>ScaleUp Services 4U — Synthèse confidentielle</span>
+          <span>Vectis Finance — Synthèse confidentielle</span>
           <span>Généré le {new Date().toLocaleDateString("fr-FR")}</span>
         </footer>
       </article>

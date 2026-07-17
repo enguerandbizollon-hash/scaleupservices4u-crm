@@ -171,7 +171,7 @@ export function FinancialImport({ dealId, organizationId, onImported }: Financia
     setFields(["fiscal_year", ...allFields]);
     setRows(mapped);
     setWarnings(warn);
-    setSourceLabel(`Modèle ScaleUp — ${parsed.length} exercice${parsed.length > 1 ? "s" : ""} détecté${parsed.length > 1 ? "s" : ""}`);
+    setSourceLabel(`Modèle VF Tool — ${parsed.length} exercice${parsed.length > 1 ? "s" : ""} détecté${parsed.length > 1 ? "s" : ""}`);
     setStep("preview");
   }
 

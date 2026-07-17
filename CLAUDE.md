@@ -1,14 +1,21 @@
-# CLAUDE.md — CRM ScaleUp Services 4U
+# CLAUDE.md — VF Tool (Vectis Finance)
 # Source de vérité absolue — lire intégralement avant tout travail
 
 ---
 
 ## Identité et vision
 
-ScaleUp Services 4U SA est un cabinet de conseil en M&A, fundraising et
-recrutement. Ce CRM est l'outil opérationnel exclusif du cabinet.
-Il n'est pas un produit générique — il est taillé pour un seul usage :
-celui de Scale Up Services 4U et de ses 4 collaborateurs.
+VF Tool est l'outil opérationnel interne de Vectis Finance, boutique
+M&A small cap. Il n'est pas un produit générique et ne sera jamais
+commercialisé : il est taillé pour un seul usage, celui d'Enguérand
+Bizollon, banquier d'affaires indépendant.
+
+Pivot en cours (2026-07) : l'outil se recentre sur le M&A small cap
+(matchmaking cédants/acquéreurs, sourcing, scoring, industrialisation
+des dossiers). Les métiers historiques RH, fundraising et CFO advisory
+sont morts et seront supprimés. Les sections de ce fichier qui les
+décrivent sont conservées jusqu'à l'élagage (phase 1) puis retirées.
+Nom historique du repo : scaleupservices4u-crm (renommage à planifier).
 
 ### Vision plateforme
 

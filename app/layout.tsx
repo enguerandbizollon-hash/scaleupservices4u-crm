@@ -7,8 +7,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Scale Up CRM",
-  description: "CRM interne Scale Up Services 4U",
+  title: "VF Tool",
+  description: "Outil M&A interne Vectis Finance",
 };
 
 export default function RootLayout({

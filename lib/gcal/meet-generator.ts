@@ -26,7 +26,7 @@ export async function generateMeetLink(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        summary: title ?? "Meeting — ScaleUp CRM",
+        summary: title ?? "Meeting — VF Tool",
         start: { dateTime: start.toISOString() },
         end:   { dateTime: end.toISOString() },
         conferenceData: {

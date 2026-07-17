@@ -212,7 +212,7 @@ export async function generateFinancialTemplate(opts: GenerateTemplateOptions): 
 
   // Feuille de garde (instructions)
   const coverRows: (string | number)[][] = [
-    ["Modèle d'import financier — ScaleUp Services 4U"],
+    ["Modèle d'import financier — Vectis Finance"],
     [],
     ["Mode d'emploi"],
     ["1. Renseignez les valeurs dans les onglets suivants. Toutes les colonnes et lignes peuvent rester vides."],

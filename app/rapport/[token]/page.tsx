@@ -41,7 +41,7 @@ export default async function RapportPublicPage({ params }: { params: Promise<{ 
         <div style={{ textAlign: "center", color: "#6B7280" }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏰</div>
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Rapport expiré</div>
-          <div style={{ fontSize: 14 }}>Ce lien n'est plus valide. Contactez votre consultant ScaleUp Services 4U.</div>
+          <div style={{ fontSize: 14 }}>Ce lien n'est plus valide. Contactez votre consultant Vectis Finance.</div>
         </div>
       </div>
     );
@@ -89,7 +89,7 @@ export default async function RapportPublicPage({ params }: { params: Promise<{ 
 
       {/* Barre impression */}
       <div className="no-print" style={{ background: "#1a56db", color: "#fff", padding: "10px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Rapport candidat — ScaleUp Services 4U</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Rapport candidat — Vectis Finance</span>
         <PrintButton />
       </div>
 
@@ -98,7 +98,7 @@ export default async function RapportPublicPage({ params }: { params: Promise<{ 
         {/* En-tête rapport */}
         <div style={{ borderBottom: "2px solid #1a56db", paddingBottom: 20, marginBottom: 28 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#1a56db", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8 }}>
-            ScaleUp Services 4U · Rapport candidat
+            Vectis Finance · Rapport candidat
           </div>
           <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 800, color: "#111" }}>
             {candidate.first_name} {candidate.last_name}
@@ -207,7 +207,7 @@ export default async function RapportPublicPage({ params }: { params: Promise<{ 
         {/* Footer */}
         <div style={{ borderTop: "1px solid #E5E7EB", paddingTop: 20, marginTop: 32, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>ScaleUp Services 4U SA</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>Vectis Finance</div>
             <div style={{ fontSize: 12, color: "#9CA3AF" }}>M&A · Fundraising · Recrutement</div>
           </div>
           <div style={{ textAlign: "right", fontSize: 12, color: "#9CA3AF" }}>

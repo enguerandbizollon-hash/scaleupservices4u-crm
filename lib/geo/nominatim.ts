@@ -82,7 +82,7 @@ export async function geocodeAddress(
     const res = await fetch(url.toString(), {
       headers: {
         // Conforme aux policies Nominatim — User-Agent identifiant le service
-        "User-Agent": "ScaleUpServicesCRM/1.0 (contact@scaleupservices4u.com)",
+        "User-Agent": "VFTool/1.0 (enguerand.bizollon@gmail.com)",
         "Accept-Language": "fr",
       },
     });
