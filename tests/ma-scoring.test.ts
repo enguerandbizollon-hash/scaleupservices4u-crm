@@ -133,6 +133,24 @@ describe("checkMaDealBreakers — ma_buy", () => {
     const org = makeOrg({ organization_type: "target", financial: { revenue: 4_000_000 } });
     expect(checkMaDealBreakers(deal, org)).toContain("hors fourchette deal");
   });
+
+  it("bornes exactes ×0.5 et ×2 incluses : pas de breaker pile sur la borne, breaker juste au-delà", () => {
+    const deal = makeDeal({ deal_type: "ma_buy", target_revenue_min: 10_000_000, target_revenue_max: 20_000_000 });
+    const target = (revenue: number) => makeOrg({ organization_type: "target", financial: { revenue } });
+
+    expect(checkMaDealBreakers(deal, target(5_000_000))).toBeNull();   // = min × 0.5
+    expect(checkMaDealBreakers(deal, target(40_000_000))).toBeNull();  // = max × 2
+    expect(checkMaDealBreakers(deal, target(4_999_999))).toContain("hors fourchette deal");
+    expect(checkMaDealBreakers(deal, target(40_000_001))).toContain("hors fourchette deal");
+  });
+
+  it("pas de breaker taille si le CA de la cible est inconnu ou si la fourchette du deal est incomplète", () => {
+    const dealFull = makeDeal({ deal_type: "ma_buy", target_revenue_min: 10_000_000, target_revenue_max: 20_000_000 });
+    expect(checkMaDealBreakers(dealFull, makeOrg({ organization_type: "target" }))).toBeNull();
+
+    const dealPartial = makeDeal({ deal_type: "ma_buy", target_revenue_min: 10_000_000 });
+    expect(checkMaDealBreakers(dealPartial, makeOrg({ organization_type: "target", financial: { revenue: 1_000_000 } }))).toBeNull();
+  });
 });
 
 // ── scoreSize ma_sell (via computeMaStrategicScore) ──────────────────────────
@@ -209,6 +227,26 @@ describe("computeMaFinancialScore — axe bilan", () => {
     expect(high?.breakdown.balance.reason).toContain("x EBITDA");
   });
 
+  it("bornes exactes du levier : 1.0x → 20 pts, 3.0x → 10 pts (seuils inclusifs)", () => {
+    const atOne = computeMaFinancialScore({ net_debt: 2_000_000, ebitda: 2_000_000 }); // 1.0x
+    expect(atOne?.breakdown.balance.earned).toBe(20);
+
+    const atThree = computeMaFinancialScore({ net_debt: 6_000_000, ebitda: 2_000_000 }); // 3.0x
+    expect(atThree?.breakdown.balance.earned).toBe(10);
+  });
+
+  it("dette avérée sans EBITDA positif ni fonds propres positifs → 2 pts, bilan dégradé et non inconnu", () => {
+    const zeroEquity = computeMaFinancialScore({ net_debt: 5_000_000, equity: 0 });
+    expect(zeroEquity?.breakdown.balance.earned).toBe(2);
+    expect(zeroEquity?.breakdown.balance.reason).toContain("Dette nette");
+
+    const zeroEbitda = computeMaFinancialScore({ net_debt: 5_000_000, ebitda: 0 });
+    expect(zeroEbitda?.breakdown.balance.earned).toBe(2);
+
+    const negativeEquity = computeMaFinancialScore({ net_debt: 5_000_000, ebitda: -300_000, equity: -1_000_000 });
+    expect(negativeEquity?.breakdown.balance.earned).toBe(2);
+  });
+
   it("net_debt > 0 sans EBITDA mais equity > 0 → gearing avec raison Gearing et sans EBITDA", () => {
     const r = computeMaFinancialScore({ net_debt: 1_000_000, equity: 4_000_000 }); // gearing 0.25
     expect(r?.breakdown.balance.earned).toBe(20);
@@ -223,10 +261,10 @@ describe("computeMaFinancialScore — axe bilan", () => {
     expect(r?.breakdown.balance.reason).not.toContain("EBITDA");
   });
 
-  it("net_debt null et equity > 0 → 25 pts", () => {
+  it("net_debt null et equity > 0 → 12 pts neutres, sans prétendre que la dette est nulle", () => {
     const r = computeMaFinancialScore({ net_debt: null, equity: 5_000_000 });
-    expect(r?.breakdown.balance.earned).toBe(25);
-    expect(r?.breakdown.balance.reason).toBe("Bilan net positif, dette nulle ou cash net");
+    expect(r?.breakdown.balance.earned).toBe(12);
+    expect(r?.breakdown.balance.reason).toBe("Fonds propres positifs, dette nette non renseignée");
   });
 
   it("net_debt et equity absents → 0 pt, bilan inconnu", () => {

@@ -404,8 +404,14 @@ export function computeMaFinancialScore(
     if (gearing <= 1)      { balanceEarned = 20; balanceReason = `Gearing modéré ${gearing.toFixed(1)}x (dette nette / capitaux propres)`; }
     else if (gearing <= 3) { balanceEarned = 10; balanceReason = `Gearing élevé ${gearing.toFixed(1)}x (dette nette / capitaux propres)`; }
     else                   { balanceEarned = 2;  balanceReason = `Gearing très élevé ${gearing.toFixed(1)}x (dette nette / capitaux propres)`; }
+  } else if (net_debt != null && net_debt > 0) {
+    // Dette avérée sans EBITDA positif ni fonds propres positifs : le bilan
+    // n'est pas inconnu, il est dégradé. Pire cas connu, pas un cas neutre.
+    balanceEarned = 2; balanceReason = "Dette nette avec fonds propres et EBITDA nuls, négatifs ou inconnus";
   } else if (net_debt == null && equity != null && equity > 0) {
-    balanceEarned = 25; balanceReason = "Bilan net positif, dette nulle ou cash net";
+    // Dette nette non renseignée : score neutre honnête, pas le maximum
+    // (l'ancien comportement affichait "dette nulle ou cash net" à tort).
+    balanceEarned = 12; balanceReason = "Fonds propres positifs, dette nette non renseignée";
   }
 
   // Comparables valorisation (25 pts)
