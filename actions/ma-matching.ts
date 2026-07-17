@@ -44,12 +44,16 @@ export async function getMaBuyerMatches(
 
   if (dealErr || !dealRow) return { matches: [], error: "Dossier M&A Sell introuvable" };
 
-  // Charger données financières de la cible
+  // Charger données financières de la cible — exercices RÉELS uniquement :
+  // les projections (is_forecast=true, v60) ont toujours un fiscal_year
+  // supérieur au dernier réel et contamineraient le breaker taille et le
+  // scoring avec un CA prévisionnel.
   const { data: finData } = await supabase
     .from("financial_data")
     .select("revenue, revenue_growth, ebitda, ebitda_margin, net_debt, equity, ev_estimate, arr, nrr")
     .eq("deal_id", dealId)
     .eq("user_id", user.id)
+    .eq("is_forecast", false)
     .order("fiscal_year", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -213,6 +217,7 @@ export async function getMaTargetMatches(
       .select("organization_id, revenue, revenue_growth, ebitda, ebitda_margin, net_debt, equity, ev_estimate, arr, nrr, fiscal_year")
       .in("organization_id", targetIds)
       .eq("user_id", user.id)
+      .eq("is_forecast", false)
       .order("fiscal_year", { ascending: false });
 
     // Garder seulement la dernière année par organisation
