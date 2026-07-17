@@ -419,8 +419,8 @@ export const DEAL_STAGES_MAIN_BY_TYPE: Record<DealTypeKey, readonly string[]> = 
 } as const;
 
 export function stagesForDealType(type: string | null | undefined): readonly string[] {
-  if (!type) return DEAL_STAGES_BY_TYPE.fundraising;
-  return DEAL_STAGES_BY_TYPE[type as DealTypeKey] ?? DEAL_STAGES_BY_TYPE.fundraising;
+  if (!type) return DEAL_STAGES_BY_TYPE.ma_sell;
+  return DEAL_STAGES_BY_TYPE[type as DealTypeKey] ?? DEAL_STAGES_BY_TYPE.ma_sell;
 }
 
 export function stageLabel(stageKey: string | null | undefined): string {

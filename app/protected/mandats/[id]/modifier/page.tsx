@@ -45,7 +45,7 @@ export default function ModifierMandatPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    name: "", type: "fundraising", client_organization_id: "",
+    name: "", type: "ma_sell", client_organization_id: "",
     status: "active", priority: "medium", currency: "EUR",
     description: "", start_date: "", target_close_date: "",
     success_fee_percent: "", success_fee_base: "ev",
@@ -61,7 +61,7 @@ export default function ModifierMandatPage() {
       if (mandate) {
         setForm({
           name:                    mandate.name ?? "",
-          type:                    mandate.type ?? "fundraising",
+          type:                    mandate.type ?? "ma_sell",
           client_organization_id:  mandate.client_organization_id ?? "",
           status:                  mandate.status ?? "active",
           priority:                mandate.priority ?? "medium",

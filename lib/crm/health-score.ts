@@ -91,7 +91,7 @@ export function computeDealHealth(
   }
 
   // ── Avancement (20 pts) ────────────────────────────────────────────────
-  const typeKey = (deal.deal_type in DEAL_STAGES_BY_TYPE ? deal.deal_type : "fundraising") as DealTypeKey;
+  const typeKey = (deal.deal_type in DEAL_STAGES_BY_TYPE ? deal.deal_type : "ma_sell") as DealTypeKey;
   const stages = DEAL_STAGES_BY_TYPE[typeKey];
   const idx = stages.indexOf(deal.deal_stage);
   if (idx >= 0 && stages.length > 1) {

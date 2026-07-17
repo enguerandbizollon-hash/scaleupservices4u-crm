@@ -38,7 +38,7 @@ export default function NouveauMandatPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    name: "", type: "fundraising", client_organization_id: "",
+    name: "", type: "ma_sell", client_organization_id: "",
     status: "active", priority: "medium", currency: "EUR",
     description: "", start_date: "", target_close_date: "",
     success_fee_percent: "", success_fee_base: "ev",

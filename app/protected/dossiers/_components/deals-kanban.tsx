@@ -90,8 +90,8 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
   // présent dans les dossiers ouverts pour éviter un écran vide.
   const firstType = useMemo<DealTypeKey>(() => {
     const open = initialDeals.find(d => d.deal_status === "open");
-    const t = (open?.deal_type ?? initialDeals[0]?.deal_type ?? "fundraising") as DealTypeKey;
-    return (t in DEAL_STAGES_BY_TYPE ? t : "fundraising") as DealTypeKey;
+    const t = (open?.deal_type ?? initialDeals[0]?.deal_type ?? "ma_sell") as DealTypeKey;
+    return (t in DEAL_STAGES_BY_TYPE ? t : "ma_sell") as DealTypeKey;
   }, [initialDeals]);
   const [typeFilter, setTypeFilter] = useState<DealTypeKey>(firstType);
   const [showClosed, setShowClosed] = useState(false);
@@ -157,7 +157,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
     if (!current) return;
     if (current.deal_stage === newStage) return;
     // V55 : valider que le nouveau stage est dans la séquence du type du dossier.
-    const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "fundraising") as DealTypeKey;
+    const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "ma_sell") as DealTypeKey;
     if (!DEAL_STAGES_BY_TYPE[typeKey].includes(newStage)) return;
 
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, deal_stage: newStage } : d));
@@ -175,7 +175,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
   function moveDeal(dealId: string, dir: "prev" | "next") {
     const current = deals.find(d => d.id === dealId);
     if (!current) return;
-    const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "fundraising") as DealTypeKey;
+    const typeKey = (current.deal_type in DEAL_STAGES_BY_TYPE ? current.deal_type : "ma_sell") as DealTypeKey;
     const stages = [...DEAL_STAGES_BY_TYPE[typeKey]];
     const idx = stages.indexOf(current.deal_stage);
     if (idx === -1) return;
@@ -388,7 +388,7 @@ function KanbanCard({ deal, lastActivityDate, onMove, onDragStart }: {
   const prioColor = PRIO_COLOR[deal.priority_level] ?? PRIO_COLOR.low;
   const amount = fmtAmount(deal.target_amount, deal.currency);
   // V55 : navigation prev/next utilise la séquence du type du dossier
-  const typeKey = (deal.deal_type in DEAL_STAGES_BY_TYPE ? deal.deal_type : "fundraising") as DealTypeKey;
+  const typeKey = (deal.deal_type in DEAL_STAGES_BY_TYPE ? deal.deal_type : "ma_sell") as DealTypeKey;
   const stages = DEAL_STAGES_BY_TYPE[typeKey];
   const idx = stages.indexOf(deal.deal_stage);
   const hasPrev = idx > 0;

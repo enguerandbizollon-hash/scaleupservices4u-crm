@@ -447,7 +447,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [matchingGeo, setMatchingGeo] = useState<string>(deal.company_geography ?? "");
   const [matchingSaving, setMatchingSaving] = useState(false);
 
-  const dt = DT[deal.deal_type] ?? DT.fundraising;
+  const dt = DT[deal.deal_type] ?? DT.ma_sell;
   const isFundraising  = deal.deal_type === "fundraising";
   const isRecruitment  = deal.deal_type === "recruitment";
   const isMa           = deal.deal_type === "ma_sell" || deal.deal_type === "ma_buy";

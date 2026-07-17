@@ -175,7 +175,7 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
   const { data: deal, error } = await supabase.from("deals").insert({
     user_id:        user.id,
     name,
-    deal_type:      data.deal_type    ?? "fundraising",
+    deal_type:      data.deal_type    ?? "ma_sell",
     deal_status:    data.deal_status  ?? "open",
     deal_stage:     data.deal_stage   ?? "kickoff",
     priority_level: data.priority_level ?? "medium",

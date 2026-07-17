@@ -209,7 +209,7 @@ async function Content() {
     label: stageLabel(stage),
     count: v.count,
     amount_total: v.amount_total,
-    dominant_type: Object.entries(v.types).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "fundraising",
+    dominant_type: Object.entries(v.types).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "ma_sell",
   })).sort((a, b) => b.count - a.count);
 
   // 2. Conversion par métier (won / (won+lost) sur 12 mois glissants).
@@ -294,7 +294,7 @@ async function Content() {
         { label:"Tâches ouvertes",  val:cTasks.count??0,    href:"/protected/dossiers",      color:(cTasks.count??0)>0?"#DC2626":"#15A348" },
       ]}
       feesKpis={feesKpis}
-      deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.fundraising, stageLabel:stageLabel(d.deal_stage), prioColor:PRIO[d.priority_level]??PRIO.medium }))}
+      deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.ma_sell, stageLabel:stageLabel(d.deal_stage), prioColor:PRIO[d.priority_level]??PRIO.medium }))}
       relances={relances.map(c => { const org=(c.organization_contacts as any[])?.[0]?.organizations; return { id:c.id, firstName:c.first_name, lastName:c.last_name, days:daysSince(c.last_contact_date!), orgName:Array.isArray(org)?org[0]?.name:org?.name }; })}
       tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority ?? "medium", dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority ?? "medium"]??PRIO.medium }; })}
       activities={activities.map(a => { const deal=Array.isArray(a.deals)?a.deals[0]:a.deals as any; return { id:a.id, title:a.title, type:toLegacyType(a.type, a.email_direction), date:(a.start_datetime ?? a.due_date) as string, dealId:a.deal_id, dealName:deal?.name }; })}
