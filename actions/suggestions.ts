@@ -206,7 +206,6 @@ export async function previewSuggestionCriteria(
     ma_sell: `Rechercher des acquéreurs pour ${deal.name}`,
     ma_buy: `Rechercher des cibles pour ${deal.name}`,
     fundraising: `Rechercher des investisseurs pour ${deal.name}`,
-    recruitment: `Rechercher des candidats pour ${deal.name}`,
     cfo_advisor: `Rechercher des partenaires pour ${deal.name}`,
   };
 

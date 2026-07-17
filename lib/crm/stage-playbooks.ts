@@ -9,7 +9,7 @@
 
 export interface PlaybookAction {
   title: string;
-  type: "task" | "email" | "call" | "meeting" | "deadline" | "document_request" | "interview" | "technical_test";
+  type: "task" | "email" | "call" | "meeting" | "deadline" | "document_request";
   description?: string;
   hard_deadline?: boolean;
   // Jours à ajouter à la date courante pour suggérer une due_date par défaut
@@ -264,54 +264,6 @@ const PLAYBOOKS: Record<PlaybookKey, Playbook> = {
       { title: "Comité de direction mensuel", type: "meeting", due_in_days: 30 },
       { title: "Suivi cash et runway", type: "task", due_in_days: 14 },
       { title: "Prévisionnel rolling 12 mois", type: "task", due_in_days: 30 },
-    ],
-  },
-
-  // ── Recrutement ──────────────────────────────────────────────────────────
-  [key("recruitment", "kickoff")]: {
-    title: "Kickoff recrutement",
-    intent: "Cadrer le brief client et lancer le sourcing.",
-    actions: [
-      { title: "Brief client : fiche de poste, salaire, profil idéal", type: "meeting", due_in_days: 3 },
-      { title: "Valider critères deal breakers (séniorité, géo)", type: "task", due_in_days: 5 },
-      { title: "Préparer le pitch employeur", type: "task", due_in_days: 7 },
-    ],
-  },
-  [key("recruitment", "search")]: {
-    title: "Sourcing candidats",
-    intent: "Constituer le vivier et qualifier les premiers profils.",
-    actions: [
-      { title: "Sourcing LinkedIn et réseau (objectif 50 contacts)", type: "task", due_in_days: 14 },
-      { title: "Premier appel qualification (10 candidats)", type: "call", due_in_days: 14 },
-      { title: "Mettre à jour le pipeline candidats hebdo", type: "task", due_in_days: 7 },
-    ],
-  },
-  [key("recruitment", "outreach")]: {
-    title: "Engagement candidats",
-    intent: "Convaincre les profils qualifiés de s'engager dans le process.",
-    actions: [
-      { title: "Présenter le poste aux candidats qualifiés", type: "call", due_in_days: 7 },
-      { title: "Coordonner les entretiens client", type: "interview", due_in_days: 14 },
-      { title: "Tests techniques si applicable", type: "technical_test", due_in_days: 14 },
-    ],
-  },
-  [key("recruitment", "negotiation")]: {
-    title: "Négociation offre",
-    intent: "Aider à la décision finale et négocier l'offre.",
-    actions: [
-      { title: "Synthèse 3 candidats finalistes pour client", type: "task", due_in_days: 7 },
-      { title: "Coaching candidat sur la négociation", type: "call", due_in_days: 7 },
-      { title: "Coordonner l'offre finale (salaire, package)", type: "task", due_in_days: 7 },
-    ],
-  },
-  [key("recruitment", "closing")]: {
-    title: "Closing placement",
-    intent: "Sécuriser l'acceptation et le démarrage.",
-    actions: [
-      { title: "Suivi acceptation offre signée", type: "task", due_in_days: 7, hard_deadline: true },
-      { title: "Coordination de la prise de poste", type: "task", due_in_days: 30 },
-      { title: "Check-in 1er mois post-placement", type: "call", due_in_days: 45 },
-      { title: "Facturer le success fee placement", type: "task", due_in_days: 7 },
     ],
   },
 };

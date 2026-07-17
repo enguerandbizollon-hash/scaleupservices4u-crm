@@ -11,14 +11,13 @@ import { useRouter } from "next/navigation";
 
 const TYPE_LABELS: Record<string, string> = {
   fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisory", recruitment: "Recrutement",
+  cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string; border: string }> = {
   fundraising: { bg: "var(--fund-bg)", tx: "var(--fund-tx)", border: "var(--fund-mid)" },
   ma_sell:     { bg: "var(--sell-bg)", tx: "var(--sell-tx)", border: "var(--sell-mid)" },
   ma_buy:      { bg: "var(--buy-bg)",  tx: "var(--buy-tx)",  border: "var(--buy-mid)"  },
   cfo_advisor: { bg: "var(--cfo-bg)",  tx: "var(--cfo-tx)",  border: "var(--cfo-mid)"  },
-  recruitment: { bg: "var(--rec-bg)",  tx: "var(--rec-tx)",  border: "var(--rec-mid)"  },
 };
 const STATUS_LABELS: Record<string, string> = {
   draft: "Brouillon", active: "Actif", on_hold: "En pause",
@@ -246,7 +245,6 @@ export function MandateDetail({ mandate, initialFees, deals }: {
               fundraising: "Montant à lever",
               ma_sell:     "Valorisation cible (EV)",
               ma_buy:      "Budget d'acquisition",
-              recruitment: "Salaire annuel (base)",
               cfo_advisor: "Budget mission",
             };
             const feeBaseLabel: Record<string, string> = {

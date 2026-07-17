@@ -21,7 +21,6 @@ const MANDATE_TYPES = [
   { value: "ma_sell",     label: "M&A Sell-side" },
   { value: "ma_buy",      label: "M&A Buy-side" },
   { value: "cfo_advisor", label: "CFO Advisor" },
-  { value: "recruitment", label: "Recrutement" },
 ];
 
 const STATUSES = [

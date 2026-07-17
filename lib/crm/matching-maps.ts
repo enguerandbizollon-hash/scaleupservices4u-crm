@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Source de vérité unique — matching investisseurs, RH, M&A, référentiels orgs
+// Source de vérité unique — matching investisseurs, M&A, référentiels orgs
 // Utilisé dans : formulaires deals, formulaires organisations, algorithme scoring
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -252,60 +252,6 @@ export function scoreGeography(
   return 0;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RÉFÉRENTIELS RH — Module candidats (M1+)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Statuts candidat ─────────────────────────────────────────────────────────
-
-export const CANDIDATE_STATUSES = [
-  { value: "searching",   label: "En recherche active", bg: "#D1FAE5", tx: "#065F46" },
-  { value: "in_process",  label: "En process",          bg: "#DBEAFE", tx: "#1D4ED8" },
-  { value: "placed",      label: "Placé",               bg: "#EDE9FE", tx: "#5B21B6" },
-  { value: "employed",    label: "En poste",            bg: "#FEF3C7", tx: "#92400E" },
-  { value: "inactive",    label: "Inactif",             bg: "#F3F4F6", tx: "#6B7280" },
-  { value: "blacklisted", label: "Blacklisté",          bg: "#FEE2E2", tx: "#991B1B" },
-] as const;
-
-export type CandidateStatus = (typeof CANDIDATE_STATUSES)[number]["value"];
-
-// ── Séniorité ────────────────────────────────────────────────────────────────
-
-export const SENIORITY_OPTIONS = [
-  { value: "junior",    label: "Junior (0–2 ans)" },
-  { value: "mid",       label: "Confirmé (2–5 ans)" },
-  { value: "senior",    label: "Senior (5–10 ans)" },
-  { value: "lead",      label: "Lead / Expert" },
-  { value: "director",  label: "Directeur" },
-  { value: "c-level",   label: "C-Level" },
-] as const;
-
-export type Seniority = (typeof SENIORITY_OPTIONS)[number]["value"];
-
-/**
- * Compatibilité séniorité pour le scoring M4
- * Clé = séniorité du poste, valeurs = séniorités compatibles (exact + adjacent)
- */
-export const SENIORITY_MAP: Record<string, string[]> = {
-  "junior":   ["junior", "mid"],
-  "mid":      ["mid", "junior", "senior"],
-  "senior":   ["senior", "mid", "lead"],
-  "lead":     ["lead", "senior", "director"],
-  "director": ["director", "lead", "c-level"],
-  "c-level":  ["c-level", "director"],
-};
-
-// ── Remote ───────────────────────────────────────────────────────────────────
-
-export const REMOTE_OPTIONS = [
-  { value: "onsite",   label: "Présentiel" },
-  { value: "hybrid",   label: "Hybride" },
-  { value: "remote",   label: "Full remote" },
-  { value: "flexible", label: "Flexible" },
-] as const;
-
-export type RemoteOption = (typeof REMOTE_OPTIONS)[number]["value"];
-
 // ── Round types (Fundraising) ────────────────────────────────────────────────
 
 export const ROUND_TYPES = [
@@ -398,13 +344,12 @@ export const STAGE_LABELS_BY_KEY: Record<string, string> = {
   post_closing:      "Post-closing",
 };
 
-export type DealTypeKey = "fundraising" | "ma_sell" | "ma_buy" | "recruitment" | "cfo_advisor";
+export type DealTypeKey = "fundraising" | "ma_sell" | "ma_buy" | "cfo_advisor";
 
 export const DEAL_STAGES_BY_TYPE: Record<DealTypeKey, readonly string[]> = {
   fundraising: ["kickoff", "preparation", "outreach", "meetings", "term_sheets", "closing", "post_closing"],
   ma_sell:     ["kickoff", "preparation", "outreach", "meetings", "loi", "dd", "spa", "closing", "post_closing"],
   ma_buy:      ["kickoff", "criteria", "sourcing", "outreach", "loi", "dd", "spa", "closing"],
-  recruitment: ["kickoff", "sourcing", "pre_qualification", "interviews", "offer", "placement", "probation"],
   cfo_advisor: ["kickoff", "onboarding", "delivery", "support"],
 } as const;
 
@@ -414,7 +359,6 @@ export const DEAL_STAGES_MAIN_BY_TYPE: Record<DealTypeKey, readonly string[]> = 
   fundraising: ["kickoff", "preparation", "outreach", "meetings", "term_sheets", "closing"],
   ma_sell:     ["kickoff", "preparation", "outreach", "meetings", "loi", "dd", "spa", "closing"],
   ma_buy:      ["kickoff", "criteria", "sourcing", "outreach", "loi", "dd", "spa", "closing"],
-  recruitment: ["kickoff", "sourcing", "pre_qualification", "interviews", "offer", "placement"],
   cfo_advisor: ["kickoff", "onboarding", "delivery", "support"],
 } as const;
 
@@ -468,7 +412,6 @@ export const SUGGESTION_ROLES = [
   { value: "target",    label: "Cible",        context: "ma_sell,ma_buy" },
   { value: "acquirer",  label: "Acquéreur",    context: "ma_sell"         },
   { value: "investor",  label: "Investisseur", context: "fundraising"     },
-  { value: "candidate", label: "Candidat",     context: "recruitment"     },
   { value: "partner",   label: "Partenaire",   context: "cfo_advisor"     },
   { value: "other",     label: "Autre",        context: "*"                },
 ] as const;
@@ -510,7 +453,6 @@ export function defaultSuggestionRoleForDealType(dealType: string | null | undef
     case "fundraising": return "investor";
     case "ma_sell":     return "acquirer";
     case "ma_buy":      return "target";
-    case "recruitment": return "candidate";
     case "cfo_advisor": return "partner";
     default:            return "other";
   }
@@ -535,87 +477,3 @@ export function isScreeningReady(status: string | null | undefined): boolean {
   return status === SCREENING_READY;
 }
 
-/**
- * Compatibilité remote poste → préférence candidat (scoring M4)
- */
-export const REMOTE_COMPATIBILITY: Record<string, string[]> = {
-  "onsite":   ["onsite", "flexible"],
-  "hybrid":   ["hybrid", "flexible", "onsite", "remote"],
-  "remote":   ["remote", "flexible"],
-  "flexible": ["onsite", "hybrid", "remote", "flexible"],
-};
-
-// ── Géographies RH ───────────────────────────────────────────────────────────
-
-export const RH_GEOGRAPHIES = [
-  // France
-  { value: "ile_de_france",       label: "Île-de-France",         group: "France" },
-  { value: "auvergne_rhone",      label: "Auvergne-Rhône-Alpes",  group: "France" },
-  { value: "paca",                label: "PACA",                  group: "France" },
-  { value: "occitanie",           label: "Occitanie",             group: "France" },
-  { value: "nouvelle_aquitaine",  label: "Nouvelle-Aquitaine",    group: "France" },
-  { value: "bretagne",            label: "Bretagne",              group: "France" },
-  { value: "grand_est",           label: "Grand Est",             group: "France" },
-  { value: "hauts_de_france",     label: "Hauts-de-France",       group: "France" },
-  { value: "normandie",           label: "Normandie",             group: "France" },
-  { value: "bourgogne",           label: "Bourgogne-Franche-Comté", group: "France" },
-  { value: "pays_de_la_loire",    label: "Pays de la Loire",      group: "France" },
-  { value: "centre_val_loire",    label: "Centre-Val de Loire",   group: "France" },
-  { value: "france_entiere",      label: "France entière",        group: "France" },
-  // Suisse
-  { value: "geneve",              label: "Genève",                group: "Suisse" },
-  { value: "vaud",                label: "Vaud",                  group: "Suisse" },
-  { value: "zurich",              label: "Zürich",                group: "Suisse" },
-  { value: "berne",               label: "Berne",                 group: "Suisse" },
-  { value: "bale",                label: "Bâle",                  group: "Suisse" },
-  { value: "suisse_romande",      label: "Suisse romande",        group: "Suisse" },
-  { value: "suisse_entiere",      label: "Suisse entière",        group: "Suisse" },
-  // Europe
-  { value: "belgique",            label: "Belgique",              group: "Europe" },
-  { value: "luxembourg",          label: "Luxembourg",            group: "Europe" },
-  { value: "allemagne",           label: "Allemagne",             group: "Europe" },
-  { value: "royaume_uni",         label: "Royaume-Uni",           group: "Europe" },
-  { value: "espagne",             label: "Espagne",               group: "Europe" },
-  { value: "italie",              label: "Italie",                group: "Europe" },
-  { value: "pays_bas",            label: "Pays-Bas",              group: "Europe" },
-  { value: "europe_entiere",      label: "Europe entière",        group: "Europe" },
-  // Global
-  { value: "international",       label: "International",         group: "Global" },
-] as const;
-
-export type RhGeography = (typeof RH_GEOGRAPHIES)[number]["value"];
-
-/**
- * Compatibilité géo RH — clé = géo du poste, valeurs = géos candidat compatibles (scoring M4)
- */
-export const RH_GEO_COMPATIBILITY: Record<string, string[]> = {
-  "ile_de_france":      ["ile_de_france", "france_entiere", "international"],
-  "auvergne_rhone":     ["auvergne_rhone", "france_entiere", "international"],
-  "paca":               ["paca", "france_entiere", "international"],
-  "occitanie":          ["occitanie", "france_entiere", "international"],
-  "nouvelle_aquitaine": ["nouvelle_aquitaine", "france_entiere", "international"],
-  "bretagne":           ["bretagne", "france_entiere", "international"],
-  "grand_est":          ["grand_est", "france_entiere", "international"],
-  "hauts_de_france":    ["hauts_de_france", "france_entiere", "international"],
-  "normandie":          ["normandie", "france_entiere", "international"],
-  "bourgogne":          ["bourgogne", "france_entiere", "international"],
-  "pays_de_la_loire":   ["pays_de_la_loire", "france_entiere", "international"],
-  "centre_val_loire":   ["centre_val_loire", "france_entiere", "international"],
-  "france_entiere":     ["ile_de_france","auvergne_rhone","paca","occitanie","nouvelle_aquitaine","bretagne","grand_est","hauts_de_france","normandie","bourgogne","pays_de_la_loire","centre_val_loire","france_entiere","international"],
-  "geneve":             ["geneve", "suisse_romande", "suisse_entiere", "international"],
-  "vaud":               ["vaud", "suisse_romande", "suisse_entiere", "international"],
-  "zurich":             ["zurich", "suisse_entiere", "international"],
-  "berne":              ["berne", "suisse_entiere", "international"],
-  "bale":               ["bale", "suisse_entiere", "international"],
-  "suisse_romande":     ["geneve", "vaud", "suisse_romande", "suisse_entiere", "international"],
-  "suisse_entiere":     ["geneve","vaud","zurich","berne","bale","suisse_romande","suisse_entiere","international"],
-  "belgique":           ["belgique", "europe_entiere", "international"],
-  "luxembourg":         ["luxembourg", "europe_entiere", "international"],
-  "allemagne":          ["allemagne", "europe_entiere", "international"],
-  "royaume_uni":        ["royaume_uni", "europe_entiere", "international"],
-  "espagne":            ["espagne", "europe_entiere", "international"],
-  "italie":             ["italie", "europe_entiere", "international"],
-  "pays_bas":           ["pays_bas", "europe_entiere", "international"],
-  "europe_entiere":     ["belgique","luxembourg","allemagne","royaume_uni","espagne","italie","pays_bas","europe_entiere","international"],
-  "international":      ["international","france_entiere","suisse_entiere","europe_entiere"],
-};

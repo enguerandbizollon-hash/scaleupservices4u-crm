@@ -8,8 +8,6 @@ import { MandateInlineForm } from "@/components/mandates/MandateInlineForm";
 import { getAllMandates, linkMandateToDeal, unlinkMandateFromDeal, getMandateByDealId } from "@/actions/mandates";
 // MatchingTab et MaMatchingTab : supprimés, leur logique est désormais
 // intégrée comme sources internes dans le SourcingWizard (S4).
-import { RecruitmentKanban } from "./recruitment-kanban";
-import { RecruitmentMatching } from "./recruitment-matching";
 import { FinancialTab, type FinancialRow } from "./financial-tab";
 import { updateDealMatchingProfile } from "@/actions/matching";
 import {
@@ -33,7 +31,7 @@ import { isScreeningReady } from "@/lib/crm/matching-maps";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
-import { COMPANY_STAGES, ORG_COMPANY_STAGES, GEOGRAPHIES, ROUND_TYPES, DEAL_TIMING_OPTIONS, SENIORITY_OPTIONS, REMOTE_OPTIONS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
+import { COMPANY_STAGES, ORG_COMPANY_STAGES, GEOGRAPHIES, ROUND_TYPES, DEAL_TIMING_OPTIONS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
@@ -58,9 +56,8 @@ const DT: Record<string,{bg:string;tx:string;border:string}> = {
   ma_sell:{bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
   ma_buy:{bg:"var(--buy-bg)",tx:"var(--buy-tx)",border:"var(--buy-mid)"},
   cfo_advisor:{bg:"var(--cfo-bg)",tx:"var(--cfo-tx)",border:"var(--cfo-mid)"},
-  recruitment:{bg:"var(--rec-bg)",tx:"var(--rec-tx)",border:"var(--rec-mid)"},
 };
-const TYPE_LABELS: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor", recruitment:"Recrutement" };
+const TYPE_LABELS: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor" };
 // V55 : libellés unifiés via stageLabel() depuis matching-maps. Map gardée
 // vide pour éviter toute référence oubliée (remplacée une à une).
 const STAGE_LABELS: Record<string,string> = {};
@@ -180,7 +177,7 @@ function MandateTabContent({
 }) {
   const MANDATE_TYPE_LABELS: Record<string, string> = {
     fundraising: "Fundraising", ma_sell: "M&A Sell-side", ma_buy: "M&A Buy-side",
-    cfo_advisor: "CFO Advisor", recruitment: "Recrutement",
+    cfo_advisor: "CFO Advisor",
   };
   const STATUS_COLORS: Record<string, { bg: string; tx: string; label: string }> = {
     draft:   { bg: "var(--surface-3)", tx: "var(--text-4)",  label: "Brouillon" },
@@ -354,7 +351,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "sourcing" | "mandat" | "pipeline" | "matching_rh" | "financier" | "documents">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "sourcing" | "mandat" | "financier" | "documents">("dossier");
   const [matchingRefreshKey, setMatchingRefreshKey] = useState(0);
 
   // Drawer latéral pour entités liées (contacts, organisations)
@@ -449,7 +446,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
   const dt = DT[deal.deal_type] ?? DT.ma_sell;
   const isFundraising  = deal.deal_type === "fundraising";
-  const isRecruitment  = deal.deal_type === "recruitment";
   const isMa           = deal.deal_type === "ma_sell" || deal.deal_type === "ma_buy";
   const target = deal.target_amount ?? 0;
   const hard = commitments.filter(c=>["hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
@@ -592,18 +588,16 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
           {(isFundraising
             ? (["dossier","screening","sourcing","mandat","financier","documents"] as const)
-            : isRecruitment
-            ? (["dossier","screening","mandat","pipeline","matching_rh","documents"] as const)
             : isMa
             ? (["dossier","screening","sourcing","mandat","financier","documents"] as const)
             : (["dossier","screening","mandat","financier","documents"] as const)
           ).map(tab => {
             const labels: Record<string, string> = {
               dossier:"Dossier", screening:"Screening", sourcing:"Sourcing", mandat:"Mandat",
-              pipeline:"Pipeline", matching_rh:"Matching vivier", financier:"Financier",
+              financier:"Financier",
               documents:"Documents",
             };
-            const accentColor = isFundraising ? "var(--fund-tx)" : isRecruitment ? "var(--rec-tx)" : isMa ? "var(--sell-tx)" : "var(--sell-tx)";
+            const accentColor = isFundraising ? "var(--fund-tx)" : isMa ? "var(--sell-tx)" : "var(--sell-tx)";
             const isActive = activeTab === tab;
             return (
               <button key={tab} onClick={()=>{
@@ -651,16 +645,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
         {/* Onglets Matching et Matching M&A : supprimés (V56 Sourcing unifié).
             La logique scoring réseau interne (ma-scoring, matching algo) est
             intégrée comme source dans executeSourcingPlanAction. */}
-
-        {/* Onglet Pipeline (recruitment) */}
-        {isRecruitment && activeTab === "pipeline" && (
-          <RecruitmentKanban dealId={deal.id} />
-        )}
-
-        {/* Onglet Matching vivier (recruitment) */}
-        {isRecruitment && activeTab === "matching_rh" && (
-          <RecruitmentMatching dealId={deal.id} />
-        )}
 
         {/* Onglet Screening — qualification dossier avant ouverture vers l'extérieur (V53) */}
         {activeTab === "screening" && (
@@ -1315,13 +1299,6 @@ type SpecDeal = {
   acquisition_budget_max: number | null;
   full_acquisition_required: boolean | null;
   strategic_rationale: string | null;
-  // Recruitment
-  job_title: string | null;
-  required_seniority: string | null;
-  required_location: string | null;
-  required_remote: string | null;
-  salary_min: number | null;
-  salary_max: number | null;
 };
 
 function hasAnySpec(deal: SpecDeal): boolean {
@@ -1343,9 +1320,6 @@ function hasAnySpec(deal: SpecDeal): boolean {
         || deal.target_ev_min || deal.target_ev_max || deal.target_stage
         || deal.acquisition_budget_min || deal.acquisition_budget_max
         || deal.full_acquisition_required || deal.strategic_rationale || deal.deal_timing);
-    case "recruitment":
-      return !!(deal.job_title || deal.required_seniority || deal.required_location
-        || deal.required_remote || deal.salary_min || deal.salary_max);
     default:
       return false;
   }
@@ -1358,7 +1332,6 @@ function SpecificsCard({ deal, dealId, expanded, onToggle }: {
     deal.deal_type === "fundraising" ? "Spécificités levée" :
     deal.deal_type === "ma_sell" ? "Spécificités cession" :
     deal.deal_type === "ma_buy" ? "Critères acquisition" :
-    deal.deal_type === "recruitment" ? "Fiche de poste" :
     "Spécificités";
 
   const cardStyle: React.CSSProperties = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", marginBottom:10 };
@@ -1371,7 +1344,6 @@ function SpecificsCard({ deal, dealId, expanded, onToggle }: {
           {deal.deal_type === "fundraising" && <FundraisingSpecs deal={deal} dealId={dealId} />}
           {deal.deal_type === "ma_sell" && <MaSellSpecs deal={deal} dealId={dealId} />}
           {deal.deal_type === "ma_buy" && <MaBuySpecs deal={deal} dealId={dealId} />}
-          {deal.deal_type === "recruitment" && <RecruitmentSpecs deal={deal} dealId={dealId} />}
         </div>
       )}
     </div>
@@ -1613,45 +1585,4 @@ function MaBuySpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
   );
 }
 
-function RecruitmentSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
-  const c = deal.currency ?? "EUR";
-  const fmSalary = (n: string | number | null) => {
-    if (n == null || n === "") return "";
-    const num = typeof n === "number" ? n : Number(n);
-    if (!Number.isFinite(num)) return "";
-    return `${num.toLocaleString("fr-FR")} ${c}`;
-  };
-  return (
-    <>
-      <SpecRow label="Poste">
-        <EditableSpec dealId={dealId} field="job_title" initialValue={deal.job_title ?? null} placeholder="Intitulé du poste" />
-      </SpecRow>
-      <SpecRow label="Séniorité">
-        <EditableSpec
-          dealId={dealId} field="required_seniority" initialValue={deal.required_seniority ?? null}
-          selectOptions={SENIORITY_OPTIONS.map(s => ({ value: s.value, label: s.label }))}
-          formatter={(v) => v ? (SENIORITY_OPTIONS.find(s => s.value === v)?.label ?? String(v)) : ""}
-          placeholder="Choisir une séniorité"
-        />
-      </SpecRow>
-      <SpecRow label="Remote">
-        <EditableSpec
-          dealId={dealId} field="required_remote" initialValue={deal.required_remote ?? null}
-          selectOptions={REMOTE_OPTIONS.map(r => ({ value: r.value, label: r.label }))}
-          formatter={(v) => v ? (REMOTE_OPTIONS.find(r => r.value === v)?.label ?? String(v)) : ""}
-          placeholder="Choisir mode remote"
-        />
-      </SpecRow>
-      {deal.required_location && (
-        <SpecRow label="Localisation">{GEO_LABELS[deal.required_location] ?? deal.required_location}</SpecRow>
-      )}
-      <SpecRow label="Salaire min">
-        <EditableSpec dealId={dealId} field="salary_min" initialValue={deal.salary_min} type="number" formatter={fmSalary} placeholder="Min annuel brut" />
-      </SpecRow>
-      <SpecRow label="Salaire max">
-        <EditableSpec dealId={dealId} field="salary_max" initialValue={deal.salary_max} type="number" formatter={fmSalary} placeholder="Max annuel brut" />
-      </SpecRow>
-    </>
-  );
-}
 

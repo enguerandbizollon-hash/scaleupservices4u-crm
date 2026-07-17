@@ -1,7 +1,7 @@
 "use client";
 
-import { TrendingUp, Banknote, Target, Building2, Activity, Briefcase, Calendar, Sparkles } from "lucide-react";
-import { stageLabel, ROUND_TYPES, SENIORITY_OPTIONS } from "@/lib/crm/matching-maps";
+import { TrendingUp, Banknote, Target, Building2, Activity, Calendar, Sparkles } from "lucide-react";
+import { stageLabel, ROUND_TYPES } from "@/lib/crm/matching-maps";
 import { computeSuccessFee, type MandateForFee, type DealForFee } from "@/lib/crm/fee-calculator";
 
 type Deal = {
@@ -31,11 +31,6 @@ type Deal = {
   target_revenue_max?: number | null;
   target_ev_min?: number | null;
   target_ev_max?: number | null;
-  // RH
-  job_title?: string | null;
-  required_seniority?: string | null;
-  salary_min?: number | null;
-  salary_max?: number | null;
 };
 
 type FinancialRow = {
@@ -239,32 +234,10 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
       }
       break;
     }
-    case "recruitment": {
-      if (deal.job_title) {
-        out.push({ label: "Poste", value: deal.job_title, icon: Briefcase });
-      }
-      if (deal.required_seniority) {
-        const sen = SENIORITY_OPTIONS.find(s => s.value === deal.required_seniority);
-        out.push({
-          label: "Séniorité",
-          value: sen?.label ?? deal.required_seniority,
-          icon: Activity,
-        });
-      }
-      if (deal.salary_min != null || deal.salary_max != null) {
-        out.push({
-          label: "Fourchette salaire",
-          value: fmtRange(deal.salary_min, deal.salary_max, currency),
-          icon: Banknote,
-          tone: "positive",
-        });
-      }
-      break;
-    }
   }
 
   // KPIs financiers (si données disponibles) — pour fundraising, ma_sell, ma_buy
-  if (deal.deal_type !== "recruitment" && deal.deal_type !== "cfo_advisor" && financialData.length > 0) {
+  if (deal.deal_type !== "cfo_advisor" && financialData.length > 0) {
     const sorted = [...financialData].sort((a, b) => b.fiscal_year - a.fiscal_year);
     const latest = sorted[0]!;
     if (latest.revenue != null) {
@@ -309,7 +282,7 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
   } else if (mandate) {
     // Calcul live du success fee si pas d'estimé stocké, à partir des
     // paramètres du mandat (% success fee) et des chiffres du dossier
-    // (asking_price / target_raise / salary). Affiché avec une étoile
+    // (asking_price / target_raise). Affiché avec une étoile
     // pour signaler que c'est un calcul automatique.
     const mandateForFee: MandateForFee = {
       type: mandate.type ?? deal.deal_type,
@@ -330,8 +303,6 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
       target_ev_max: deal.target_ev_max,
       acquisition_budget_min: deal.acquisition_budget_min,
       acquisition_budget_max: deal.acquisition_budget_max,
-      salary_min: deal.salary_min,
-      salary_max: deal.salary_max,
       target_amount: deal.target_amount,
     };
     const fee = computeSuccessFee(mandateForFee, dealForFee);

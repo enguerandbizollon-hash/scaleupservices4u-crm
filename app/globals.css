@@ -109,7 +109,6 @@ select.inp { cursor:pointer; }
 .dt-ma_sell     { background:var(--sell-bg); color:var(--sell-tx); }
 .dt-ma_buy      { background:var(--buy-bg);  color:var(--buy-tx); }
 .dt-cfo_advisor { background:var(--cfo-bg);  color:var(--cfo-tx); }
-.dt-recruitment { background:var(--rec-bg);  color:var(--rec-tx); }
 
 /* Contact status badges */
 .cs-active     { background:var(--cs-active-bg);    color:var(--cs-active-tx); }

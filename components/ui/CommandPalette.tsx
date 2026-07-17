@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, FolderOpen, Building2, User, Briefcase, Activity, ArrowRight, Plus, UserSearch, Inbox, BarChart2, CheckSquare } from "lucide-react";
+import { Search, FolderOpen, Building2, User, Briefcase, Activity, ArrowRight, Plus, Inbox, BarChart2, CheckSquare } from "lucide-react";
 import { searchGlobal, type SearchHit } from "@/actions/search";
 
 const KIND_META: Record<SearchHit["kind"], { label: string; icon: typeof FolderOpen; color: string }> = {
@@ -30,7 +30,6 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "create-contact",  kind: "create",   label: "Nouveau contact",        href: "/protected/contacts/nouveau",      icon: User,        color: "var(--buy-tx)",  keywords: "contact personne" },
   { id: "create-org",      kind: "create",   label: "Nouvelle organisation",  href: "/protected/organisations/nouveau", icon: Building2,   color: "var(--sell-tx)", keywords: "organisation entreprise fonds investisseur" },
   { id: "create-mandate",  kind: "create",   label: "Nouveau mandat",         href: "/protected/mandats/nouveau",       icon: Briefcase,   color: "var(--cfo-tx)",  keywords: "mandat client" },
-  { id: "create-candidate",kind: "create",   label: "Nouveau candidat",       href: "/protected/candidats/nouveau",     icon: UserSearch,  color: "#0891B2",        keywords: "candidat rh recrutement" },
   { id: "go-inbox",        kind: "navigate", label: "Boîte de tri (emails)",  href: "/protected/inbox",                 icon: Inbox,       color: "#E11D48",        keywords: "inbox emails tri" },
   { id: "go-tasks",        kind: "navigate", label: "Tâches à faire",         href: "/protected/taches",                icon: CheckSquare, color: "#7E57C2",        keywords: "taches todo a faire" },
   { id: "go-stats",        kind: "navigate", label: "Statistiques",           href: "/protected/statistiques",          icon: BarChart2,   color: "#0F766E",        keywords: "stats fees performance" },

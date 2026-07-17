@@ -89,7 +89,7 @@ function stripCodeFences(raw: string): string {
 
 // ── Scoring IA ───────────────────────────────────────────────────────────────
 
-const SCORING_SYSTEM_PROMPT = `Tu es analyste senior en M&A, fundraising et recrutement. Tu évalues le fit stratégique entre un dossier et une organisation suggérée comme cible, acquéreur, investisseur, candidat ou partenaire.
+const SCORING_SYSTEM_PROMPT = `Tu es analyste senior en M&A et fundraising. Tu évalues le fit stratégique entre un dossier et une organisation suggérée comme cible, acquéreur, investisseur ou partenaire.
 
 Règles impératives :
 - Langue : français professionnel, sobre, factuel.
@@ -240,7 +240,7 @@ export interface OutreachDraftOutput {
   reasoning: string | null;
 }
 
-const OUTREACH_SYSTEM_PROMPT = `Tu rédiges des accroches de prise de contact sobres et efficaces pour le M&A, le fundraising et le recrutement. Ton style :
+const OUTREACH_SYSTEM_PROMPT = `Tu rédiges des accroches de prise de contact sobres et efficaces pour le M&A et le fundraising. Ton style :
 - Français professionnel, direct, sans fioritures, jamais alarmiste
 - Pas de tiret cadratin (—) : virgule ou point
 - Pas de superlatifs gratuits ni de formules commerciales agressives

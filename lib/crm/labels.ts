@@ -3,7 +3,6 @@ export const dealTypeLabels: Record<string, string> = {
   ma_sell: "M&A Sell-side",
   ma_buy: "M&A Buy-side",
   cfo_advisor: "CFO Advisor",
-  recruitment: "Recrutement",
 };
 
 export const dealStatusLabels: Record<string, string> = {
@@ -122,7 +121,6 @@ export const documentTypeLabels: Record<string, string> = {
   nda: "NDA",
   legal: "Juridique",
   finance: "Finance",
-  hr: "RH",
   deck: "Deck",
   other: "Autre",
 };
@@ -146,7 +144,7 @@ export const agendaTypeLabels: Record<string, string> = {
 };
 
 // ────────────────────────────────────────────────────────────────
-// NOUVEAUX LABELS V14 : UNIFIED ACTIVITIES & RECRUITMENT
+// NOUVEAUX LABELS V14 : UNIFIED ACTIVITIES
 // ────────────────────────────────────────────────────────────────
 
 export const unifiedActivityTypeLabels: Record<string, string> = {
@@ -166,10 +164,6 @@ export const unifiedActivityTypeLabels: Record<string, string> = {
   deadline: "Deadline",
   delivery: "Rendu",
   closing: "Closing",
-  // Nouveaux : recrutement
-  recruitment_interview: "Entretien recrutement",
-  recruitment_feedback: "Feedback recrutement",
-  recruitment_task: "Tâche recrutement",
   // Nouveaux : services
   cfo_advisory: "Advisory CFO",
   investor_meeting: "Réunion investisseur",
@@ -181,45 +175,6 @@ export const activityStatusLabels: Record<string, string> = {
   open: "Ouverte",
   done: "Terminée",
   cancelled: "Annulée",
-};
-
-export const recruitmentStageLabels: Record<string, string> = {
-  job_definition: "Définition du poste",
-  sourcing: "Sourcing",
-  screening: "Screening",
-  phone_interview: "Entretien téléphonique",
-  first_interview: "Premier entretien",
-  second_interview: "Deuxième entretien",
-  final_interview: "Entretien final",
-  offer: "Offre",
-  negotiation: "Négociation",
-  hired: "Embauché",
-  rejected: "Rejeté",
-};
-
-export const candidateStatusLabels: Record<string, string> = {
-  searching:   "En recherche active",
-  in_process:  "En process",
-  placed:      "Placé",
-  employed:    "En poste",
-  inactive:    "Inactif",
-  blacklisted: "Blacklisté",
-};
-
-export const seniorityLabels: Record<string, string> = {
-  junior:   "Junior",
-  mid:      "Confirmé",
-  senior:   "Senior",
-  lead:     "Lead",
-  director: "Directeur",
-  "c-level": "C-Level",
-};
-
-export const remoteLabels: Record<string, string> = {
-  onsite:   "Présentiel",
-  hybrid:   "Hybride",
-  remote:   "Full remote",
-  flexible: "Flexible",
 };
 
 export const cfoAdvisoryTypeLabels: Record<string, string> = {

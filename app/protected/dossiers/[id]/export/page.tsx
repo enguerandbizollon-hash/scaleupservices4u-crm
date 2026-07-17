@@ -28,7 +28,6 @@ const DEAL_TYPE_LABEL: Record<string, string> = {
   ma_sell:     "M&A Sell-side",
   ma_buy:      "M&A Buy-side",
   cfo_advisor: "CFO Advisory",
-  recruitment: "Recrutement",
 };
 
 function fmtMoney(n: number | null | undefined, c: string | null | undefined): string {

@@ -6,7 +6,7 @@ import { syncToGCal } from "@/lib/gcal/sync-helper";
 import { generateMeetLink } from "@/lib/gcal/meet-generator";
 import { generateActionSummary } from "@/lib/ai/action-summary";
 
-const GCAL_SYNC_TYPES = ["meeting", "call", "deadline", "task", "document_request", "interview", "technical_test"];
+const GCAL_SYNC_TYPES = ["meeting", "call", "deadline", "task", "document_request"];
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +40,6 @@ export interface ActionInput {
   deal_id?: string | null;
   organization_id?: string | null;
   mandate_id?: string | null;
-  candidate_id?: string | null;
   contact_ids?: { id: string; role?: string; attended?: boolean }[];
   organization_ids?: { id: string; role?: string }[];
 }
@@ -76,14 +75,12 @@ export interface ActionRow {
   deal_id: string | null;
   organization_id: string | null;
   mandate_id: string | null;
-  candidate_id: string | null;
   gcal_event_id: string | null;
   created_at: string;
   updated_at: string;
   // Joined
   deals?: { id: string; name: string; deal_type: string } | null;
   organizations?: { id: string; name: string } | null;
-  candidates?: { id: string; first_name: string; last_name: string; email: string | null } | null;
   contacts?: { id: string; first_name: string; last_name: string; phone: string | null }[];
   action_contacts?: { contact_id: string; role: string | null; attended: boolean; contacts: { id: string; first_name: string; last_name: string; phone: string | null } }[];
   action_organizations?: { organization_id: string; role: string | null; organizations: { id: string; name: string } }[];
@@ -96,7 +93,6 @@ export async function getActions(filters?: {
   organization_id?: string;
   contact_id?: string;
   mandate_id?: string;
-  candidate_id?: string;
   type?: string[];
   status?: string[];
   from?: string;
@@ -112,7 +108,6 @@ export async function getActions(filters?: {
       *,
       deals:deal_id(id, name, deal_type),
       organizations:organization_id(id, name),
-      candidates:candidate_id(id, first_name, last_name, email),
       action_contacts(contact_id, role, attended, contacts:contact_id(id, first_name, last_name, phone)),
       action_organizations(organization_id, role, organizations:organization_id(id, name))
     `)
@@ -122,7 +117,6 @@ export async function getActions(filters?: {
   if (filters?.deal_id)         query = query.eq("deal_id", filters.deal_id);
   if (filters?.organization_id) query = query.eq("organization_id", filters.organization_id);
   if (filters?.mandate_id)      query = query.eq("mandate_id", filters.mandate_id);
-  if (filters?.candidate_id)    query = query.eq("candidate_id", filters.candidate_id);
   if (filters?.type?.length)    query = query.in("type", filters.type);
   if (filters?.status?.length)  query = query.in("status", filters.status);
   if (filters?.from)            query = query.gte("due_date", filters.from);
@@ -184,7 +178,6 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
     deal_id:          input.deal_id ?? null,
     organization_id:  input.organization_id ?? null,
     mandate_id:       input.mandate_id ?? null,
-    candidate_id:     input.candidate_id ?? null,
   }).select("id").single();
 
   if (error) return { success: false, error: error.message };
@@ -207,7 +200,7 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
     );
   }
 
-  // Sync GCal (meeting, call, deadline, task, interview, technical_test — pas note ni email)
+  // Sync GCal (meeting, call, deadline, task, document_request — pas note ni email)
   if (GCAL_SYNC_TYPES.includes(input.type) && (input.due_date || input.start_datetime)) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     // meet_link n'est plus injecté dans la description (il est attaché en
@@ -231,29 +224,12 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
         }));
     }
 
-    // Ajouter le candidat lié comme attendee (s'il a un email)
-    if (input.candidate_id) {
-      const { data: candidateData } = await supabase
-        .from("candidates")
-        .select("id, email, first_name, last_name")
-        .eq("id", input.candidate_id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (candidateData?.email && !attendees.some(a => a.email === candidateData.email)) {
-        attendees.push({
-          email: candidateData.email,
-          displayName: `${candidateData.first_name ?? ""} ${candidateData.last_name ?? ""}`.trim() || undefined,
-        });
-      }
-    }
-
     // Deadline = toujours événement all-day (sémantique : jalon, pas créneau horaire)
     const isDeadline = input.type === "deadline";
     // sourceUrl : prioriser le contexte le plus spécifique
     const sourceUrl =
-      input.deal_id      ? `${baseUrl}/protected/dossiers/${input.deal_id}` :
-      input.candidate_id ? `${baseUrl}/protected/candidats/${input.candidate_id}` :
-                           `${baseUrl}/protected/agenda`;
+      input.deal_id ? `${baseUrl}/protected/dossiers/${input.deal_id}` :
+                      `${baseUrl}/protected/agenda`;
     syncToGCal({
       action: "create", source_type: "activity", source_id: action.id,
       event: {
@@ -274,11 +250,9 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/candidats");
   revalidatePath("/protected/mandats");
   if (input.deal_id) revalidatePath(`/protected/dossiers/${input.deal_id}`);
   if (input.organization_id) revalidatePath(`/protected/organisations/${input.organization_id}`);
-  if (input.candidate_id) revalidatePath(`/protected/candidats/${input.candidate_id}`);
   return { success: true, id: action.id };
 }
 
@@ -296,7 +270,7 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
     "gmail_thread_id", "gmail_message_id", "email_subject", "email_direction",
     "email_from", "email_to", "email_cc",
     "document_url",
-    "deal_id", "organization_id", "mandate_id", "candidate_id",
+    "deal_id", "organization_id", "mandate_id",
   ];
   for (const f of fields) {
     if ((input as Record<string, unknown>)[f] !== undefined) payload[f] = (input as Record<string, unknown>)[f];
@@ -327,19 +301,17 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
 
   // Sync GCal update
   const effectiveDate = (input.start_datetime ?? input.due_date) as string | undefined;
-  // Type et candidate_id : si absents du payload (Partial), les relire en DB
-  // pour conserver la même logique que createAction (note/email jamais sync GCal).
+  // Type : si absent du payload (Partial), le relire en DB pour conserver la
+  // même logique que createAction (note/email jamais sync GCal).
   let effectiveType = input.type;
-  let candidateIdForSync = input.candidate_id as string | null | undefined;
-  if (effectiveDate && (effectiveType === undefined || candidateIdForSync === undefined)) {
+  if (effectiveDate && effectiveType === undefined) {
     const { data: existingAction } = await supabase
       .from("actions")
-      .select("type, candidate_id")
+      .select("type")
       .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
-    if (effectiveType === undefined) effectiveType = existingAction?.type ?? undefined;
-    if (candidateIdForSync === undefined) candidateIdForSync = existingAction?.candidate_id ?? null;
+    effectiveType = existingAction?.type ?? undefined;
   }
 
   if (effectiveDate && effectiveType && GCAL_SYNC_TYPES.includes(effectiveType)) {
@@ -357,21 +329,6 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
         email: c.email as string,
         displayName: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || undefined,
       }));
-
-    if (candidateIdForSync) {
-      const { data: candidateData } = await supabase
-        .from("candidates")
-        .select("id, email, first_name, last_name")
-        .eq("id", candidateIdForSync)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (candidateData?.email && !attendees.some(a => a.email === candidateData.email)) {
-        attendees.push({
-          email: candidateData.email,
-          displayName: `${candidateData.first_name ?? ""} ${candidateData.last_name ?? ""}`.trim() || undefined,
-        });
-      }
-    }
 
     // Deadline = toujours événement all-day (lit effectiveType pour couvrir
     // le cas d'un Partial<ActionInput> sans `type`).
@@ -393,11 +350,9 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/candidats");
   revalidatePath("/protected/mandats");
   if (input.deal_id) revalidatePath(`/protected/dossiers/${input.deal_id}`);
   if (input.organization_id) revalidatePath(`/protected/organisations/${input.organization_id}`);
-  if (input.candidate_id) revalidatePath(`/protected/candidats/${input.candidate_id}`);
   return { success: true };
 }
 
@@ -409,7 +364,7 @@ export async function deleteAction(id: string): Promise<{ success: boolean; erro
   // Récupérer les liens parents avant suppression pour cibler les revalidations
   const { data: existing } = await supabase
     .from("actions")
-    .select("deal_id, organization_id, candidate_id")
+    .select("deal_id, organization_id")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -428,11 +383,9 @@ export async function deleteAction(id: string): Promise<{ success: boolean; erro
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/candidats");
   revalidatePath("/protected/mandats");
   if (existing?.deal_id) revalidatePath(`/protected/dossiers/${existing.deal_id}`);
   if (existing?.organization_id) revalidatePath(`/protected/organisations/${existing.organization_id}`);
-  if (existing?.candidate_id) revalidatePath(`/protected/candidats/${existing.candidate_id}`);
   return { success: true };
 }
 
@@ -442,13 +395,12 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
   if (!user) return { success: false, error: "Non autorisé" };
 
   // Déterminer le statut de completion selon le type + lire les liens parents
-  const { data: action } = await supabase.from("actions").select("type, deal_id, organization_id, candidate_id").eq("id", id).eq("user_id", user.id).maybeSingle();
+  const { data: action } = await supabase.from("actions").select("type, deal_id, organization_id").eq("id", id).eq("user_id", user.id).maybeSingle();
   if (!action) return { success: false, error: "Action introuvable" };
 
   const completedStatus: Record<string, string> = {
     task: "done", call: "completed", meeting: "completed",
     deadline: "met", document_request: "done", note: "done", email: "sent",
-    interview: "completed", technical_test: "completed",
   };
 
   const payload: Record<string, unknown> = {
@@ -465,11 +417,9 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/candidats");
   revalidatePath("/protected/mandats");
   if (action.deal_id) revalidatePath(`/protected/dossiers/${action.deal_id}`);
   if (action.organization_id) revalidatePath(`/protected/organisations/${action.organization_id}`);
-  if (action.candidate_id) revalidatePath(`/protected/candidats/${action.candidate_id}`);
   return { success: true };
 }
 

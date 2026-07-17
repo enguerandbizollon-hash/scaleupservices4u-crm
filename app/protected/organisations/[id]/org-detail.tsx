@@ -49,7 +49,7 @@ const STATUS_LABELS: Record<string,string> = {
 };
 const DEAL_TYPE: Record<string,string> = {
   fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy",
-  cfo_advisor:"CFO Advisor", recruitment:"Recrutement",
+  cfo_advisor:"CFO Advisor",
 };
 const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
 
@@ -66,7 +66,7 @@ type Tab = "contacts" | "dossiers" | "activites" | "profil" | "mandats" | "finan
 
 const MANDATE_TYPE_LABELS: Record<string, string> = {
   fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisory", recruitment: "Recrutement",
+  cfo_advisor: "CFO Advisory",
 };
 const MANDATE_STATUS: Record<string, { bg: string; tx: string }> = {
   draft:   { bg: "var(--surface-3)", tx: "var(--text-5)" },

@@ -4,7 +4,6 @@ import { useState, useRef } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Trash2 } from "lucide-react";
 import { importOrganisations, type ImportReport } from "@/actions/import/organisations";
 import { importContacts } from "@/actions/import/contacts";
-import { importCandidates } from "@/actions/import/candidates";
 
 // ── CSV parser (RFC 4180) ────────────────────────────────────────────────────
 function parseCSV(text: string): { headers: string[]; rows: Record<string, string>[] } {
@@ -40,7 +39,7 @@ function parseCSV(text: string): { headers: string[]; rows: Record<string, strin
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
-type Mode = "organisations" | "contacts" | "candidats" | "dossier";
+type Mode = "organisations" | "contacts" | "dossier";
 type Step = "idle" | "loading" | "done";
 
 interface FileState {
@@ -65,13 +64,6 @@ const COLUMNS: Record<string, { required: string[]; optional: string[] }> = {
     required: ["first_name","last_name"],
     optional: ["email","phone","title","linkedin_url","base_status",
                "last_contact_date","organisation_name","role_label","sector","country","notes"],
-  },
-  candidats: {
-    required: ["first_name","last_name"],
-    optional: ["email","phone","linkedin_url","current_title","current_company",
-               "location","seniority_level","remote_preference",
-               "desired_salary_min","desired_salary_max","global_status",
-               "notes_shareable","notes_internal"],
   },
 };
 
@@ -231,7 +223,6 @@ function ReportBlock({ report, onReset }: { report: ImportReport; onReset: () =>
 const MODES: { key: Mode; label: string; color: string }[] = [
   { key: "organisations", label: "Organisations", color: "#D97706" },
   { key: "contacts",      label: "Contacts",      color: "#A8306A" },
-  { key: "candidats",     label: "Candidats",     color: "#0891B2" },
   { key: "dossier",       label: "Dossier complet", color: "#15A348" },
 ];
 
@@ -262,8 +253,7 @@ export default function ImportPage() {
     try {
       let r: ImportReport;
       if (mode === "organisations") r = await importOrganisations(file.rows);
-      else if (mode === "contacts") r = await importContacts(file.rows);
-      else r = await importCandidates(file.rows);
+      else r = await importContacts(file.rows);
       setReport(r);
       setStep("done");
     } catch (e: unknown) {
@@ -307,7 +297,7 @@ export default function ImportPage() {
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>Import CSV</h1>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-4)" }}>
-            Import global — organisations, contacts, candidats ou dossier complet.
+            Import global — organisations, contacts ou dossier complet.
           </p>
         </div>
 

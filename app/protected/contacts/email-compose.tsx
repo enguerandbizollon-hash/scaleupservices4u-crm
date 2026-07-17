@@ -56,7 +56,7 @@ export function EmailCompose({ to, name, onClose }: { to: string; name: string; 
                 placeholder="Votre message…" style={{ resize: "vertical" }} />
             </div>
             {status === "error" && (
-              <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--deal-recruitment-bg)", color: "var(--deal-recruitment-text)", fontSize: 12, marginBottom: 12 }}>
+              <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--rec-bg)", color: "var(--rec-tx)", fontSize: 12, marginBottom: 12 }}>
                 {error.includes("Non connecté") ? "⚠ Connecte-toi d'abord à Google dans Connecteurs." : error}
               </div>
             )}

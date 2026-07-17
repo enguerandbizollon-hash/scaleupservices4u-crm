@@ -4,7 +4,7 @@
 
 export const DOCUMENT_TYPES = [
   "bilan", "pl", "business_plan", "organigramme", "teaser",
-  "nda", "im", "dataroom", "cv", "presentation", "rapport", "autre",
+  "nda", "im", "dataroom", "presentation", "rapport", "autre",
 ] as const;
 
 export type DocumentType = typeof DOCUMENT_TYPES[number];
@@ -23,7 +23,6 @@ export const TYPE_TO_CATEGORY: Record<DocumentType, DocumentCategory> = {
   nda: "operation",
   im: "operation",
   dataroom: "operation",
-  cv: "operation",  // CV candidat — opération recrutement
   autre: "operation",
 };
 
@@ -36,7 +35,6 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   nda: "NDA",
   im: "Information memorandum (IM)",
   dataroom: "Dataroom",
-  cv: "CV",
   presentation: "Présentation",
   rapport: "Rapport",
   autre: "Autre",

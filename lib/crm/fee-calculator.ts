@@ -11,7 +11,7 @@
 // ── Types d'entrée ─────────────────────────────────────────────────────────────
 
 export interface MandateForFee {
-  type: string;                          // fundraising|ma_sell|ma_buy|cfo_advisor|recruitment
+  type: string;                          // fundraising|ma_sell|ma_buy|cfo_advisor
   currency?: string | null;              // défaut EUR
   success_fee_percent?: number | null;   // % (ex: 3 pour 3%)
   retainer_monthly?: number | null;      // retainer mensuel
@@ -33,9 +33,6 @@ export interface DealForFee {
   target_ev_max?: number | null;         // buy-side
   acquisition_budget_min?: number | null;
   acquisition_budget_max?: number | null;
-  // Recrutement
-  salary_min?: number | null;
-  salary_max?: number | null;
   // Générique
   target_amount?: number | null;
   committed_amount?: number | null;
@@ -50,7 +47,6 @@ export type FeeBaseSource =
   | "asking_price_mid"
   | "target_ev_mid"
   | "acquisition_budget_mid"
-  | "salary_mid"
   | "target_amount"
   | "retainer_duration"
   | null;
@@ -176,11 +172,6 @@ export function computeSuccessFee(
                : base !== null && (deal.acquisition_budget_min || deal.acquisition_budget_max) ? "acquisition_budget_mid"
                : base !== null && (deal.target_ev_min || deal.target_ev_max) ? "target_ev_mid"
                : base !== null ? "target_amount" : null;
-        break;
-      }
-      case "recruitment": {
-        base = pickFirst(mid(deal.salary_min, deal.salary_max), deal.target_amount);
-        source = base !== null && (deal.salary_min || deal.salary_max) ? "salary_mid" : base !== null ? "target_amount" : null;
         break;
       }
       default: {

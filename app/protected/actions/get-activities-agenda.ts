@@ -59,21 +59,6 @@ export async function getAgendaFiltersMetaAction() {
       { id: "deadline", label: "Deadline", category: "Events" },
       { id: "delivery", label: "Livraison", category: "Events" },
       { id: "closing", label: "Closing", category: "Events" },
-      {
-        id: "recruitment_interview",
-        label: "Entretien recrutement",
-        category: "Recruitment",
-      },
-      {
-        id: "recruitment_feedback",
-        label: "Feedback recrutement",
-        category: "Recruitment",
-      },
-      {
-        id: "recruitment_task",
-        label: "Tâche recrutement",
-        category: "Recruitment",
-      },
       { id: "cfo_advisory", label: "Conseil CFO", category: "Advisory" },
       {
         id: "investor_meeting",

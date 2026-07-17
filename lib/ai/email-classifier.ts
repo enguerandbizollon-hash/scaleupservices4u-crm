@@ -39,7 +39,7 @@ export interface EmailClassifierOutput {
   reason: string;
 }
 
-const SYSTEM_PROMPT = `Tu classes des emails professionnels d'un cabinet de conseil M&A, fundraising et recrutement vers le dossier auquel ils appartiennent.
+const SYSTEM_PROMPT = `Tu classes des emails professionnels d'un cabinet de conseil M&A et fundraising vers le dossier auquel ils appartiennent.
 
 Règles impératives :
 - Tu choisis au plus UN dossier parmi la liste fournie, jamais d'invention.

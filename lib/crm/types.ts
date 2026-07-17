@@ -15,9 +15,7 @@ export type DealView = {
   targetDate: string;
   description: string;
   // Nouveaux : support multi-service
-  dealTypes?: string[]; // e.g., ['fundraising', 'cfo_advisory', 'recruitment']
-  recruitmentStage?: string;
-  recruitmentTargetPositions?: string[];
+  dealTypes?: string[]; // e.g., ['fundraising', 'cfo_advisory']
   cfoAdvisoryScope?: string;
 };
 
@@ -73,8 +71,6 @@ export type UnifiedActivityType =
   | 'todo' | 'follow_up' | 'deck_sent' | 'nda' | 'document_sent'
   // Originaux agenda/events
   | 'deadline' | 'delivery' | 'closing'
-  // Nouveaux : recrutement
-  | 'recruitment_interview' | 'recruitment_feedback' | 'recruitment_task'
   // Nouveaux : services
   | 'cfo_advisory' | 'investor_meeting' | 'due_diligence'
   | 'other';

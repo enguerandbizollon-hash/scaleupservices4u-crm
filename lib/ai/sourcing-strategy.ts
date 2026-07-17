@@ -111,7 +111,7 @@ function stripCodeFences(raw: string): string {
 
 // ── Prompt ───────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Tu es associé senior en M&A, fundraising et recrutement, avec 15 ans d'expérience de sourcing. Pour un dossier donné, tu construis une stratégie de recherche d'acteurs à contacter structurée, priorisée, actionnable.
+const SYSTEM_PROMPT = `Tu es associé senior en M&A et fundraising, avec 15 ans d'expérience de sourcing. Pour un dossier donné, tu construis une stratégie de recherche d'acteurs à contacter structurée, priorisée, actionnable.
 
 Règles impératives :
 - Langue : français professionnel, sobre, factuel, direct.
@@ -166,8 +166,6 @@ function buildUserPrompt(input: SourcingStrategyInput): string {
     if (d.round_type) parts.push(`Type de tour : ${d.round_type}`);
     if (d.use_of_funds) parts.push(`\nUse of funds :\n${d.use_of_funds}`);
     parts.push(`\nObjectif : identifier des INVESTISSEURS potentiels (VC / PE / FO / CVC / BA avec thèse alignée).`);
-  } else if (d.deal_type === "recruitment") {
-    parts.push(`\nObjectif : identifier des PROFILS / VIVIERS de candidats pertinents pour le poste (cabinets de recrutement spécialisés, entreprises qui emploient ces profils, associations professionnelles).`);
   } else if (d.deal_type === "cfo_advisor") {
     parts.push(`\nObjectif : identifier des PARTENAIRES pertinents (experts-comptables de réseau, conseils financiers complémentaires, logiciels).`);
   }

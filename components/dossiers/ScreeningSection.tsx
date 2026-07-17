@@ -304,7 +304,7 @@ export function ScreeningSection({ dealId }: Props) {
       {/* Éditeurs par champ */}
       <TextFieldEditor
         title="Pitch exécutif"
-        hint="3 à 5 lignes lisibles par un tiers externe (fonds, acquéreur, candidat)."
+        hint="3 à 5 lignes lisibles par un tiers externe (fonds, acquéreur)."
         value={snapshot.executive_summary}
         minChars={80}
         onSave={async (value) => {

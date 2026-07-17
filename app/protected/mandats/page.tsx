@@ -7,14 +7,13 @@ import { ExportCSVButton, type ExportRow } from "@/components/exports/export-csv
 
 const TYPE_LABELS: Record<string, string> = {
   fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisory", recruitment: "Recrutement",
+  cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
   fundraising: { bg: "var(--fund-bg)", tx: "var(--fund-tx)" },
   ma_sell:     { bg: "var(--sell-bg)", tx: "var(--sell-tx)" },
   ma_buy:      { bg: "var(--buy-bg)",  tx: "var(--buy-tx)"  },
   cfo_advisor: { bg: "var(--cfo-bg)",  tx: "var(--cfo-tx)"  },
-  recruitment: { bg: "var(--rec-bg)",  tx: "var(--rec-tx)"  },
 };
 const STATUS_LABELS: Record<string, string> = {
   draft: "Brouillon", active: "Actif", on_hold: "En pause",
@@ -62,7 +61,7 @@ async function Content() {
   const confirmedTotal = mandates.reduce((s, m) => s + ((m as any).confirmed_fee_amount ?? 0), 0);
 
   // ── Performance par type ──────────────────────────────────────────────────
-  const types = ["fundraising","ma_sell","ma_buy","cfo_advisor","recruitment"];
+  const types = ["fundraising","ma_sell","ma_buy","cfo_advisor"];
   const byType = types.map(t => {
     const rows = mandates.filter(m => m.type === t);
     const tWon   = rows.filter(m => m.status === "won").length;

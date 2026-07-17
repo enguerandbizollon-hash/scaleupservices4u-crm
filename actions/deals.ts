@@ -23,13 +23,6 @@ export interface DealInput {
   company_stage?: string | null;
   company_geography?: string | null;
   mandate_id?: string | null;
-  // Recrutement
-  job_title?: string | null;
-  required_seniority?: string | null;
-  required_location?: string | null;
-  required_remote?: string | null;
-  salary_min?: number | null;
-  salary_max?: number | null;
   // Fundraising
   pre_money_valuation?: number | null;
   post_money_valuation?: number | null;
@@ -190,13 +183,6 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
     company_stage:      data.company_stage      ?? null,
     company_geography: data.company_geography ?? null,
     mandate_id:        data.mandate_id        ?? null,
-    // Recrutement
-    job_title:          data.job_title          ?? null,
-    required_seniority: data.required_seniority ?? null,
-    required_location:  data.required_location  ?? null,
-    required_remote:    data.required_remote    ?? null,
-    salary_min:         data.salary_min         ?? null,
-    salary_max:         data.salary_max         ?? null,
     // Fundraising
     pre_money_valuation:  data.pre_money_valuation  ?? null,
     post_money_valuation: data.post_money_valuation ?? null,
@@ -252,18 +238,6 @@ export async function updateDeal(id: string, data: Partial<DealInput>): Promise<
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
-
-  // M5 trigger RH : deal_status → won → flaguer candidats non-closing
-  if (data.deal_status === "won") {
-    const { data: current } = await supabase
-      .from("deals").select("deal_status").eq("id", id).eq("user_id", user.id).maybeSingle();
-    if (current && current.deal_status !== "won") {
-      await supabase.from("deal_candidates")
-        .update({ needs_review: true })
-        .eq("deal_id", id)
-        .neq("stage", "closing");
-    }
-  }
 
   const { error } = await supabase.from("deals")
     .update({ ...data, updated_at: new Date().toISOString() })
@@ -523,13 +497,11 @@ const NUMBER_FIELDS = new Set<string>([
   "acquisition_budget_min", "acquisition_budget_max",
   "target_revenue_min", "target_revenue_max",
   "target_ev_min", "target_ev_max",
-  "salary_min", "salary_max",
 ]);
 
 const TEXT_FIELDS = new Set<string>([
   "name", "description", "sector", "location",
   "use_of_funds", "management_retention_notes", "strategic_rationale",
-  "job_title", "required_location",
 ]);
 
 const DATE_FIELDS = new Set<string>([
@@ -539,7 +511,7 @@ const DATE_FIELDS = new Set<string>([
 const SELECT_FIELDS = new Set<string>([
   "deal_status", "priority_level", "currency",
   "round_type", "deal_timing", "company_stage", "company_geography",
-  "required_seniority", "required_remote", "target_stage",
+  "target_stage",
 ]);
 
 const EDITABLE_FIELDS = new Set<string>([

@@ -14,7 +14,6 @@ export type NotificationKind =
 export type NotificationSourceType =
   | "action"
   | "fee_milestone"
-  | "candidate"
   | "contact";
 
 export interface NotificationInput {

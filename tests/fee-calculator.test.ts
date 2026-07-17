@@ -184,20 +184,6 @@ describe("computeSuccessFee — ma_buy", () => {
   });
 });
 
-// ── Recrutement : salaire × % ────────────────────────────────────────────────
-
-describe("computeSuccessFee — recruitment", () => {
-  it("base = milieu de fourchette salariale", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "recruitment", success_fee_percent: 20 }),
-      { salary_min: 80_000, salary_max: 120_000 },
-    );
-    expect(result.base).toBe(100_000);
-    expect(result.estimated).toBe(20_000);
-    expect(result.source).toBe("salary_mid");
-  });
-});
-
 // ── Cas transverses ──────────────────────────────────────────────────────────
 
 describe("computeSuccessFee — transverse", () => {

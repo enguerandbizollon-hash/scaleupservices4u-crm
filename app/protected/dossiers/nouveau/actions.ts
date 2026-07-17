@@ -51,13 +51,6 @@ export async function updateDealAction(formData: FormData) {
   const dealId = ns(formData.get("deal_id"));
   if (!dealId) throw new Error("ID manquant");
 
-  // M5 : Lire le statut actuel avant mise à jour
-  const { data: currentDeal } = await supabase
-    .from("deals")
-    .select("deal_status")
-    .eq("id", dealId)
-    .maybeSingle();
-
   const targetAmount = formData.get("target_amount");
 
   // Champs de base (toujours présents dans le form)
@@ -82,27 +75,9 @@ export async function updateDealAction(formData: FormData) {
   if (formData.has("company_stage")) updateData.company_stage = ns(formData.get("company_stage"));
   if (formData.has("company_geography")) updateData.company_geography = ns(formData.get("company_geography"));
 
-  // Recrutement — seulement si champs présents dans le form
-  if (formData.has("job_title")) updateData.job_title = ns(formData.get("job_title"));
-  if (formData.has("required_seniority")) updateData.required_seniority = ns(formData.get("required_seniority"));
-  if (formData.has("required_location")) updateData.required_location = ns(formData.get("required_location"));
-  if (formData.has("required_remote")) updateData.required_remote = ns(formData.get("required_remote"));
-  if (formData.has("salary_min")) updateData.salary_min = formData.get("salary_min") ? Number(formData.get("salary_min")) : null;
-  if (formData.has("salary_max")) updateData.salary_max = formData.get("salary_max") ? Number(formData.get("salary_max")) : null;
-
   const { error } = await supabase.from("deals").update(updateData).eq("id", dealId);
 
   if (error) throw new Error(error.message);
-
-  // M5 trigger : deal_status → "won" → flaguer les candidats non-closing à revoir
-  const newStatus = ns(formData.get("deal_status"));
-  if (newStatus === "won" && currentDeal?.deal_status !== "won") {
-    await supabase
-      .from("deal_candidates")
-      .update({ needs_review: true })
-      .eq("deal_id", dealId)
-      .neq("stage", "closing");
-  }
 
   revalidatePath(`/protected/dossiers/${dealId}`);
   redirect(`/protected/dossiers/${dealId}`);
@@ -111,7 +86,7 @@ export async function updateDealAction(formData: FormData) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Wizard de création de dossier (3 étapes)
 //   1. Identité + dirigeant + mandat (création inline possible)
-//   2. Spécificités par deal_type (Fundraising / M&A Sell / M&A Buy / RH / CFO)
+//   2. Spécificités par deal_type (Fundraising / M&A Sell / M&A Buy / CFO)
 //   3. Données financières initiales N-1 (optionnelles)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -185,13 +160,6 @@ export interface WizardDealPayload {
   acquisition_budget_max: number | null;
   full_acquisition_required: boolean | null;
   strategic_rationale: string | null;
-  // Recruitment
-  job_title: string | null;
-  required_seniority: string | null;
-  required_location: string | null;
-  required_remote: string | null;
-  salary_min: number | null;
-  salary_max: number | null;
 
   // Step 3 — données financières (optionnel)
   financial: {
@@ -325,14 +293,6 @@ export async function createDealWizardAction(
       dealInsert.full_acquisition_required = payload.full_acquisition_required;
       dealInsert.strategic_rationale = payload.strategic_rationale;
       dealInsert.deal_timing = payload.deal_timing;
-      break;
-    case "recruitment":
-      dealInsert.job_title = payload.job_title;
-      dealInsert.required_seniority = payload.required_seniority;
-      dealInsert.required_location = payload.required_location;
-      dealInsert.required_remote = payload.required_remote;
-      dealInsert.salary_min = payload.salary_min;
-      dealInsert.salary_max = payload.salary_max;
       break;
     case "cfo_advisor":
       dealInsert.target_amount = payload.target_amount;

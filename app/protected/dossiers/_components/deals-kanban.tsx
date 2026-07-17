@@ -55,7 +55,6 @@ const TYPE_META: Record<string, { label: string; icon: string; bg: string; tx: s
   ma_sell:     { label: "M&A Sell",    icon: "🏢", bg: "var(--sell-bg)",  tx: "var(--sell-tx)",  border: "var(--sell-mid)" },
   ma_buy:      { label: "M&A Buy",     icon: "🎯", bg: "var(--buy-bg)",   tx: "var(--buy-tx)",   border: "var(--buy-mid)"  },
   cfo_advisor: { label: "CFO Advisor", icon: "💼", bg: "var(--cfo-bg)",   tx: "var(--cfo-tx)",   border: "var(--cfo-mid)"  },
-  recruitment: { label: "Recrutement", icon: "👤", bg: "var(--rec-bg)",   tx: "var(--rec-tx)",   border: "var(--rec-mid)"  },
 };
 
 const PRIO_COLOR: Record<string, string> = {
@@ -131,7 +130,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
   }, [filtered]);
 
   // V55 : stades du métier sélectionné + stades post-opération si non vides
-  // (ex. post_closing en fundraising/ma_sell, probation en recruitment).
+  // (ex. post_closing en fundraising/ma_sell).
   const visibleStages: string[] = useMemo(() => {
     const main = [...DEAL_STAGES_MAIN_BY_TYPE[typeFilter]];
     const allForType = DEAL_STAGES_BY_TYPE[typeFilter];

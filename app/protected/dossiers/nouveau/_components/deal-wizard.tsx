@@ -11,8 +11,6 @@ import {
   SECTORS,
   COMPANY_STAGES,
   ORG_COMPANY_STAGES,
-  SENIORITY_OPTIONS,
-  REMOTE_OPTIONS,
   ROUND_TYPES,
   DEAL_TIMING_OPTIONS,
   CURRENCIES,
@@ -25,7 +23,7 @@ const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type DealType = "fundraising" | "ma_sell" | "ma_buy" | "recruitment" | "cfo_advisor";
+type DealType = "fundraising" | "ma_sell" | "ma_buy" | "cfo_advisor";
 
 interface MandateOption { id: string; name: string; type: string; status: string; client_name: string | null }
 interface OrgOption { id: string; name: string }
@@ -41,7 +39,6 @@ const DEAL_TYPE_LABELS: Record<string, string> = {
   fundraising: "Fundraising",
   ma_sell: "M&A Sell-side",
   ma_buy: "M&A Buy-side",
-  recruitment: "Recrutement",
   cfo_advisor: "CFO Advisor",
 };
 
@@ -255,14 +252,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   const [fullAcquisitionRequired, setFullAcquisitionRequired] = useState(false);
   const [strategicRationale, setStrategicRationale] = useState("");
 
-  // Step 2 — Recruitment
-  const [jobTitle, setJobTitle] = useState("");
-  const [requiredSeniority, setRequiredSeniority] = useState("");
-  const [requiredLocation, setRequiredLocation] = useState("");
-  const [requiredRemote, setRequiredRemote] = useState("");
-  const [salaryMin, setSalaryMin] = useState("");
-  const [salaryMax, setSalaryMax] = useState("");
-
   // Step 3 — données financières
   const [financialEnabled, setFinancialEnabled] = useState(false);
   const [fiscalYear, setFiscalYear] = useState<number>(new Date().getFullYear() - 1);
@@ -467,14 +456,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
       acquisition_budget_max: numOrNull(acquisitionBudgetMax),
       full_acquisition_required: dealType === "ma_buy" ? fullAcquisitionRequired : null,
       strategic_rationale: strategicRationale.trim() || null,
-
-      // Recruitment
-      job_title: jobTitle.trim() || null,
-      required_seniority: requiredSeniority || null,
-      required_location: requiredLocation || null,
-      required_remote: requiredRemote || null,
-      salary_min: numOrNull(salaryMin),
-      salary_max: numOrNull(salaryMax),
 
       // Financial (Step 3)
       financial: financialEnabled ? {
@@ -1035,51 +1016,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
               <label style={lbl}>Rationale stratégique</label>
               <textarea rows={3} value={strategicRationale} onChange={e => setStrategicRationale(e.target.value)}
                 placeholder="Synergies, expansion géo, consolidation…" style={{ ...inp, resize: "vertical" }} />
-            </div>
-          </div>
-        )}
-
-        {step === 2 && dealType === "recruitment" && (
-          <div style={sectionCard}>
-            <div style={sectionTitle}>Recrutement — fiche de poste</div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Intitulé du poste *</label>
-              <input value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="Head of Sales, CTO…" style={inp} />
-            </div>
-            <div style={grid2}>
-              <div>
-                <label style={lbl}>Séniorité requise</label>
-                <select value={requiredSeniority} onChange={e => setRequiredSeniority(e.target.value)} style={inp}>
-                  <option value="">— Non renseignée —</option>
-                  {SENIORITY_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Remote policy</label>
-                <select value={requiredRemote} onChange={e => setRequiredRemote(e.target.value)} style={inp}>
-                  <option value="">— Non renseigné —</option>
-                  {REMOTE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={grid2}>
-              <div>
-                <label style={lbl}>Localisation</label>
-                <select value={requiredLocation} onChange={e => setRequiredLocation(e.target.value)} style={inp}>
-                  <option value="">— Non renseignée —</option>
-                  {GEO_OPTIONS.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <div>
-                  <label style={lbl}>Salaire min ({currencySymbol})</label>
-                  <input type="number" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} placeholder="80000" style={inp} />
-                </div>
-                <div>
-                  <label style={lbl}>Salaire max ({currencySymbol})</label>
-                  <input type="number" value={salaryMax} onChange={e => setSalaryMax(e.target.value)} placeholder="120000" style={inp} />
-                </div>
-              </div>
             </div>
           </div>
         )}

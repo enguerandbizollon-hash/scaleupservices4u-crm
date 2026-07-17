@@ -338,14 +338,12 @@ const TYPE_COLOR_BY_KEY: Record<string, string> = {
   ma_sell:     "var(--sell-tx)",
   ma_buy:      "var(--buy-tx)",
   cfo_advisor: "var(--cfo-tx)",
-  recruitment: "var(--rec-tx)",
 };
 const TYPE_BG_BY_KEY: Record<string, string> = {
   fundraising: "var(--fund-bg)",
   ma_sell:     "var(--sell-bg)",
   ma_buy:      "var(--buy-bg)",
   cfo_advisor: "var(--cfo-bg)",
-  recruitment: "var(--rec-bg)",
 };
 
 function blockHeader(label: string) {

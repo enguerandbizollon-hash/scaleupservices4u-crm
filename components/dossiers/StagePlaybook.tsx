@@ -13,8 +13,6 @@ const TYPE_ICON: Record<PlaybookAction["type"], string> = {
   meeting: "🤝",
   deadline: "⏰",
   document_request: "📄",
-  interview: "👥",
-  technical_test: "🧪",
 };
 
 export function StagePlaybook({

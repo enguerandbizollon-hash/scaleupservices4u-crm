@@ -13,14 +13,13 @@ function pct(a: number, b: number) { return b === 0 ? 0 : Math.round(a / b * 100
 
 const TYPE_LABELS: Record<string, string> = {
   fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisory", recruitment: "Recrutement",
+  cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
   fundraising: { bg: "#EFF6FF", tx: "#1D4ED8" },
   ma_sell:     { bg: "#FFF7ED", tx: "#C2410C" },
   ma_buy:      { bg: "#FFFBEB", tx: "#92400E" },
   cfo_advisor: { bg: "#F0FDF4", tx: "#166534" },
-  recruitment: { bg: "#FDF4FF", tx: "#7E22CE" },
 };
 
 // ── Server data ──────────────────────────────────────────────────────────────
@@ -38,7 +37,6 @@ async function Content() {
     { data: fees },
     { data: deals },
     { data: mandates },
-    { data: candidates },
     { data: feesAllTime },
   ] = await Promise.all([
     supabase.from("fee_milestones")
@@ -51,9 +49,6 @@ async function Content() {
     supabase.from("mandates")
       .select("id, type, status, estimated_fee_amount, confirmed_fee_amount, currency")
       .eq("user_id", user.id),
-    supabase.from("candidates")
-      .select("id, candidate_status, updated_at")
-      .eq("user_id", user.id),
     supabase.from("fee_milestones")
       .select("amount, currency, status, paid_date")
       .eq("user_id", user.id)
@@ -63,7 +58,6 @@ async function Content() {
   const allFees       = fees ?? [];
   const allDeals      = deals ?? [];
   const allMandates   = mandates ?? [];
-  const allCandidates = candidates ?? [];
 
   // ── Fees ────────────────────────────────────────────────────────────────
   const paidYtd     = allFees.filter(f => f.status === "paid"     && f.paid_date?.startsWith(String(year)));
@@ -104,15 +98,6 @@ async function Content() {
   const activeMandates = allMandates.filter(m => m.status === "active").length;
   const wonMandates    = allMandates.filter(m => m.status === "won").length;
   const confirmedTotal = allMandates.reduce((s, m) => s + (m.confirmed_fee_amount ?? 0), 0);
-
-  // ── Recrutement ──────────────────────────────────────────────────────────
-  const placed       = allCandidates.filter((c: any) => c.candidate_status === "placed");
-  const searching    = allCandidates.filter((c: any) => c.candidate_status === "searching").length;
-  const inProcess    = allCandidates.filter((c: any) => c.candidate_status === "in_process").length;
-  const placedYtd    = placed.filter((c: any) => c.updated_at?.startsWith(String(year))).length;
-  const convRate     = pct(placed.length, allCandidates.length);
-  const rhDeals      = allDeals.filter(d => d.deal_type === "recruitment");
-  const rhOpen       = rhDeals.filter(d => d.deal_status === "open").length;
 
   // ── Fundraising pipeline ────────────────────────────────────────────────
   const fundDeals      = allDeals.filter(d => d.deal_type === "fundraising" && d.deal_status === "open");
@@ -299,36 +284,6 @@ async function Content() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-
-          {/* ── Recrutement ────────────────────────────────────────────── */}
-          <div style={card}>
-            <div style={sectionTitle}>Recrutement</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12, marginBottom: 14 }}>
-              <div>
-                <div style={{ ...kpiVal, color: "#7E22CE" }}>{placedYtd}</div>
-                <div style={kpiLbl}>Placements {year}</div>
-              </div>
-              <div>
-                <div style={kpiVal}>{inProcess}</div>
-                <div style={kpiLbl}>En process</div>
-              </div>
-              <div>
-                <div style={kpiVal}>{searching}</div>
-                <div style={kpiLbl}>Vivier actif</div>
-              </div>
-              <div>
-                <div style={{ ...kpiVal, color: placed.length > 0 ? "#7E22CE" : "var(--text-3)" }}>
-                  {allCandidates.length > 0 ? `${convRate}%` : "—"}
-                </div>
-                <div style={kpiLbl}>Taux conversion global</div>
-              </div>
-            </div>
-            {rhOpen > 0 && (
-              <div style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, background: "#FDF4FF", color: "#7E22CE" }}>
-                {rhOpen} mission{rhOpen > 1 ? "s" : ""} de recrutement active{rhOpen > 1 ? "s" : ""}
-              </div>
-            )}
-          </div>
 
           {/* ── Fundraising ────────────────────────────────────────────── */}
           <div style={card}>
