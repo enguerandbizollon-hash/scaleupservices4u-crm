@@ -236,7 +236,7 @@ async function upsertOrganizationFromApollo(
       .select("id, external_ids, website")
       .eq("user_id", userId)
       .ilike("website", `%${domain}%`)
-      .limit(10);
+      .limit(50);
 
     const byDomain = (byDomainRows ?? []).find(
       (row) => extractDomain(row.website) === domain,
