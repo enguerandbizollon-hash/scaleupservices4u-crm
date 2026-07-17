@@ -282,10 +282,22 @@ describe("projectYearEndFromYtd", () => {
     expect(projectYearEndFromYtd(50_000, new Date(2026, 0, 15))).toBeNull();
   });
 
-  it("projette linéairement paid_ytd / mois_écoulés × 12", () => {
-    const now = new Date(2026, 5, 15); // juin → 5 + 15/30.44 mois écoulés
-    const expected = (120_000 / (5 + 15 / 30.44)) * 12;
-    expect(projectYearEndFromYtd(120_000, now)).toBeCloseTo(expected, 6);
+  it("projette linéairement : au 1er juillet (mi-année), la projection double le YTD à ~3% près", () => {
+    // Attente indépendante de la formule interne : 120k encaissés sur la
+    // première moitié de l'année doivent projeter ~240k en fin d'année.
+    const projected = projectYearEndFromYtd(120_000, new Date(2026, 6, 1));
+    expect(projected).not.toBeNull();
+    expect(projected!).toBeGreaterThan(232_000);
+    expect(projected!).toBeLessThan(248_000);
+  });
+
+  it("projette 12× le rythme mensuel en tout début février", () => {
+    // 10k encaissés après ~1 mois → ~120k projetés (tolérance large sur la
+    // fraction de jour).
+    const projected = projectYearEndFromYtd(10_000, new Date(2026, 1, 1));
+    expect(projected).not.toBeNull();
+    expect(projected!).toBeGreaterThan(110_000);
+    expect(projected!).toBeLessThan(121_000);
   });
 });
 
