@@ -105,7 +105,6 @@ select.inp { cursor:pointer; }
 .badge::before { content:''; display:inline-block; width:5px; height:5px; border-radius:50%; background:currentColor; opacity:.55; flex-shrink:0; }
 
 /* Deal type badges */
-.dt-fundraising { background:var(--fund-bg); color:var(--fund-tx); }
 .dt-ma_sell     { background:var(--sell-bg); color:var(--sell-tx); }
 .dt-ma_buy      { background:var(--buy-bg);  color:var(--buy-tx); }
 .dt-cfo_advisor { background:var(--cfo-bg);  color:var(--cfo-tx); }

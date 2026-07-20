@@ -48,7 +48,7 @@ const STATUS_LABELS: Record<string,string> = {
   excluded:   "Inactif",
 };
 const DEAL_TYPE: Record<string,string> = {
-  fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy",
+  ma_sell:"M&A Sell", ma_buy:"M&A Buy",
   cfo_advisor:"CFO Advisor",
 };
 const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
@@ -65,7 +65,7 @@ function fmtDate(d: string | null) {
 type Tab = "contacts" | "dossiers" | "activites" | "profil" | "mandats" | "financier";
 
 const MANDATE_TYPE_LABELS: Record<string, string> = {
-  fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
+  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
   cfo_advisor: "CFO Advisory",
 };
 const MANDATE_STATUS: Record<string, { bg: string; tx: string }> = {

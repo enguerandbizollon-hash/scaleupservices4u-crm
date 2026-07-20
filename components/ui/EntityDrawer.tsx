@@ -165,7 +165,7 @@ const ORG_TYPE_LABEL: Record<string, string> = {
   consulting_firm: "Cabinet de conseil", other: "Autre",
 };
 const DEAL_TYPE_LABEL: Record<string, string> = {
-  fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
+  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
   cfo_advisor: "CFO Advisor",
 };
 

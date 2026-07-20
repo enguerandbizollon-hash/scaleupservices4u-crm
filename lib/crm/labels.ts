@@ -1,5 +1,4 @@
 export const dealTypeLabels: Record<string, string> = {
-  fundraising: "Fundraising",
   ma_sell: "M&A Sell-side",
   ma_buy: "M&A Buy-side",
   cfo_advisor: "CFO Advisor",

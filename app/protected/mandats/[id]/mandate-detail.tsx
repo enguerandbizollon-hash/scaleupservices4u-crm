@@ -10,11 +10,10 @@ import { useRouter } from "next/navigation";
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const TYPE_LABELS: Record<string, string> = {
-  fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
+  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
   cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string; border: string }> = {
-  fundraising: { bg: "var(--fund-bg)", tx: "var(--fund-tx)", border: "var(--fund-mid)" },
   ma_sell:     { bg: "var(--sell-bg)", tx: "var(--sell-tx)", border: "var(--sell-mid)" },
   ma_buy:      { bg: "var(--buy-bg)",  tx: "var(--buy-tx)",  border: "var(--buy-mid)"  },
   cfo_advisor: { bg: "var(--cfo-bg)",  tx: "var(--cfo-tx)",  border: "var(--cfo-mid)"  },
