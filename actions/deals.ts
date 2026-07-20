@@ -23,13 +23,6 @@ export interface DealInput {
   company_stage?: string | null;
   company_geography?: string | null;
   mandate_id?: string | null;
-  // Fundraising
-  pre_money_valuation?: number | null;
-  post_money_valuation?: number | null;
-  use_of_funds?: string | null;
-  runway_months?: number | null;
-  current_investors?: string[] | null;
-  round_type?: string | null;
   // M&A Sell-side
   asking_price_min?: number | null;
   asking_price_max?: number | null;
@@ -174,13 +167,6 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
     company_stage:      data.company_stage      ?? null,
     company_geography: data.company_geography ?? null,
     mandate_id:        data.mandate_id        ?? null,
-    // Fundraising
-    pre_money_valuation:  data.pre_money_valuation  ?? null,
-    post_money_valuation: data.post_money_valuation ?? null,
-    use_of_funds:         data.use_of_funds         ?? null,
-    runway_months:        data.runway_months         ?? null,
-    current_investors:    data.current_investors     ?? null,
-    round_type:           data.round_type            ?? null,
     // M&A Sell-side
     asking_price_min:     data.asking_price_min     ?? null,
     asking_price_max:     data.asking_price_max     ?? null,
@@ -412,7 +398,6 @@ export async function updateDealStageAction(
 
 const NUMBER_FIELDS = new Set<string>([
   "target_amount",
-  "target_raise_amount", "pre_money_valuation", "post_money_valuation", "runway_months",
   "asking_price_min", "asking_price_max",
   "acquisition_budget_min", "acquisition_budget_max",
   "target_revenue_min", "target_revenue_max",
@@ -421,7 +406,7 @@ const NUMBER_FIELDS = new Set<string>([
 
 const TEXT_FIELDS = new Set<string>([
   "name", "description", "sector", "location",
-  "use_of_funds", "management_retention_notes", "strategic_rationale",
+  "management_retention_notes", "strategic_rationale",
 ]);
 
 const DATE_FIELDS = new Set<string>([
@@ -430,7 +415,7 @@ const DATE_FIELDS = new Set<string>([
 
 const SELECT_FIELDS = new Set<string>([
   "deal_status", "priority_level", "currency",
-  "round_type", "deal_timing", "company_stage", "company_geography",
+  "deal_timing", "company_stage", "company_geography",
   "target_stage",
 ]);
 

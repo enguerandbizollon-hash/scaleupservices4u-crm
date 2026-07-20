@@ -12,11 +12,10 @@ function fmtPct(n: number) { return `${n.toFixed(1)} %`; }
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round(a / b * 100); }
 
 const TYPE_LABELS: Record<string, string> = {
-  fundraising: "Fundraising", ma_sell: "M&A Sell", ma_buy: "M&A Buy",
+  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
   cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
-  fundraising: { bg: "#EFF6FF", tx: "#1D4ED8" },
   ma_sell:     { bg: "#FFF7ED", tx: "#C2410C" },
   ma_buy:      { bg: "#FFFBEB", tx: "#92400E" },
   cfo_advisor: { bg: "#F0FDF4", tx: "#166534" },
@@ -44,7 +43,7 @@ async function Content() {
       .eq("user_id", user.id)
       .neq("status", "cancelled"),
     supabase.from("deals")
-      .select("id, deal_type, deal_status, deal_stage, target_amount, committed_amount, currency, created_at")
+      .select("id, deal_type, deal_status, deal_stage, currency, created_at")
       .eq("user_id", user.id),
     supabase.from("mandates")
       .select("id, type, status, estimated_fee_amount, confirmed_fee_amount, currency")
@@ -98,11 +97,6 @@ async function Content() {
   const activeMandates = allMandates.filter(m => m.status === "active").length;
   const wonMandates    = allMandates.filter(m => m.status === "won").length;
   const confirmedTotal = allMandates.reduce((s, m) => s + (m.confirmed_fee_amount ?? 0), 0);
-
-  // ── Fundraising pipeline ────────────────────────────────────────────────
-  const fundDeals      = allDeals.filter(d => d.deal_type === "fundraising" && d.deal_status === "open");
-  const fundPipeline   = fundDeals.reduce((s, d) => s + (d.target_amount ?? 0), 0);
-  const fundCommitted  = fundDeals.reduce((s, d) => s + (d.committed_amount ?? 0), 0);
 
   // ── Stages pipeline ──────────────────────────────────────────────────────
   const stageOrder = ["kickoff","preparation","outreach","management_meetings","dd","negotiation","closing"];
@@ -281,40 +275,6 @@ async function Content() {
               );
             })}
           </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-
-          {/* ── Fundraising ────────────────────────────────────────────── */}
-          <div style={card}>
-            <div style={sectionTitle}>Fundraising</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12, marginBottom: 14 }}>
-              <div>
-                <div style={kpiVal}>{fundDeals.length}</div>
-                <div style={kpiLbl}>Rounds actifs</div>
-              </div>
-              <div>
-                <div style={{ ...kpiVal, color: "#1D4ED8" }}>{fmtAmt(fundPipeline)}</div>
-                <div style={kpiLbl}>Levées cibles</div>
-              </div>
-              <div>
-                <div style={{ ...kpiVal, color: "#065F46" }}>{fmtAmt(fundCommitted)}</div>
-                <div style={kpiLbl}>Engagements reçus</div>
-              </div>
-              <div>
-                <div style={{ ...kpiVal, color: fundPipeline > 0 ? "#065F46" : "var(--text-3)" }}>
-                  {fundPipeline > 0 ? `${pct(fundCommitted, fundPipeline)}%` : "—"}
-                </div>
-                <div style={kpiLbl}>Taux couverture</div>
-              </div>
-            </div>
-            {fundPipeline > 0 && (
-              <div style={{ height: 6, borderRadius: 3, background: "var(--surface-3)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 3, background: "#1D4ED8", width: `${Math.min(pct(fundCommitted, fundPipeline), 100)}%` }} />
-              </div>
-            )}
-          </div>
-
         </div>
       </div>
     </div>

@@ -24,7 +24,6 @@ import { stageLabel } from "@/lib/crm/matching-maps";
 import { ExportPrintBootstrap } from "./export-print-bootstrap";
 
 const DEAL_TYPE_LABEL: Record<string, string> = {
-  fundraising: "Fundraising",
   ma_sell:     "M&A Sell-side",
   ma_buy:      "M&A Buy-side",
   cfo_advisor: "CFO Advisory",
@@ -77,7 +76,6 @@ async function Content({ params, searchParams }: {
       id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,
       description,start_date,target_date,target_amount,currency,
       executive_summary,motivation_narrative,key_differentiators,key_risks,
-      target_raise_amount,pre_money_valuation,post_money_valuation,round_type,
       asking_price_min,asking_price_max,deal_timing,strategic_rationale,
       ai_valuation_low,ai_valuation_high,ai_financial_notes,
       organization_id,mandate_id,
@@ -117,7 +115,6 @@ async function Content({ params, searchParams }: {
   const financials = (financialRes.data ?? []) as FinancialRow[];
   const acts = (recentActsRes.data ?? []) as Array<{ id: string; title: string; type: string; due_date: string | null; start_datetime: string | null; status: string }>;
 
-  const isFundraising = deal.deal_type === "fundraising";
   const isMaSell      = deal.deal_type === "ma_sell";
   const isMaBuy       = deal.deal_type === "ma_buy";
 
@@ -249,20 +246,6 @@ async function Content({ params, searchParams }: {
         )}
 
         {/* Bloc 4 — Spécifiques par deal_type */}
-        {isFundraising && (deal.target_raise_amount || deal.round_type || deal.pre_money_valuation) && (
-          <section style={{ marginBottom: 16 }}>
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: "#1f2937", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: ".06em" }}>
-              Conditions du tour
-            </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-              {deal.target_raise_amount && <KpiBox label="Montant recherché" value={fmtMoney(deal.target_raise_amount, deal.currency)} />}
-              {deal.round_type && <KpiBox label="Type de tour" value={deal.round_type} />}
-              {deal.pre_money_valuation && <KpiBox label="Pre-money" value={fmtMoney(deal.pre_money_valuation, deal.currency)} />}
-              {deal.post_money_valuation && <KpiBox label="Post-money" value={fmtMoney(deal.post_money_valuation, deal.currency)} />}
-            </div>
-          </section>
-        )}
-
         {isMaSell && (deal.asking_price_min || deal.asking_price_max || deal.ai_valuation_low) && (
           <section style={{ marginBottom: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 700, color: "#1f2937", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: ".06em" }}>

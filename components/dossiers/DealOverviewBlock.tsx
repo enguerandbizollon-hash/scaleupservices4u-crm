@@ -1,7 +1,7 @@
 "use client";
 
 import { TrendingUp, Banknote, Target, Building2, Activity, Calendar, Sparkles } from "lucide-react";
-import { stageLabel, ROUND_TYPES } from "@/lib/crm/matching-maps";
+import { stageLabel } from "@/lib/crm/matching-maps";
 import { computeSuccessFee, type MandateForFee, type DealForFee } from "@/lib/crm/fee-calculator";
 
 type Deal = {
@@ -14,10 +14,6 @@ type Deal = {
   target_date: string | null;
   // Fundraising
   target_raise_amount?: number | null;
-  pre_money_valuation?: number | null;
-  post_money_valuation?: number | null;
-  round_type?: string | null;
-  runway_months?: number | null;
   // M&A Sell
   asking_price_min?: number | null;
   asking_price_max?: number | null;
@@ -171,34 +167,6 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
 
   // KPIs spécifiques par type
   switch (deal.deal_type) {
-    case "fundraising": {
-      if (deal.target_raise_amount != null) {
-        out.push({
-          label: "Montant cible",
-          value: fmtMoney(deal.target_raise_amount, currency),
-          sublabel: deal.round_type ? (ROUND_TYPES.find(r => r.value === deal.round_type)?.label ?? deal.round_type) : undefined,
-          icon: Target,
-          tone: "positive",
-        });
-      }
-      if (deal.pre_money_valuation != null) {
-        out.push({
-          label: "Valorisation pré",
-          value: fmtMoney(deal.pre_money_valuation, currency),
-          sublabel: deal.post_money_valuation != null ? `Post : ${fmtMoney(deal.post_money_valuation, currency)}` : undefined,
-          icon: Banknote,
-        });
-      }
-      if (deal.runway_months != null) {
-        out.push({
-          label: "Runway",
-          value: `${deal.runway_months} mois`,
-          icon: Activity,
-          tone: deal.runway_months < 6 ? "warning" : "neutral",
-        });
-      }
-      break;
-    }
     case "ma_sell": {
       const askingRange = (deal.asking_price_min != null || deal.asking_price_max != null)
         ? fmtRange(deal.asking_price_min, deal.asking_price_max, currency)
