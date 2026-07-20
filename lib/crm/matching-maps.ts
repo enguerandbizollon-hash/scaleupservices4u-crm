@@ -252,20 +252,6 @@ export function scoreGeography(
   return 0;
 }
 
-// ── Round types (Fundraising) ────────────────────────────────────────────────
-
-export const ROUND_TYPES = [
-  { value: "seed",         label: "Seed" },
-  { value: "pre-series-a", label: "Pre-Series A" },
-  { value: "series-a",     label: "Series A" },
-  { value: "series-b",     label: "Series B" },
-  { value: "growth",       label: "Growth" },
-  { value: "bridge",       label: "Bridge" },
-  { value: "convertible",  label: "Convertible" },
-] as const;
-
-export type RoundType = (typeof ROUND_TYPES)[number]["value"];
-
 // ── Deal timing (M&A) ────────────────────────────────────────────────────────
 
 export const DEAL_TIMING_OPTIONS = [

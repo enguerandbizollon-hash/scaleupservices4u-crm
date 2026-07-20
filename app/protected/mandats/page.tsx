@@ -61,7 +61,7 @@ async function Content() {
   const confirmedTotal = mandates.reduce((s, m) => s + ((m as any).confirmed_fee_amount ?? 0), 0);
 
   // ── Performance par type ──────────────────────────────────────────────────
-  const types = ["fundraising","ma_sell","ma_buy","cfo_advisor"];
+  const types = ["ma_sell","ma_buy","cfo_advisor"];
   const byType = types.map(t => {
     const rows = mandates.filter(m => m.type === t);
     const tWon   = rows.filter(m => m.status === "won").length;

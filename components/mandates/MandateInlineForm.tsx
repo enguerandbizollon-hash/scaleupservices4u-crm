@@ -17,7 +17,6 @@ interface Props {
 }
 
 const MANDATE_TYPES = [
-  { value: "fundraising", label: "Fundraising" },
   { value: "ma_sell",     label: "M&A Sell-side" },
   { value: "ma_buy",      label: "M&A Buy-side" },
   { value: "cfo_advisor", label: "CFO Advisor" },
@@ -50,7 +49,7 @@ export function MandateInlineForm({
   onCreated,
 }: Props) {
   const [name, setName] = useState("");
-  const [type, setType] = useState(defaultType || "fundraising");
+  const [type, setType] = useState(defaultType || "ma_sell");
   const [status, setStatus] = useState("draft");
   const [priority, setPriority] = useState("medium");
   const [clientOrgId, setClientOrgId] = useState(defaultClientOrgId ?? clientOrgs[0]?.id ?? "");
@@ -66,7 +65,7 @@ export function MandateInlineForm({
   useEffect(() => {
     if (!open) return;
     setName(dealName ? `Mandat — ${dealName}` : "");
-    setType(defaultType || "fundraising");
+    setType(defaultType || "ma_sell");
     setStatus("draft");
     setPriority("medium");
     setClientOrgId(defaultClientOrgId ?? clientOrgs[0]?.id ?? "");

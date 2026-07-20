@@ -86,7 +86,7 @@ export function MandateDetail({ mandate, initialFees, deals }: {
   const [loading, setLoading] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
 
-  const tc = TYPE_COLORS[mandate.type] ?? TYPE_COLORS.fundraising;
+  const tc = TYPE_COLORS[mandate.type] ?? TYPE_COLORS.ma_sell;
   const sc = STATUS_COLORS[mandate.status] ?? STATUS_COLORS.draft;
 
   const totalEstimated = mandate.estimated_fee_amount ?? 0;
@@ -242,13 +242,12 @@ export function MandateDetail({ mandate, initialFees, deals }: {
           {/* Infos clés */}
           {(() => {
             const opLabel: Record<string, string> = {
-              fundraising: "Montant à lever",
               ma_sell:     "Valorisation cible (EV)",
               ma_buy:      "Budget d'acquisition",
               cfo_advisor: "Budget mission",
             };
             const feeBaseLabel: Record<string, string> = {
-              ev: "sur EV", revenue: "sur CA", raise_amount: "sur levée", salary: "sur salaire",
+              ev: "sur EV", revenue: "sur CA", salary: "sur salaire",
             };
             const infos = [
               { label: "Début",        val: fmtDate(mandate.start_date) },

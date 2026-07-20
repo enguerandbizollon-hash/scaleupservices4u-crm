@@ -7,7 +7,6 @@ import { getMandateById, updateMandate } from "@/actions/mandates";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 
 const TYPES = [
-  { value: "fundraising", label: "Fundraising" },
   { value: "ma_sell",     label: "M&A Sell-side" },
   { value: "ma_buy",      label: "M&A Buy-side" },
   { value: "cfo_advisor", label: "CFO Advisory" },
@@ -29,7 +28,6 @@ const CURRENCIES  = ["EUR", "CHF", "USD", "GBP"];
 const FEE_BASES   = [
   { value: "ev",           label: "Valeur d'entreprise (EV)" },
   { value: "revenue",      label: "Chiffre d'affaires" },
-  { value: "raise_amount", label: "Montant levé" },
   { value: "salary",       label: "Salaire annuel" },
 ];
 
@@ -226,7 +224,7 @@ export default function ModifierMandatPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={lbl}>
-                  {{fundraising:"Montant à lever",ma_sell:"Valorisation cible (EV)",ma_buy:"Budget d'acquisition",cfo_advisor:"Budget mission"}[form.type] ?? "Montant de l'opération"}
+                  {{ma_sell:"Valorisation cible (EV)",ma_buy:"Budget d'acquisition",cfo_advisor:"Budget mission"}[form.type] ?? "Montant de l'opération"}
                 </label>
                 <input style={inp} type="number" placeholder="0" value={form.operation_amount} onChange={setF("operation_amount")} />
               </div>

@@ -66,7 +66,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div>
                 <label style={{ cssText: lbl } as any}>Type de mission</label>
                 <select name="deal_type" defaultValue={deal.deal_type} style={{ cssText: sel } as any}>
-                  <option value="fundraising">Fundraising</option>
                   <option value="ma_sell">M&A Sell-side</option>
                   <option value="ma_buy">M&A Buy-side</option>
                   <option value="cfo_advisor">CFO Advisor</option>
@@ -159,8 +158,8 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                 />
               </div>
 
-              {/* Profil matching — fundraising et M&A */}
-              {["fundraising","ma_sell","ma_buy"].includes(deal.deal_type) && (
+              {/* Profil matching — M&A */}
+              {["ma_sell","ma_buy"].includes(deal.deal_type) && (
                 <>
                   <div>
                     <label style={{ cssText: lbl } as any}>Stade de l&apos;entreprise</label>

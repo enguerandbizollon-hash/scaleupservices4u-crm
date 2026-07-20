@@ -11,7 +11,6 @@ import {
   SECTORS,
   COMPANY_STAGES,
   ORG_COMPANY_STAGES,
-  ROUND_TYPES,
   DEAL_TIMING_OPTIONS,
   CURRENCIES,
   GEO_ALL,
@@ -23,7 +22,7 @@ const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type DealType = "fundraising" | "ma_sell" | "ma_buy" | "cfo_advisor";
+type DealType = "ma_sell" | "ma_buy" | "cfo_advisor";
 
 interface MandateOption { id: string; name: string; type: string; status: string; client_name: string | null }
 interface OrgOption { id: string; name: string }
@@ -36,7 +35,6 @@ interface Props {
 }
 
 const DEAL_TYPE_LABELS: Record<string, string> = {
-  fundraising: "Fundraising",
   ma_sell: "M&A Sell-side",
   ma_buy: "M&A Buy-side",
   cfo_advisor: "CFO Advisor",
@@ -181,7 +179,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
 
   // Step 1 — identité
   const [name, setName] = useState("");
-  const [dealType, setDealType] = useState<DealType>("fundraising");
+  const [dealType, setDealType] = useState<DealType>("ma_sell");
   const [dealStatus, setDealStatus] = useState("open");
   const [dealStage, setDealStage] = useState("kickoff");
   const [priority, setPriority] = useState("medium");
@@ -218,15 +216,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   const [newMandateName, setNewMandateName] = useState("");
   const [newMandateStart, setNewMandateStart] = useState("");
   const [newMandateClose, setNewMandateClose] = useState("");
-
-  // Step 2 — Fundraising
-  const [targetRaiseAmount, setTargetRaiseAmount] = useState("");
-  const [preMoneyValuation, setPreMoneyValuation] = useState("");
-  const [postMoneyValuation, setPostMoneyValuation] = useState("");
-  const [useOfFunds, setUseOfFunds] = useState("");
-  const [runwayMonths, setRunwayMonths] = useState("");
-  const [roundType, setRoundType] = useState("");
-  const [currentInvestors, setCurrentInvestors] = useState<string[]>([]);
 
   // Step 2 — M&A Sell
   const [targetAmount, setTargetAmount] = useState("");
@@ -379,9 +368,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
       priority_level: priority,
       sector: sector || null,
       location: location || null,
-      // V54 : stade startup uniquement pour fundraising. Les autres types
-      // s'appuient sur organizations.company_stage (taille d'entreprise).
-      company_stage: dealType === "fundraising" ? (companyStage || null) : null,
+      company_stage: null,
       company_geography: companyGeography || null,
       start_date: startDate || null,
       target_date: targetDate || null,
@@ -423,15 +410,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
         target_close_date: newMandateClose || null,
         currency,
       } : null,
-
-      // Fundraising
-      target_raise_amount: numOrNull(targetRaiseAmount),
-      pre_money_valuation: numOrNull(preMoneyValuation),
-      post_money_valuation: numOrNull(postMoneyValuation),
-      use_of_funds: useOfFunds.trim() || null,
-      runway_months: numOrNull(runwayMonths),
-      round_type: roundType || null,
-      current_investors: currentInvestors.length > 0 ? currentInvestors : null,
 
       // M&A Sell
       target_amount: numOrNull(targetAmount),
@@ -602,18 +580,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
                 </div>
               </div>
               <div style={grid2}>
-                {/* V54 : Stade startup (seed → growth) réservé au fundraising.
-                    Pour les autres types, la taille d'entreprise se renseigne
-                    sur l'organisation cliente (section suivante). */}
-                {dealType === "fundraising" ? (
-                  <div>
-                    <label style={lbl}>Stade startup</label>
-                    <select value={companyStage} onChange={e => setCompanyStage(e.target.value)} style={inp}>
-                      <option value="">— Non renseigné —</option>
-                      {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
-                ) : <div />}
+                <div />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <div>
                     <label style={lbl}>Date de début</label>
@@ -841,48 +808,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
         )}
 
         {/* Step 2 — Spécificités */}
-        {step === 2 && dealType === "fundraising" && (
-          <div style={sectionCard}>
-            <div style={sectionTitle}>Fundraising — levée de fonds</div>
-            <div style={grid3}>
-              <div>
-                <label style={lbl}>Montant cible ({currencySymbol})</label>
-                <input type="number" value={targetRaiseAmount} onChange={e => setTargetRaiseAmount(e.target.value)} placeholder="3000000" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>Pre-money ({currencySymbol})</label>
-                <input type="number" value={preMoneyValuation} onChange={e => setPreMoneyValuation(e.target.value)} style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>Post-money ({currencySymbol})</label>
-                <input type="number" value={postMoneyValuation} onChange={e => setPostMoneyValuation(e.target.value)} style={inp} />
-              </div>
-            </div>
-            <div style={grid2}>
-              <div>
-                <label style={lbl}>Type de round</label>
-                <select value={roundType} onChange={e => setRoundType(e.target.value)} style={inp}>
-                  <option value="">— Non renseigné —</option>
-                  {ROUND_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Runway (mois)</label>
-                <input type="number" value={runwayMonths} onChange={e => setRunwayMonths(e.target.value)} placeholder="12" style={inp} />
-              </div>
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Utilisation des fonds</label>
-              <textarea rows={2} value={useOfFunds} onChange={e => setUseOfFunds(e.target.value)}
-                placeholder="Recrutement, produit, marketing, international…" style={{ ...inp, resize: "vertical" }} />
-            </div>
-            <div>
-              <label style={lbl}>Investisseurs actuels</label>
-              <TagsInput values={currentInvestors} onChange={setCurrentInvestors} placeholder="Ajouter un investisseur puis Entrée" />
-            </div>
-          </div>
-        )}
-
         {step === 2 && dealType === "ma_sell" && (
           <div style={sectionCard}>
             <div style={sectionTitle}>M&A Sell-side — cession</div>

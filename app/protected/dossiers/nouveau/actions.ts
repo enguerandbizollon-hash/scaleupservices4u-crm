@@ -130,14 +130,6 @@ export interface WizardDealPayload {
   } | null;
 
   // Step 2 — spécificités
-  // Fundraising
-  target_raise_amount: number | null;
-  pre_money_valuation: number | null;
-  post_money_valuation: number | null;
-  use_of_funds: string | null;
-  runway_months: number | null;
-  round_type: string | null;
-  current_investors: string[] | null;
   // M&A Sell
   target_amount: number | null;
   asking_price_min: number | null;
@@ -260,15 +252,6 @@ export async function createDealWizardAction(
 
   // Spécificités par deal_type (on pousse tout, les colonnes nullable ignorent le reste)
   switch (payload.deal_type) {
-    case "fundraising":
-      dealInsert.target_raise_amount = payload.target_raise_amount;
-      dealInsert.pre_money_valuation = payload.pre_money_valuation;
-      dealInsert.post_money_valuation = payload.post_money_valuation;
-      dealInsert.use_of_funds = payload.use_of_funds;
-      dealInsert.runway_months = payload.runway_months;
-      dealInsert.round_type = payload.round_type;
-      dealInsert.current_investors = payload.current_investors?.length ? payload.current_investors : null;
-      break;
     case "ma_sell":
       dealInsert.target_amount = payload.target_amount;
       dealInsert.asking_price_min = payload.asking_price_min;

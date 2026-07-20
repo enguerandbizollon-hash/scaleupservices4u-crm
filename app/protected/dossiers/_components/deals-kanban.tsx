@@ -383,7 +383,7 @@ function KanbanCard({ deal, lastActivityDate, onMove, onDragStart }: {
   onMove: (dealId: string, dir: "prev" | "next") => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>) => void;
 }) {
-  const meta = TYPE_META[deal.deal_type] ?? TYPE_META.fundraising;
+  const meta = TYPE_META[deal.deal_type] ?? TYPE_META.ma_sell;
   const prioColor = PRIO_COLOR[deal.priority_level] ?? PRIO_COLOR.low;
   const amount = fmtAmount(deal.target_amount, deal.currency);
   // V55 : navigation prev/next utilise la séquence du type du dossier
