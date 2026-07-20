@@ -9,9 +9,7 @@ import { getAllMandates, linkMandateToDeal, unlinkMandateFromDeal, getMandateByD
 // MatchingTab et MaMatchingTab : supprimés, leur logique est désormais
 // intégrée comme sources internes dans le SourcingWizard (S4).
 import { FinancialTab, type FinancialRow } from "./financial-tab";
-import { updateDealMatchingProfile } from "@/actions/matching";
 import {
-  createCommitment, updateCommitment, deleteCommitment,
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
   updateDealOrganizationStage, setDealClientOrganization,
   updateDealField,
@@ -31,12 +29,12 @@ import { isScreeningReady } from "@/lib/crm/matching-maps";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
-import { COMPANY_STAGES, ORG_COMPANY_STAGES, GEOGRAPHIES, ROUND_TYPES, DEAL_TIMING_OPTIONS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
+import { COMPANY_STAGES, ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, ChevronDown, ChevronUp,
-  Mail, Phone, Linkedin, Users, User, Building2, TrendingUp,
+  Mail, Phone, Linkedin, Users, User, Building2,
   FileText, ExternalLink, AlertTriangle, CalendarDays, Briefcase
 } from "lucide-react";
 import { StatusDropdown } from "../../components/status-dropdown";
@@ -47,17 +45,15 @@ import { useRouter } from "next/navigation";
 // ── Types ────────────────────────────────────────────────────
 type Org = { id:string; name:string; organization_type:string; base_status:string; location?:string; investment_ticket?:string; role_in_dossier?:string; contacts: Contact[] };
 type Contact = { id:string; first_name:string; last_name:string; email?:string; phone?:string; title?:string; linkedin_url?:string; base_status:string; last_contact_date?:string; role_label?:string; org_id?:string; org_name?:string };
-type Commitment = { id:string; amount?:number; currency:string; status:string; committed_at?:string; notes?:string; organization_id?:string; org_name?:string };
 // Les documents sont gérés dans l'onglet Documents (V49) via ma_documents + Supabase Storage.
 
 // ── Helpers ──────────────────────────────────────────────────
 const DT: Record<string,{bg:string;tx:string;border:string}> = {
-  fundraising:{bg:"var(--fund-bg)",tx:"var(--fund-tx)",border:"var(--fund-mid)"},
   ma_sell:{bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
   ma_buy:{bg:"var(--buy-bg)",tx:"var(--buy-tx)",border:"var(--buy-mid)"},
   cfo_advisor:{bg:"var(--cfo-bg)",tx:"var(--cfo-tx)",border:"var(--cfo-mid)"},
 };
-const TYPE_LABELS: Record<string,string> = { fundraising:"Fundraising", ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor" };
+const TYPE_LABELS: Record<string,string> = { ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor" };
 // V55 : libellés unifiés via stageLabel() depuis matching-maps. Map gardée
 // vide pour éviter toute référence oubliée (remplacée une à une).
 const STAGE_LABELS: Record<string,string> = {};
@@ -74,14 +70,6 @@ const STATUS_SC: Record<string,{bg:string,tx:string}> = {
 const STATUS_L: Record<string,string> = {
   active:"Actif", to_qualify:"Non qualifié", inactive:"Inactif",
   priority:"Actif", qualified:"Actif", dormant:"Non qualifié", excluded:"Inactif",
-};
-const COMM_S: Record<string,{label:string,bg:string,tx:string}> = {
-  indication:{label:"Indication",bg:"var(--surface-3)",tx:"var(--text-4)"},
-  soft:{label:"Soft",bg:"#FEF3C7",tx:"#92400E"},
-  hard:{label:"Hard",bg:"var(--fund-bg)",tx:"var(--fund-tx)"},
-  signed:{label:"Signé",bg:"var(--fund-bg)",tx:"var(--fund-tx)"},
-  transferred:{label:"Transféré",bg:"var(--fund-bg)",tx:"var(--fund-tx)"},
-  cancelled:{label:"Annulé",bg:"var(--rec-bg)",tx:"var(--rec-tx)"},
 };
 const ROLE_CONFIG: Record<string,{label:string;bg:string;tx:string}> = {
   client:          {label:"Client",           bg:"#D1FAE5", tx:"#065F46"},
@@ -304,11 +292,10 @@ function MandateTabContent({
 }
 
 // ════════════════════════════════════════════════════════════
-export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitments, initialFinancialData, initialMandate, initialClientOrganization, initialSuggestions }: {
+export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancialData, initialMandate, initialClientOrganization, initialSuggestions }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
-  initialCommitments: Commitment[];
   initialFinancialData: FinancialRow[];
   initialMandate: any;
   initialClientOrganization: { id: string; name: string; company_stage: string | null; organization_type: string | null; is_client: boolean } | null;
@@ -332,12 +319,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     getAllOrganisationsSimple().then(orgs => setAllOrgs(orgs)).catch(() => {});
   }, []);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
-  const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
 
   // Expanded sections
   const [expOrgs, setExpOrgs] = useState(true);
   const [expOrg, setExpOrg] = useState<Record<string,boolean>>({});
-  const [expPipeline, setExpPipeline] = useState(true);
   const [expSpecs, setExpSpecs] = useState(true);
 
   // Modals
@@ -352,7 +337,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
   const [form, setForm] = useState<Record<string,string>>({});
 
   const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "sourcing" | "mandat" | "financier" | "documents">("dossier");
-  const [matchingRefreshKey, setMatchingRefreshKey] = useState(0);
 
   // Drawer latéral pour entités liées (contacts, organisations)
   const [drawerEntity, setDrawerEntity] = useState<EntityRef>(null);
@@ -438,56 +422,12 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
     }
   }
 
-  // Matching profile inline edit
-  const [matchingEditOpen, setMatchingEditOpen] = useState(false);
-  const [matchingStage, setMatchingStage] = useState<string>(deal.company_stage ?? "");
-  const [matchingGeo, setMatchingGeo] = useState<string>(deal.company_geography ?? "");
-  const [matchingSaving, setMatchingSaving] = useState(false);
-
   const dt = DT[deal.deal_type] ?? DT.ma_sell;
-  const isFundraising  = deal.deal_type === "fundraising";
   const isMa           = deal.deal_type === "ma_sell" || deal.deal_type === "ma_buy";
-  const target = deal.target_amount ?? 0;
-  const hard = commitments.filter(c=>["hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
-  const soft = commitments.filter(c=>["soft","hard","signed","transferred"].includes(c.status)).reduce((s,c)=>s+(c.amount??0),0);
-  const pct = target > 0 ? Math.min(100, Math.round(hard/target*100)) : 0;
 
   const setF = (k:string) => (e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => setForm(p=>({...p,[k]:e.target.value}));
   const openModal = (name:string, data?:any) => { setModal(name); setEditing(data??null); setForm(data ? {...data, amount:data.amount??"", committed_at:toDateStr(data.committed_at), due_date:toDateStr(data.due_date), activity_date:toDateStr(data.activity_date), organization_id:data.organization_id??""} : {}); };
   const closeModal = () => { setModal(null); setEditing(null); setForm({}); };
-
-  // ── PIPELINE CRUD ──────────────────────────────────────────
-  async function saveCommitment() {
-    setLoading(true);
-    try {
-      const payload = {
-        organization_id: form.organization_id || null,
-        amount:          form.amount ? Number(form.amount) : null,
-        currency:        form.currency || "EUR",
-        status:          form.status || "indication",
-        committed_at:    form.committed_at || null,
-        notes:           form.notes || null,
-      };
-      if (editing) {
-        const r = await updateCommitment(deal.id, editing.id, payload);
-        if (!r.success) throw new Error(r.error);
-        const orgName = Array.isArray(r.data?.organizations)?r.data.organizations[0]?.name:(r.data?.organizations as any)?.name;
-        setCommitments(p=>p.map(c=>c.id===editing.id?{...r.data!,org_name:orgName}:c));
-      } else {
-        const r = await createCommitment(deal.id, payload);
-        if (!r.success) throw new Error(r.error);
-        const orgName = Array.isArray(r.data?.organizations)?r.data.organizations[0]?.name:(r.data?.organizations as any)?.name;
-        setCommitments(p=>[...p,{...r.data!,org_name:orgName}]);
-      }
-      closeModal();
-    } catch(e:any){ alert(e.message); } finally { setLoading(false); }
-  }
-  async function handleDeleteCommitment(id:string) {
-    if (!confirm("Supprimer cet engagement ?")) return;
-    const r = await deleteCommitment(deal.id, id);
-    if (!r.success) { alert(r.error); return; }
-    setCommitments(p=>p.filter(c=>c.id!==id));
-  }
 
   const cardStyle: React.CSSProperties = { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", marginBottom:10 };
   const rowStyle: React.CSSProperties = { display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderBottom:"1px solid var(--border)" };
@@ -586,9 +526,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
 
         {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
         <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
-          {(isFundraising
-            ? (["dossier","screening","sourcing","mandat","financier","documents"] as const)
-            : isMa
+          {(isMa
             ? (["dossier","screening","sourcing","mandat","financier","documents"] as const)
             : (["dossier","screening","mandat","financier","documents"] as const)
           ).map(tab => {
@@ -597,7 +535,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
               financier:"Financier",
               documents:"Documents",
             };
-            const accentColor = isFundraising ? "var(--fund-tx)" : isMa ? "var(--sell-tx)" : "var(--sell-tx)";
+            const accentColor = "var(--sell-tx)";
             const isActive = activeTab === tab;
             return (
               <button key={tab} onClick={()=>{
@@ -934,119 +872,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
             {/* SPÉCIFICITÉS MISSION — dépend du deal_type, saisies au wizard */}
             <SpecificsCard deal={deal} dealId={deal.id} expanded={expSpecs} onToggle={()=>setExpSpecs(p=>!p)}/>
 
-            {/* PIPELINE FINANCIER */}
-            {isFundraising && (
-              <div style={cardStyle}>
-                <SectionHeader icon={TrendingUp} title="Pipeline investisseurs" count={commitments.length} expanded={expPipeline} onToggle={()=>setExpPipeline(p=>!p)} onAdd={()=>openModal("commitment")} addLabel="Engagement"/>
-                {expPipeline && (
-                  <>
-                    {target > 0 && (
-                      <div style={{ padding:"10px 16px", borderTop:"1px solid var(--border)", background:"var(--surface-2)" }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"var(--text-4)", marginBottom:5 }}>
-                          <span>Hard : <strong style={{ color:"var(--fund-tx)" }}>{fmtA(hard, deal.currency)}</strong></span>
-                          <span>Objectif : <strong style={{ color:"var(--text-2)" }}>{fmtA(target, deal.currency)}</strong> — <strong style={{ color:"var(--fund-tx)" }}>{pct}%</strong></span>
-                        </div>
-                        <div style={{ height:6, background:"var(--surface-3)", borderRadius:6, overflow:"hidden" }}>
-                          <div style={{ height:"100%", width:`${pct}%`, background:"var(--fund-tx)", borderRadius:6 }}/>
-                        </div>
-                      </div>
-                    )}
-                    {commitments.map((c,i) => {
-                      const cs = COMM_S[c.status]??COMM_S.indication;
-                      return (
-                        <div key={c.id} style={{ ...rowStyle, borderBottom: i<commitments.length-1?"1px solid var(--border)":"none" }}>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontSize:13.5, fontWeight:600, color:"var(--text-1)" }}>{c.org_name ?? "—"}</div>
-                            <div style={{ fontSize:12, color:"var(--text-5)", marginTop:1 }}>{fmt(c.committed_at)}{c.notes ? ` · ${c.notes}` : ""}</div>
-                          </div>
-                          <span style={{ fontSize:11.5, padding:"3px 9px", borderRadius:20, background:cs.bg, color:cs.tx, fontWeight:600, flexShrink:0 }}>{cs.label}</span>
-                          <span style={{ fontSize:13.5, fontWeight:700, color:"var(--text-1)", flexShrink:0, minWidth:70, textAlign:"right" }}>{fmtA(c.amount, c.currency)}</span>
-                          <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                            <button onClick={()=>openModal("commitment",{...c,org_name:c.org_name})} style={{...actionBtn}}><Pencil size={11}/></button>
-                            <button onClick={()=>handleDeleteCommitment(c.id)} style={{...actionBtn, color:"var(--rec-tx)"}}><Trash2 size={11}/></button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {commitments.length===0 && <div style={{ padding:"20px 16px", fontSize:13, color:"var(--text-5)", borderTop:"1px solid var(--border)", textAlign:"center" }}>Aucun engagement</div>}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* PROFIL POUR MATCHING — fundraising uniquement */}
-            {isFundraising && (
-              <div style={cardStyle}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <TrendingUp size={14} color="var(--text-4)"/>
-                    <span style={{ fontSize:13, fontWeight:700, color:"var(--text-2)", textTransform:"uppercase", letterSpacing:".06em" }}>Profil matching</span>
-                  </div>
-                  <button onClick={()=>setMatchingEditOpen(p=>!p)} style={{ padding:"4px 10px", border:"1px solid var(--border)", borderRadius:7, background:"var(--surface-2)", color:"var(--text-3)", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
-                    {matchingEditOpen ? "Annuler" : "Modifier"}
-                  </button>
-                </div>
-                {!matchingEditOpen ? (
-                  <div style={{ padding:"10px 16px 14px", borderTop:"1px solid var(--border)", display:"flex", gap:16, flexWrap:"wrap" }}>
-                    <div>
-                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Stade</div>
-                      <div style={{ fontSize:13, color:"var(--text-2)" }}>
-                        {COMPANY_STAGES.find(s=>s.value===deal.company_stage)?.label ?? <span style={{ color:"var(--text-5)" }}>—</span>}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Géographie</div>
-                      <div style={{ fontSize:13, color:"var(--text-2)" }}>
-                        {GEOGRAPHIES.find(g=>g.value===deal.company_geography)?.label ?? <span style={{ color:"var(--text-5)" }}>—</span>}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Secteur</div>
-                      <div style={{ fontSize:13, color:"var(--text-2)" }}>{deal.sector ?? <span style={{ color:"var(--text-5)" }}>—</span>}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text-5)", textTransform:"uppercase", marginBottom:3 }}>Montant cible</div>
-                      <div style={{ fontSize:13, color:"var(--text-2)" }}>{target > 0 ? fmtA(target, deal.currency) : <span style={{ color:"var(--text-5)" }}>—</span>}</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ padding:"12px 16px 14px", borderTop:"1px solid var(--border)", display:"flex", flexDirection:"column", gap:12 }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                      <div>
-                        <label style={{ display:"block", fontSize:11.5, fontWeight:600, color:"var(--text-4)", marginBottom:5 }}>Stade</label>
-                        <select value={matchingStage} onChange={e=>setMatchingStage(e.target.value)} style={sel}>
-                          <option value="">— Non renseigné —</option>
-                          {COMPANY_STAGES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ display:"block", fontSize:11.5, fontWeight:600, color:"var(--text-4)", marginBottom:5 }}>Géographie</label>
-                        <select value={matchingGeo} onChange={e=>setMatchingGeo(e.target.value)} style={sel}>
-                          <option value="">— Non renseignée —</option>
-                          {GEOGRAPHIES.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", justifyContent:"flex-end" }}>
-                      <BtnPrimary loading={matchingSaving} onClick={async ()=>{
-                        setMatchingSaving(true);
-                        const res = await updateDealMatchingProfile(deal.id, {
-                          company_stage:     matchingStage || null,
-                          company_geography: matchingGeo   || null,
-                        });
-                        setMatchingSaving(false);
-                        if (res.success) {
-                          deal.company_stage     = matchingStage     || null;
-                          deal.company_geography = matchingGeo       || null;
-                          setMatchingEditOpen(false);
-                          setMatchingRefreshKey(k => k + 1);
-                        }
-                      }}>Enregistrer</BtnPrimary>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* ── Colonne droite ── */}
@@ -1066,43 +891,6 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialCommitme
       </div>
 
       {/* ═══ MODALES ═══════════════════════════════════════════ */}
-
-      {/* Engagement */}
-      {modal==="commitment" && (
-        <Modal title={editing?"Modifier l'engagement":"Nouvel engagement"} onClose={closeModal}>
-          <Field label="Organisation">
-            <select style={sel} value={form.organization_id||""} onChange={setF("organization_id")}>
-              <option value="">— Choisir —</option>
-              {allOrgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Statut">
-            <select style={sel} value={form.status||"indication"} onChange={setF("status")}>
-              {Object.entries(COMM_S).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Montant">
-            <input style={inp} type="number" placeholder="ex: 500000" value={form.amount||""} onChange={setF("amount")}/>
-          </Field>
-          <Field label="Devise">
-            <select style={sel} value={form.currency||"EUR"} onChange={setF("currency")}>
-              <option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option>
-            </select>
-          </Field>
-          <Field label="Date d'engagement">
-            <input style={inp} type="date" value={form.committed_at||""} onChange={setF("committed_at")}/>
-          </Field>
-          <Field label="Notes">
-            <input style={inp} placeholder="Notes…" value={form.notes||""} onChange={setF("notes")}/>
-          </Field>
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
-            <button onClick={closeModal} style={{ padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface-2)", color:"var(--text-3)", cursor:"pointer", fontSize:13 }}>Annuler</button>
-            <BtnPrimary onClick={saveCommitment} loading={loading}>{editing?"Enregistrer":"Ajouter"}</BtnPrimary>
-          </div>
-        </Modal>
-      )}
-
-
 
       {/* Ajouter contact — picker unifié (recherche + création) */}
       {modal==="add_contact" && (
@@ -1270,14 +1058,6 @@ type SpecDeal = {
   deal_type: string;
   currency: string | null;
   target_amount: number | null;
-  // Fundraising
-  target_raise_amount: number | null;
-  pre_money_valuation: number | null;
-  post_money_valuation: number | null;
-  round_type: string | null;
-  runway_months: number | null;
-  use_of_funds: string | null;
-  current_investors: string[] | null;
   // M&A Sell
   asking_price_min: number | null;
   asking_price_max: number | null;
@@ -1303,10 +1083,6 @@ type SpecDeal = {
 
 function hasAnySpec(deal: SpecDeal): boolean {
   switch (deal.deal_type) {
-    case "fundraising":
-      return !!(deal.target_raise_amount || deal.pre_money_valuation || deal.post_money_valuation
-        || deal.round_type || deal.runway_months || deal.use_of_funds
-        || (deal.current_investors && deal.current_investors.length > 0));
     case "ma_sell":
       return !!(deal.target_amount || deal.asking_price_min || deal.asking_price_max
         || deal.management_retention_notes || deal.deal_timing
@@ -1329,7 +1105,6 @@ function SpecificsCard({ deal, dealId, expanded, onToggle }: {
   deal: SpecDeal; dealId: string; expanded: boolean; onToggle: () => void;
 }) {
   const title =
-    deal.deal_type === "fundraising" ? "Spécificités levée" :
     deal.deal_type === "ma_sell" ? "Spécificités cession" :
     deal.deal_type === "ma_buy" ? "Critères acquisition" :
     "Spécificités";
@@ -1341,7 +1116,6 @@ function SpecificsCard({ deal, dealId, expanded, onToggle }: {
       <SectionHeader icon={Briefcase} title={title} expanded={expanded} onToggle={onToggle} />
       {expanded && (
         <div style={{ padding:"12px 16px", borderTop:"1px solid var(--border)", display:"flex", flexDirection:"column", gap:10 }}>
-          {deal.deal_type === "fundraising" && <FundraisingSpecs deal={deal} dealId={dealId} />}
           {deal.deal_type === "ma_sell" && <MaSellSpecs deal={deal} dealId={dealId} />}
           {deal.deal_type === "ma_buy" && <MaBuySpecs deal={deal} dealId={dealId} />}
         </div>
@@ -1432,48 +1206,6 @@ function rangeFmt(min: number | null, max: number | null, currency: string | nul
 }
 
 // ── Specs par type ────────────────────────────────────────────────────────────
-
-function FundraisingSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
-  const c = deal.currency ?? "EUR";
-  const fmMoney = (n: string | number | null) => {
-    if (n == null || n === "") return "";
-    const num = typeof n === "number" ? n : Number(n);
-    if (!Number.isFinite(num)) return "";
-    if (Math.abs(num) >= 1e6) return `${(num / 1e6).toFixed(1)}M ${c}`;
-    if (Math.abs(num) >= 1e3) return `${(num / 1e3).toFixed(0)}k ${c}`;
-    return `${num} ${c}`;
-  };
-  return (
-    <>
-      <SpecRow label="Montant cible">
-        <EditableSpec dealId={dealId} field="target_raise_amount" initialValue={deal.target_raise_amount} type="number" formatter={fmMoney} placeholder="Saisir un montant" />
-      </SpecRow>
-      <SpecRow label="Type de round">
-        <EditableSpec
-          dealId={dealId} field="round_type" initialValue={deal.round_type ?? null}
-          selectOptions={ROUND_TYPES.map(r => ({ value: r.value, label: r.label }))}
-          formatter={(v) => v ? (ROUND_TYPES.find(r => r.value === v)?.label ?? String(v)) : ""}
-          placeholder="Choisir un round"
-        />
-      </SpecRow>
-      <SpecRow label="Valorisation pré">
-        <EditableSpec dealId={dealId} field="pre_money_valuation" initialValue={deal.pre_money_valuation} type="number" formatter={fmMoney} placeholder="Saisir valorisation pré" />
-      </SpecRow>
-      <SpecRow label="Valorisation post">
-        <EditableSpec dealId={dealId} field="post_money_valuation" initialValue={deal.post_money_valuation} type="number" formatter={fmMoney} placeholder="Saisir valorisation post" />
-      </SpecRow>
-      <SpecRow label="Runway">
-        <EditableSpec dealId={dealId} field="runway_months" initialValue={deal.runway_months} type="number" formatter={(v) => v == null || v === "" ? "" : `${v} mois`} placeholder="Saisir runway (mois)" />
-      </SpecRow>
-      <SpecRow label="Utilisation">
-        <EditableSpec dealId={dealId} field="use_of_funds" initialValue={deal.use_of_funds ?? null} placeholder="Décrire l'usage des fonds" />
-      </SpecRow>
-      {deal.current_investors && deal.current_investors.length > 0 && (
-        <SpecRow label="Investisseurs actuels"><Chips values={deal.current_investors} /></SpecRow>
-      )}
-    </>
-  );
-}
 
 function MaSellSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
   const c = deal.currency ?? "EUR";

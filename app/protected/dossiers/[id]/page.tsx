@@ -33,11 +33,10 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   // plus de fetch server-side ici.
   // Documents gérés dans l'onglet Documents (V49) — fetch côté client via
   // listDealDocuments, pas de prefetch server-side ici.
-  const [orgsRes, commitmentsRes, financialRes] = await Promise.all([
+  const [orgsRes, financialRes] = await Promise.all([
     supabase.from("deal_organizations")
       .select("organization_id,role_in_dossier,organizations(id,name,organization_type,base_status,location,investment_ticket,investment_stage)")
       .eq("deal_id", id),
-    supabase.from("investor_commitments").select("id,amount,currency,status,committed_at,notes,organization_id,organizations(name)").eq("deal_id",id).order("committed_at",{ascending:false}),
     supabase.from("financial_data").select("*").eq("deal_id",id).order("fiscal_year",{ascending:false}),
   ]);
 
@@ -64,11 +63,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     }
   }
 
-  const comms = (commitmentsRes.data ?? []).map(c => ({
-    ...c,
-    org_name: Array.isArray(c.organizations) ? c.organizations[0]?.name : (c.organizations as any)?.name,
-  }));
-
   // Mandat lié au dossier (null si deal.mandate_id est null)
   const initialMandate = await getMandateByDealId(id);
 
@@ -83,7 +77,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       deal={deal}
       initialOrgs={orgs}
       initialContacts={contacts}
-      initialCommitments={comms}
       initialFinancialData={financialRes.data ?? []}
       initialMandate={initialMandate}
       initialClientOrganization={clientOrg}

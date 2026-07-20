@@ -61,15 +61,6 @@ export type DealActionResult =
   | { success: true; id: string }
   | { success: false; error: string };
 
-export interface CommitmentInput {
-  organization_id?: string | null;
-  amount?: number | null;
-  currency?: string;
-  status?: string;
-  committed_at?: string | null;
-  notes?: string | null;
-}
-
 // DocumentInput : supprimée (V49). Remplacée par CreateDocumentInput dans
 // actions/documents.ts (ma_documents + Supabase Storage).
 
@@ -290,79 +281,8 @@ export async function getDealById(id: string) {
   return data;
 }
 
-// ── Pipeline — investor_commitments ──────────────────────────────────────────
-
-export async function createCommitment(dealId: string, data: CommitmentInput) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false as const, error: "Non autorisé" };
-
-  const { data: commitment, error } = await supabase
-    .from("investor_commitments").insert({
-      deal_id:         dealId,
-      user_id:         user.id,
-      organization_id: data.organization_id ?? null,
-      amount:          data.amount          ?? null,
-      currency:        data.currency        ?? "EUR",
-      status:          data.status          ?? "indication",
-      committed_at:    data.committed_at    ?? null,
-      notes:           data.notes           ?? null,
-    })
-    .select("id,amount,currency,status,committed_at,notes,organization_id,organizations(name)")
-    .single();
-
-  if (error) return { success: false as const, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true as const, data: commitment };
-}
-
-export async function updateCommitment(
-  dealId: string,
-  commitmentId: string,
-  updates: Partial<CommitmentInput>,
-) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false as const, error: "Non autorisé" };
-
-  const payload: Record<string, unknown> = {};
-  if (updates.organization_id !== undefined) payload.organization_id = updates.organization_id;
-  if (updates.amount          !== undefined) payload.amount          = updates.amount ? Number(updates.amount) : null;
-  if (updates.currency        !== undefined) payload.currency        = updates.currency;
-  if (updates.status          !== undefined) payload.status          = updates.status;
-  if (updates.committed_at    !== undefined) payload.committed_at    = updates.committed_at;
-  if (updates.notes           !== undefined) payload.notes           = updates.notes;
-
-  const { data, error } = await supabase
-    .from("investor_commitments")
-    .update(payload)
-    .eq("id", commitmentId)
-    .eq("deal_id", dealId)
-    .eq("user_id", user.id)
-    .select("id,amount,currency,status,committed_at,notes,organization_id,organizations(name)")
-    .single();
-
-  if (error) return { success: false as const, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true as const, data };
-}
-
-export async function deleteCommitment(dealId: string, commitmentId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Non autorisé" };
-
-  const { error } = await supabase
-    .from("investor_commitments")
-    .delete()
-    .eq("id", commitmentId)
-    .eq("deal_id", dealId)
-    .eq("user_id", user.id);
-
-  if (error) return { success: false, error: error.message };
-  revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true };
-}
+// Pipeline investisseurs (investor_commitments) : retiré au pivot M&A (2026-07-20).
+// Le CRUD des engagements est extrait vers _extraction-fundraising-2026-07-20/.
 
 // Documents deal : supprimés (V49). La table deal_documents a été droppée
 // au profit de ma_documents + Supabase Storage. Voir actions/documents.ts.
