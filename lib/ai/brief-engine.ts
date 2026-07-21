@@ -40,9 +40,7 @@ export interface ScreeningBriefInput {
   sector: string | null;
   description: string | null;
   strategic_rationale: string | null;
-  use_of_funds: string | null;
   company_stage: string | null;
-  target_raise_amount: number | null;
   asking_price_min: number | null;
   asking_price_max: number | null;
   currency: string;
@@ -61,7 +59,7 @@ export interface ScreeningBriefSuggestion {
   notes: string | null;     // avertissements éventuels (peu de données, etc.)
 }
 
-const SYSTEM_PROMPT = `Tu es analyste senior en M&A et fundraising. Tu produis des brouillons de qualification de dossier, sobres et factuels, basés uniquement sur les informations fournies.
+const SYSTEM_PROMPT = `Tu es analyste senior en M&A. Tu produis des brouillons de qualification de dossier, sobres et factuels, basés uniquement sur les informations fournies.
 
 Règles impératives :
 - Langue : français professionnel, ton sobre, jamais alarmiste, pas de superlatifs gratuits.
@@ -91,12 +89,6 @@ function buildUserPrompt(input: ScreeningBriefInput): string {
   }
   if (input.strategic_rationale && input.strategic_rationale.trim()) {
     parts.push(`\nRationale stratégique (M&A) :\n${input.strategic_rationale}`);
-  }
-  if (input.use_of_funds && input.use_of_funds.trim()) {
-    parts.push(`\nUse of funds (fundraising) :\n${input.use_of_funds}`);
-  }
-  if (input.target_raise_amount) {
-    parts.push(`Montant recherché : ${formatAmount(input.target_raise_amount, input.currency)}`);
   }
   if (input.asking_price_min || input.asking_price_max) {
     const range = `${formatAmount(input.asking_price_min, input.currency)} à ${formatAmount(input.asking_price_max, input.currency)}`;

@@ -163,7 +163,7 @@ function MandateTabContent({
   onOpenUnlink: () => void;
 }) {
   const MANDATE_TYPE_LABELS: Record<string, string> = {
-    fundraising: "Fundraising", ma_sell: "M&A Sell-side", ma_buy: "M&A Buy-side",
+    ma_sell: "M&A Sell-side", ma_buy: "M&A Buy-side",
   };
   const STATUS_COLORS: Record<string, { bg: string; tx: string; label: string }> = {
     draft:   { bg: "var(--surface-3)", tx: "var(--text-4)",  label: "Brouillon" },

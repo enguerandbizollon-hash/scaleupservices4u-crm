@@ -10,7 +10,6 @@ export type DealView = {
   organisation: string;
   sector: string;
   valuation: string;
-  fundraising: string;
   startDate: string;
   targetDate: string;
   description: string;

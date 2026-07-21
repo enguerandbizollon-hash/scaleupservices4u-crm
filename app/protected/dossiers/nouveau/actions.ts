@@ -71,7 +71,7 @@ export async function updateDealAction(formData: FormData) {
     mandate_id:     ns(formData.get("mandate_id")),
   };
 
-  // Matching investisseur (fundraising / M&A) — seulement si champs présents dans le form
+  // Profil de matching M&A — seulement si champs présents dans le form
   if (formData.has("company_stage")) updateData.company_stage = ns(formData.get("company_stage"));
   if (formData.has("company_geography")) updateData.company_geography = ns(formData.get("company_geography"));
 
@@ -86,7 +86,7 @@ export async function updateDealAction(formData: FormData) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Wizard de création de dossier (3 étapes)
 //   1. Identité + dirigeant + mandat (création inline possible)
-//   2. Spécificités par deal_type (Fundraising / M&A Sell / M&A Buy / CFO)
+//   2. Spécificités par deal_type (M&A Sell / M&A Buy)
 //   3. Données financières initiales N-1 (optionnelles)
 // ═══════════════════════════════════════════════════════════════════════════
 

@@ -32,9 +32,6 @@ export interface MatchingBrainDealContext {
   target_revenue_min: number | null;
   target_revenue_max: number | null;
   strategic_rationale: string | null;
-  // Critères Fundraising
-  target_raise_amount: number | null;
-  round_type: string | null;
   // Financier synthétique
   latest_revenue: number | null;
   latest_ebitda: number | null;
@@ -89,7 +86,7 @@ function stripCodeFences(raw: string): string {
 
 // ── Scoring IA ───────────────────────────────────────────────────────────────
 
-const SCORING_SYSTEM_PROMPT = `Tu es analyste senior en M&A et fundraising. Tu évalues le fit stratégique entre un dossier et une organisation suggérée comme cible, acquéreur, investisseur ou partenaire.
+const SCORING_SYSTEM_PROMPT = `Tu es analyste senior en M&A. Tu évalues le fit stratégique entre un dossier et une organisation suggérée comme cible ou acquéreur.
 
 Règles impératives :
 - Langue : français professionnel, sobre, factuel.
@@ -123,11 +120,6 @@ function buildScoringPrompt(input: MatchingBrainInput): string {
       parts.push(`Fourchette revenue cible : ${fmtAmount(d.target_revenue_min, d.currency)} à ${fmtAmount(d.target_revenue_max, d.currency)}`);
     }
     if (d.strategic_rationale) parts.push(`\nRationale stratégique :\n${d.strategic_rationale}`);
-  }
-
-  if (d.deal_type === "fundraising") {
-    if (d.target_raise_amount) parts.push(`Montant recherché : ${fmtAmount(d.target_raise_amount, d.currency)}`);
-    if (d.round_type) parts.push(`Type de tour : ${d.round_type}`);
   }
 
   if (d.latest_revenue != null || d.latest_ebitda != null) {
@@ -240,7 +232,7 @@ export interface OutreachDraftOutput {
   reasoning: string | null;
 }
 
-const OUTREACH_SYSTEM_PROMPT = `Tu rédiges des accroches de prise de contact sobres et efficaces pour le M&A et le fundraising. Ton style :
+const OUTREACH_SYSTEM_PROMPT = `Tu rédiges des accroches de prise de contact sobres et efficaces pour le M&A. Ton style :
 - Français professionnel, direct, sans fioritures, jamais alarmiste
 - Pas de tiret cadratin (—) : virgule ou point
 - Pas de superlatifs gratuits ni de formules commerciales agressives
@@ -261,8 +253,6 @@ function buildOutreachPrompt(input: OutreachDraftInput): string {
   if (d.sector) parts.push(`- Secteur : ${d.sector}`);
   if (d.executive_summary) parts.push(`- Pitch : ${d.executive_summary}`);
   if (d.key_differentiators?.length) parts.push(`- Différenciateurs : ${d.key_differentiators.join("; ")}`);
-  if (d.target_raise_amount) parts.push(`- Montant recherché : ${fmtAmount(d.target_raise_amount, d.currency)}`);
-  if (d.round_type) parts.push(`- Round : ${d.round_type}`);
   if (d.latest_revenue != null) parts.push(`- Revenue dernier exercice : ${fmtAmount(d.latest_revenue, d.currency)}`);
 
   parts.push(`\nDestinataire (organisation) :`);

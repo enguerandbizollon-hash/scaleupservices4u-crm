@@ -12,8 +12,6 @@ type Deal = {
   target_amount: number | null;
   currency: string | null;
   target_date: string | null;
-  // Fundraising
-  target_raise_amount?: number | null;
   // M&A Sell
   asking_price_min?: number | null;
   asking_price_max?: number | null;
@@ -264,7 +262,6 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
     };
     const dealForFee: DealForFee = {
       deal_type: deal.deal_type,
-      target_raise_amount: deal.target_raise_amount,
       asking_price_min: deal.asking_price_min,
       asking_price_max: deal.asking_price_max,
       target_ev_min: deal.target_ev_min,

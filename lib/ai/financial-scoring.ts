@@ -1,5 +1,5 @@
 /**
- * Analyse IA financière d'un dossier M&A / Fundraising.
+ * Analyse IA financière d'un dossier M&A.
  *
  * Consomme : données financières N, N-1, N-2 (table financial_data) +
  * contexte deal (secteur, type, devise).
@@ -35,7 +35,7 @@ export interface FinancialYear {
 
 export interface FinancialScoringInput {
   deal_name: string;
-  deal_type: string;          // fundraising | ma_sell | ma_buy | cfo_advisor
+  deal_type: string;          // ma_sell | ma_buy
   sector: string | null;
   currency: string;           // EUR | CHF | USD | GBP
   company_stage: string | null;

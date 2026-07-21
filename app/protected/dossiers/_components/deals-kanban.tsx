@@ -128,7 +128,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
   }, [filtered]);
 
   // V55 : stades du métier sélectionné + stades post-opération si non vides
-  // (ex. post_closing en fundraising/ma_sell).
+  // (ex. post_closing en ma_sell).
   const visibleStages: string[] = useMemo(() => {
     const main = [...DEAL_STAGES_MAIN_BY_TYPE[typeFilter]];
     const allForType = DEAL_STAGES_BY_TYPE[typeFilter];

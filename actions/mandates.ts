@@ -8,7 +8,7 @@ import { syncToGCal } from "@/lib/gcal/sync-helper";
 
 export interface MandateInput {
   name: string;
-  type: string;                        // fundraising|ma_sell|ma_buy|cfo_advisor
+  type: string;                        // ma_sell|ma_buy
   client_organization_id: string;
   status?: string;                     // draft|active|on_hold|won|lost|closed
   priority?: string;                   // low|medium|high

@@ -14,48 +14,6 @@ function makeMandate(overrides: Partial<MandateForFee> & { type: string }): Mand
   return { ...overrides };
 }
 
-// ── Fundraising : montant levé × % ───────────────────────────────────────────
-
-describe("computeSuccessFee — fundraising", () => {
-  it("closed_amount prioritaire sur target_raise_amount", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "fundraising", success_fee_percent: 5 }),
-      { closed_amount: 3_000_000, target_raise_amount: 5_000_000 },
-    );
-    expect(result.estimated).toBe(150_000);
-    expect(result.base).toBe(3_000_000);
-    expect(result.percent).toBe(5);
-    expect(result.source).toBe("closed_amount");
-  });
-
-  it("fallback sur target_raise_amount si closed_amount absent", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "fundraising", success_fee_percent: 3 }),
-      { target_raise_amount: 2_000_000 },
-    );
-    expect(result.estimated).toBe(60_000);
-    expect(result.source).toBe("target_raise_amount");
-  });
-
-  it("closed_amount à 0 est ignoré (pickFirst saute les zéros)", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "fundraising", success_fee_percent: 3 }),
-      { closed_amount: 0, target_raise_amount: 2_000_000 },
-    );
-    expect(result.base).toBe(2_000_000);
-    expect(result.source).toBe("target_raise_amount");
-  });
-
-  it("fallback final sur target_amount", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "fundraising", success_fee_percent: 4 }),
-      { target_amount: 1_000_000 },
-    );
-    expect(result.estimated).toBe(40_000);
-    expect(result.source).toBe("target_amount");
-  });
-});
-
 // ── M&A sell : EV × % ────────────────────────────────────────────────────────
 
 describe("computeSuccessFee — ma_sell", () => {
@@ -86,6 +44,24 @@ describe("computeSuccessFee — ma_sell", () => {
     expect(result.base).toBe(9_000_000);
     expect(result.estimated).toBe(180_000);
     expect(result.source).toBe("closed_amount");
+  });
+
+  it("closed_amount à 0 est ignoré (pickFirst saute les zéros)", () => {
+    const result = computeSuccessFee(
+      makeMandate({ type: "ma_sell", success_fee_percent: 3 }),
+      { closed_amount: 0, asking_price_min: 2_000_000, asking_price_max: 2_000_000 },
+    );
+    expect(result.base).toBe(2_000_000);
+    expect(result.source).toBe("asking_price_mid");
+  });
+
+  it("fallback final sur target_amount", () => {
+    const result = computeSuccessFee(
+      makeMandate({ type: "ma_sell", success_fee_percent: 4 }),
+      { target_amount: 1_000_000 },
+    );
+    expect(result.estimated).toBe(40_000);
+    expect(result.source).toBe("target_amount");
   });
 });
 
@@ -123,7 +99,7 @@ describe("computeSuccessFee — ma_buy", () => {
 describe("computeSuccessFee — transverse", () => {
   it("operation_amount (override manuel) est prioritaire sur le deal", () => {
     const result = computeSuccessFee(
-      makeMandate({ type: "fundraising", success_fee_percent: 5, operation_amount: 1_000_000 }),
+      makeMandate({ type: "ma_sell", success_fee_percent: 5, operation_amount: 1_000_000 }),
       { closed_amount: 3_000_000 },
     );
     expect(result.base).toBe(1_000_000);
@@ -142,17 +118,17 @@ describe("computeSuccessFee — transverse", () => {
 
   it("pourcentage manquant → estimation null, base conservée, note ajoutée", () => {
     const result = computeSuccessFee(
-      makeMandate({ type: "fundraising" }),
-      { target_raise_amount: 2_000_000 },
+      makeMandate({ type: "ma_sell" }),
+      { target_amount: 2_000_000 },
     );
     expect(result.estimated).toBeNull();
     expect(result.base).toBe(2_000_000);
-    expect(result.source).toBe("target_raise_amount");
+    expect(result.source).toBe("target_amount");
     expect(result.notes).toContain("Pourcentage de success fee non renseigné.");
   });
 
   it("ni deal ni operation_amount → estimation null avec note base manquante", () => {
-    const result = computeSuccessFee(makeMandate({ type: "fundraising", success_fee_percent: 5 }));
+    const result = computeSuccessFee(makeMandate({ type: "ma_sell", success_fee_percent: 5 }));
     expect(result.estimated).toBeNull();
     expect(result.base).toBeNull();
     expect(result.source).toBeNull();
@@ -160,8 +136,8 @@ describe("computeSuccessFee — transverse", () => {
   });
 
   it("devise : EUR par défaut, sinon celle du mandat", () => {
-    expect(computeSuccessFee(makeMandate({ type: "fundraising" })).currency).toBe("EUR");
-    expect(computeSuccessFee(makeMandate({ type: "fundraising", currency: "CHF" })).currency).toBe("CHF");
+    expect(computeSuccessFee(makeMandate({ type: "ma_sell" })).currency).toBe("EUR");
+    expect(computeSuccessFee(makeMandate({ type: "ma_sell", currency: "CHF" })).currency).toBe("CHF");
   });
 
   it("documente le comportement actuel : percent = 0 note le manque mais calcule estimated = 0", () => {
@@ -169,8 +145,8 @@ describe("computeSuccessFee — transverse", () => {
     // le calcul aboutit quand même (base × 0 = 0) car la garde finale ne
     // vérifie que percent === null, pas percent <= 0.
     const result = computeSuccessFee(
-      makeMandate({ type: "fundraising", success_fee_percent: 0 }),
-      { target_raise_amount: 2_000_000 },
+      makeMandate({ type: "ma_sell", success_fee_percent: 0 }),
+      { target_amount: 2_000_000 },
     );
     expect(result.notes).toContain("Pourcentage de success fee non renseigné.");
     expect(result.estimated).toBe(0);

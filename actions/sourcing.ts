@@ -111,9 +111,6 @@ interface DealContextForSourcing {
   target_revenue_max: number | null;
   target_stage: string | null;
   strategic_rationale: string | null;
-  target_raise_amount: number | null;
-  round_type: string | null;
-  use_of_funds: string | null;
   asking_price_min: number | null;
   asking_price_max: number | null;
   company_geography: string | null;
@@ -136,7 +133,6 @@ async function loadDealContextForSourcing(
       key_differentiators, key_risks, competitive_landscape, market_context,
       target_sectors, excluded_sectors, target_geographies, excluded_geographies,
       target_revenue_min, target_revenue_max, target_stage, strategic_rationale,
-      target_raise_amount, round_type, use_of_funds,
       asking_price_min, asking_price_max,
       company_geography, company_stage
     `)
@@ -192,9 +188,6 @@ function toSourcingStrategyInput(d: DealContextForSourcing): SourcingStrategyInp
       target_revenue_max: d.target_revenue_max,
       target_stage: d.target_stage,
       strategic_rationale: d.strategic_rationale,
-      target_raise_amount: d.target_raise_amount,
-      round_type: d.round_type,
-      use_of_funds: d.use_of_funds,
       asking_price_min: d.asking_price_min,
       asking_price_max: d.asking_price_max,
       company_geography: d.company_geography,
@@ -433,8 +426,6 @@ export async function executeSourcingPlanAction(
       target_revenue_min: deal.target_revenue_min,
       target_revenue_max: deal.target_revenue_max,
       strategic_rationale: deal.strategic_rationale,
-      target_raise_amount: deal.target_raise_amount,
-      round_type: deal.round_type,
       latest_revenue: deal.latest_revenue,
       latest_ebitda: deal.latest_ebitda,
       currency: deal.currency,

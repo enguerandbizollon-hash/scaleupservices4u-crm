@@ -41,7 +41,7 @@ export function EmailCompose({ to, name, onClose }: { to: string; name: string; 
         </div>
 
         {status === "sent" ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--deal-fundraising-text)", padding: "20px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-4)", padding: "20px 0" }}>
             <CheckCircle size={20} /> Email envoyé avec succès !
           </div>
         ) : (

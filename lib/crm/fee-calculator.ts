@@ -11,21 +11,19 @@
 // ── Types d'entrée ─────────────────────────────────────────────────────────────
 
 export interface MandateForFee {
-  type: string;                          // fundraising|ma_sell|ma_buy|cfo_advisor
+  type: string;                          // ma_sell|ma_buy
   currency?: string | null;              // défaut EUR
   success_fee_percent?: number | null;   // % (ex: 3 pour 3%)
   retainer_monthly?: number | null;      // retainer mensuel
   operation_amount?: number | null;      // override manuel — prioritaire sur le deal
-  start_date?: string | null;            // ISO date — pour CFO
-  target_close_date?: string | null;     // ISO date — pour CFO
-  end_date?: string | null;              // ISO date — pour CFO
+  start_date?: string | null;            // ISO date
+  target_close_date?: string | null;     // ISO date
+  end_date?: string | null;              // ISO date
 }
 
 export interface DealForFee {
   deal_type?: string | null;
-  // Fundraising
-  target_raise_amount?: number | null;
-  closed_amount?: number | null;         // levée réalisée
+  closed_amount?: number | null;         // opération réalisée
   // M&A (sell & buy)
   asking_price_min?: number | null;
   asking_price_max?: number | null;
@@ -43,7 +41,6 @@ export interface DealForFee {
 export type FeeBaseSource =
   | "operation_amount"
   | "closed_amount"
-  | "target_raise_amount"
   | "asking_price_mid"
   | "target_ev_mid"
   | "acquisition_budget_mid"
@@ -113,13 +110,6 @@ export function computeSuccessFee(
     source = "operation_amount";
   } else if (deal) {
     switch (type) {
-      case "fundraising": {
-        base = pickFirst(deal.closed_amount, deal.target_raise_amount, deal.target_amount, deal.committed_amount);
-        source = base === deal.closed_amount ? "closed_amount"
-               : base === deal.target_raise_amount ? "target_raise_amount"
-               : base !== null ? "target_amount" : null;
-        break;
-      }
       case "ma_sell": {
         base = pickFirst(deal.closed_amount, mid(deal.asking_price_min, deal.asking_price_max), deal.target_amount);
         source = base === deal.closed_amount ? "closed_amount"

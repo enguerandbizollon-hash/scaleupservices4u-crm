@@ -56,10 +56,8 @@ interface DealFullContext {
   target_revenue_max: number | null;
   target_stage: string | null;
   strategic_rationale: string | null;
-  target_raise_amount: number | null;
   asking_price_min: number | null;
   asking_price_max: number | null;
-  round_type: string | null;
   company_stage: string | null;
   company_geography: string | null;
   latest_revenue: number | null;
@@ -76,7 +74,7 @@ async function loadDealContext(dealId: string, userId: string): Promise<DealFull
       key_differentiators, key_risks,
       target_sectors, excluded_sectors, target_geographies,
       target_revenue_min, target_revenue_max, target_stage,
-      strategic_rationale, target_raise_amount, round_type,
+      strategic_rationale,
       asking_price_min, asking_price_max,
       company_stage, company_geography
     `)
@@ -117,8 +115,6 @@ function toMatchingBrainDealContext(d: DealFullContext): MatchingBrainDealContex
     target_revenue_min: d.target_revenue_min,
     target_revenue_max: d.target_revenue_max,
     strategic_rationale: d.strategic_rationale,
-    target_raise_amount: d.target_raise_amount,
-    round_type: d.round_type,
     latest_revenue: d.latest_revenue,
     latest_ebitda: d.latest_ebitda,
     currency: d.currency,
@@ -136,11 +132,6 @@ function toMatchingBrainDealContext(d: DealFullContext): MatchingBrainDealContex
 //   → secteurs visés (target_sectors)
 //   → géographies visées (target_geographies)
 //   → fourchette revenue/employés cible
-//
-// Fundraising : cherche des INVESTISSEURS potentiels pour la société qui lève.
-//   → VC / PE / FO / business angels avec thèse sectorielle alignée
-//   → géographie d'investissement couvrant le pays de la société
-//   → ticket aligné avec target_raise_amount (typiquement 10-30% du round)
 function buildApolloCriteriaForDeal(d: DealFullContext): ApolloSearchCriteria {
   const criteria: ApolloSearchCriteria = { per_page: 25, page: 1 };
 
@@ -164,15 +155,6 @@ function buildApolloCriteriaForDeal(d: DealFullContext): ApolloSearchCriteria {
     } else if (d.asking_price_min) {
       criteria.employee_min = Math.max(50, Math.floor((d.asking_price_min * 3) / 200_000));
     }
-
-  } else if (d.deal_type === "fundraising") {
-    // On cherche des investisseurs : VC / PE / BA / FO / CVC
-    criteria.sectors = d.sector ? [d.sector] : [];
-    criteria.geographies = d.company_geography ? [d.company_geography] : ["france", "europe"];
-    criteria.keywords = ["venture capital", "private equity", "family office", "business angel", "corporate venture"];
-    // Taille des fonds cibles : larges structures (50-5000 employés)
-    criteria.employee_min = 5;
-    criteria.employee_max = 500;
   }
 
   return criteria;
@@ -205,7 +187,6 @@ export async function previewSuggestionCriteria(
   const missionByType: Record<string, string> = {
     ma_sell: `Rechercher des acquéreurs pour ${deal.name}`,
     ma_buy: `Rechercher des cibles pour ${deal.name}`,
-    fundraising: `Rechercher des investisseurs pour ${deal.name}`,
   };
 
   const employeeRange =

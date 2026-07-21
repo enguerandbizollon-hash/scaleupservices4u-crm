@@ -43,10 +43,6 @@ export interface SourcingStrategyInput {
     target_revenue_max: number | null;
     target_stage: string | null;
     strategic_rationale: string | null;
-    // Fundraising
-    target_raise_amount: number | null;
-    round_type: string | null;
-    use_of_funds: string | null;
     // M&A Sell
     asking_price_min: number | null;
     asking_price_max: number | null;
@@ -111,7 +107,7 @@ function stripCodeFences(raw: string): string {
 
 // ── Prompt ───────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Tu es associé senior en M&A et fundraising, avec 15 ans d'expérience de sourcing. Pour un dossier donné, tu construis une stratégie de recherche d'acteurs à contacter structurée, priorisée, actionnable.
+const SYSTEM_PROMPT = `Tu es associé senior en M&A, avec 15 ans d'expérience de sourcing. Pour un dossier donné, tu construis une stratégie de recherche d'acteurs à contacter structurée, priorisée, actionnable.
 
 Règles impératives :
 - Langue : français professionnel, sobre, factuel, direct.
@@ -161,11 +157,6 @@ function buildUserPrompt(input: SourcingStrategyInput): string {
     if (d.target_stage) parts.push(`Taille cible : ${d.target_stage}`);
     if (d.strategic_rationale) parts.push(`\nRationale stratégique :\n${d.strategic_rationale}`);
     parts.push(`\nObjectif : identifier des CIBLES d'acquisition (PME/ETI selon critères, entreprises à vendre dans les segments visés).`);
-  } else if (d.deal_type === "fundraising") {
-    if (d.target_raise_amount) parts.push(`Montant recherché : ${fmtAmount(d.target_raise_amount, d.currency)}`);
-    if (d.round_type) parts.push(`Type de tour : ${d.round_type}`);
-    if (d.use_of_funds) parts.push(`\nUse of funds :\n${d.use_of_funds}`);
-    parts.push(`\nObjectif : identifier des INVESTISSEURS potentiels (VC / PE / FO / CVC / BA avec thèse alignée).`);
   }
 
   parts.push(`
@@ -339,17 +330,6 @@ export function buildFallbackPlan(input: SourcingStrategyInput): SourcingPlan {
       employee_min: 20,
       employee_max: 500,
       rationale: "Fonds d'investissement avec thèse mid-market capables de reprise avec management.",
-    });
-  } else if (d.deal_type === "fundraising") {
-    segments.push({
-      name: "VC sectoriels",
-      priority: 1,
-      actor_type: "venture_capital",
-      keywords: d.sector ? ["venture capital", d.sector] : ["venture capital"],
-      geographies: d.company_geography ? [d.company_geography, "europe"] : ["france", "europe"],
-      employee_min: 5,
-      employee_max: 200,
-      rationale: "Fonds VC ayant investi dans des sociétés du même secteur ou avec thèse alignée.",
     });
   } else if (d.deal_type === "ma_buy") {
     segments.push({

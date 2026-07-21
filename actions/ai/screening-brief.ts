@@ -25,7 +25,7 @@ export async function suggestScreeningBrief(dealId: string): Promise<ScreeningBr
     .from("deals")
     .select(`
       id, name, deal_type, sector, description,
-      strategic_rationale, use_of_funds, company_stage,
+      strategic_rationale, company_stage,
       target_amount, asking_price_min, asking_price_max, currency
     `)
     .eq("id", dealId)
@@ -75,9 +75,7 @@ export async function suggestScreeningBrief(dealId: string): Promise<ScreeningBr
     sector: deal.sector,
     description: deal.description,
     strategic_rationale: deal.strategic_rationale,
-    use_of_funds: deal.use_of_funds,
     company_stage: deal.company_stage,
-    target_raise_amount: deal.target_amount,
     asking_price_min: deal.asking_price_min,
     asking_price_max: deal.asking_price_max,
     currency: deal.currency ?? "EUR",

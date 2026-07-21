@@ -191,7 +191,7 @@ export async function updateOrganisationAction(
 
   revalidatePath("/protected/organisations");
   revalidatePath(`/protected/organisations/${id}`);
-  // Les dossiers fundraising/M&A utilisent les données investisseur pour le matching
+  // Les dossiers M&A utilisent les données investisseur pour le matching (fonds PE acquéreurs)
   revalidatePath("/protected/dossiers");
   return { success: true, id };
 }

@@ -13,7 +13,7 @@ export async function generateActionSummary(action: {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
-  const prompt = `Tu es un assistant M&A / fundraising pour un cabinet de conseil.
+  const prompt = `Tu es un assistant M&A pour un cabinet de conseil.
 Génère un résumé structuré et professionnel de cette action :
 
 Type : ${action.type}
