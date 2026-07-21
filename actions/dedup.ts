@@ -2,11 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { normalizeOrgName, extractDomain, type DuplicateCandidate } from "@/lib/dedup/organisations";
+import { normalizeOrgName, extractDomain, normalizeSiren, type DuplicateCandidate } from "@/lib/dedup/organisations";
 
 /**
  * Cherche les doublons potentiels pour une organisation (à la création ou édition).
- * Critères : normalized_name identique OU website (domaine) identique OU linkedin_url identique.
+ * Critères, par ordre de fiabilité décroissante : SIREN identique (V64), puis
+ * normalized_name, website (domaine) ou linkedin_url.
  * Exclut les orgs déjà fusionnées et l'org elle-même (si excludeId fourni).
  */
 export async function checkDuplicates(
@@ -14,6 +15,7 @@ export async function checkDuplicates(
   website: string | null,
   linkedinUrl: string | null,
   excludeId?: string,
+  siren?: string | null,
 ): Promise<DuplicateCandidate[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -21,8 +23,29 @@ export async function checkDuplicates(
 
   const normalized = normalizeOrgName(name);
   const domain = extractDomain(website);
+  const cleanSiren = normalizeSiren(siren);
   const candidates: DuplicateCandidate[] = [];
   const seenIds = new Set<string>();
+
+  // 0. Chercher par SIREN — signal le plus fort : deux entreprises ne
+  // partagent jamais un SIREN. Placé en premier pour que la fusion proposée
+  // s'appuie sur l'identité légale plutôt que sur une ressemblance de nom.
+  if (cleanSiren) {
+    const { data } = await supabase
+      .from("organizations")
+      .select("id, name, website, linkedin_url, normalized_name")
+      .eq("user_id", user.id)
+      .eq("siren", cleanSiren)
+      .eq("is_merged", false)
+      .limit(5);
+
+    for (const row of data ?? []) {
+      if (row.id === excludeId) continue;
+      if (seenIds.has(row.id)) continue;
+      seenIds.add(row.id);
+      candidates.push({ ...row, matchType: "siren" });
+    }
+  }
 
   // 1. Chercher par normalized_name
   if (normalized.length >= 3) {

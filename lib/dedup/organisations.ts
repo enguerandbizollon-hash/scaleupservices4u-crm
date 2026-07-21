@@ -28,11 +28,23 @@ export function extractDomain(url: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Normalise un SIREN : ne garde que les chiffres, exige exactement 9.
+ * Accepte les formats "123 456 789", "123456789", "SIREN 123456789".
+ * Renvoie null si ce n'est pas un SIREN exploitable.
+ */
+export function normalizeSiren(siren: string | null | undefined): string | null {
+  if (!siren) return null;
+  const digits = siren.replace(/[^0-9]/g, "");
+  return /^[0-9]{9}$/.test(digits) ? digits : null;
+}
+
 export interface DuplicateCandidate {
   id: string;
   name: string;
   website: string | null;
   linkedin_url: string | null;
   normalized_name: string | null;
-  matchType: "name" | "website" | "linkedin";
+  /** "siren" est le signal le plus fort : deux entreprises ne partagent jamais un SIREN. */
+  matchType: "siren" | "name" | "website" | "linkedin";
 }

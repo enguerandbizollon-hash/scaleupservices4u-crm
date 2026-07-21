@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { fetchEntrepriseBySiren, searchEntreprisesByName, type NormalizedEntreprise } from "@/lib/connectors/recherche-entreprises";
+import { sectorFromNaf } from "@/lib/crm/matching-maps";
+import { normalizeSiren } from "@/lib/dedup/organisations";
 
 // ── Type partagé avec OrganisationForm ───────────────────────────────
 
@@ -268,6 +270,8 @@ export async function getAllOrganisationsSimple(): Promise<{ id: string; name: s
 
 export interface EnrichmentPreview {
   siren: string;
+  /** Code NAF/APE rév. 2 brut (ex. "43.21A"), persisté en colonne depuis V64 */
+  naf: string | null;
   name: string;
   short_name: string | null;
   forme_juridique: string | null;
@@ -286,6 +290,7 @@ export interface EnrichmentPreview {
 function previewFromNormalized(n: NormalizedEntreprise): EnrichmentPreview {
   return {
     siren: n.siren,
+    naf: n.activite_principale_code,
     name: n.name,
     short_name: n.short_name,
     forme_juridique: n.forme_juridique_label,
@@ -339,7 +344,7 @@ export async function applyEnrichmentToOrganisation(
   // Charger l'org actuelle pour décider quels champs sont vides
   const { data: org, error: readErr } = await supabase
     .from("organizations")
-    .select("name, sector, location, country, founded_year, employee_count, company_stage, description")
+    .select("name, sector, location, country, founded_year, employee_count, company_stage, description, siren, naf")
     .eq("id", orgId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -360,8 +365,18 @@ export async function applyEnrichmentToOrganisation(
   setIfEmpty("founded_year", data.founded_year);
   setIfEmpty("employee_count", data.employee_count);
   setIfEmpty("company_stage", data.company_stage_crm);
-  setIfEmpty("sector", data.activite);
   setIfEmpty("country", data.country);
+
+  // V64 : identité légale persistée en colonnes (avant, le SIREN n'existait
+  // qu'en texte libre dans description).
+  setIfEmpty("siren", normalizeSiren(data.siren));
+  setIfEmpty("naf", data.naf);
+
+  // Secteur : on dérive une valeur du référentiel SECTORS depuis le code NAF.
+  // Avant V64 on écrivait ici `data.activite`, c'est-à-dire la section INSEE
+  // ("F") ou le code APE brut ("43.21A") — des valeurs hors référentiel qui
+  // faisaient échouer le matching sectoriel.
+  setIfEmpty("sector", sectorFromNaf(data.naf));
 
   // Location : "address, postal_code city" si tous présents, sinon city seul
   if (!current.location || overwrite) {
