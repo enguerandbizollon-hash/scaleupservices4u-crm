@@ -63,13 +63,27 @@ export type SaleReadiness = (typeof SALE_READINESS_OPTIONS)[number]["value"];
 // ── Secteurs ─────────────────────────────────────────────────────────────────
 
 export const SECTORS = [
+  // Tech / innovation
   "SaaS", "Fintech", "Healthtech", "Deeptech", "Cybersécurité",
-  "Industrie", "Retail", "Energie", "Immobilier", "Transport",
-  "Food", "Edtech", "Marketplace", "Hardware", "Impact", "Social",
-  "Généraliste", "PropTech", "InsurTech", "RegTech", "HRtech",
-  "CleanTech", "BioTech", "MedTech", "Pharma", "Défense",
-  "Aéronautique", "Luxe", "Média", "Sport", "Services B2B",
-  "Conseil", "Infrastructure",
+  "Edtech", "Marketplace", "Hardware", "PropTech", "InsurTech",
+  "RegTech", "HRtech", "CleanTech", "BioTech", "MedTech",
+  // Industrie et matériaux
+  "Industrie", "Métallurgie", "Plasturgie", "Chimie", "Textile",
+  "Bois & Ameublement", "Emballage", "Imprimerie", "Pharma",
+  "Aéronautique", "Défense", "Automobile",
+  // Construction et immobilier
+  "BTP", "Immobilier", "Infrastructure",
+  // Commerce et distribution
+  "Négoce", "Retail", "Luxe", "Food",
+  // Agro
+  "Agroalimentaire", "Agriculture",
+  // Transport et logistique
+  "Transport", "Logistique",
+  // Services
+  "Services B2B", "Conseil", "Propreté & Facility", "Sécurité privée",
+  "Formation", "Santé & Médico-social", "Hôtellerie-Restauration",
+  // Autres
+  "Energie", "Média", "Sport", "Impact", "Social", "Généraliste",
 ] as const;
 
 export type Sector = (typeof SECTORS)[number];
@@ -90,26 +104,108 @@ export const DEAL_SECTOR_NORMALIZATION: Record<string, string> = {
   "Distribution / Retail":       "Retail",
   "Médias / Entertainment":      "Média",
   "Transport / Logistique":      "Transport",
-  "Agroalimentaire":             "Food",
+  "Agroalimentaire":             "Agroalimentaire",
   "Éducation / EdTech":          "Edtech",
   "Défense / Sécurité":          "Défense",
-  "Tourisme / Hospitality":      "Sport",
+  "Tourisme / Hospitality":      "Hôtellerie-Restauration",
   "Services B2B":                "Services B2B",
   "Conseil / Advisory":          "Conseil",
   "Juridique":                   "Conseil",
   "Finance / Investissement":    "Fintech",
   "Ressources Humaines":         "HRtech",
   "Luxe / Premium":              "Luxe",
-  "Construction / BTP":          "Industrie",
+  "Construction / BTP":          "BTP",
   "Télécommunications":          "Infrastructure",
-  "Agriculture / AgriTech":      "Food",
-  "Chimie / Matériaux":          "Industrie",
+  "Agriculture / AgriTech":      "Agriculture",
+  "Chimie / Matériaux":          "Chimie",
   "Aérospatial":                 "Aéronautique",
   "Environnement":               "Energie",
   "Sport / Loisirs":             "Sport",
   "Bien-être / Beauté":          "Luxe",
   "Cybersécurité":               "Cybersécurité",
+  // Small cap traditionnel (pivot M&A 2026)
+  "Négoce / Distribution B2B":   "Négoce",
+  "Logistique":                  "Logistique",
+  "Propreté / Nettoyage":        "Propreté & Facility",
+  "Sécurité / Gardiennage":      "Sécurité privée",
+  "Santé / Médico-social":       "Santé & Médico-social",
+  "Hôtellerie / Restauration":   "Hôtellerie-Restauration",
+  "Formation / Organisme":       "Formation",
+  "Automobile":                  "Automobile",
+  "Métallurgie / Usinage":       "Métallurgie",
+  "Plasturgie":                  "Plasturgie",
+  "Textile / Habillement":       "Textile",
+  "Bois / Ameublement":          "Bois & Ameublement",
+  "Emballage / Packaging":       "Emballage",
+  "Imprimerie / Print":          "Imprimerie",
 };
+
+// ── NAF → secteur ────────────────────────────────────────────────────────────
+// Mapping par DIVISION NAF rév. 2 (2 premiers chiffres du code APE). C'est le
+// niveau le plus robuste : la sous-classe (ex. 43.21A) est trop fine pour un
+// référentiel de matching, la section (lettre) trop grossière.
+// Source de vérité pour rattacher automatiquement une organisation enrichie
+// (Pappers / INSEE / Recherche d'Entreprises) à un secteur du référentiel.
+
+export const NAF_DIVISION_TO_SECTOR: Record<string, string> = {
+  // Agriculture, sylviculture, pêche
+  "01": "Agriculture", "02": "Agriculture", "03": "Agriculture",
+  // Industries extractives
+  "05": "Industrie", "06": "Industrie", "07": "Industrie", "08": "Industrie", "09": "Industrie",
+  // Industrie manufacturière
+  "10": "Agroalimentaire", "11": "Agroalimentaire", "12": "Agroalimentaire",
+  "13": "Textile", "14": "Textile", "15": "Textile",
+  "16": "Bois & Ameublement",
+  "17": "Emballage", "18": "Imprimerie",
+  "19": "Chimie", "20": "Chimie", "21": "Pharma", "22": "Plasturgie",
+  "23": "Industrie",
+  "24": "Métallurgie", "25": "Métallurgie",
+  "26": "Hardware", "27": "Industrie", "28": "Industrie",
+  "29": "Automobile", "30": "Aéronautique",
+  "31": "Bois & Ameublement", "32": "Industrie", "33": "Industrie",
+  // Énergie, eau, déchets
+  "35": "Energie", "36": "Energie", "37": "Energie", "38": "Energie", "39": "Energie",
+  // Construction
+  "41": "BTP", "42": "BTP", "43": "BTP",
+  // Commerce
+  "45": "Automobile", "46": "Négoce", "47": "Retail",
+  // Transport et entreposage
+  "49": "Transport", "50": "Transport", "51": "Transport",
+  "52": "Logistique", "53": "Logistique",
+  // Hébergement et restauration
+  "55": "Hôtellerie-Restauration", "56": "Hôtellerie-Restauration",
+  // Information et communication
+  "58": "Média", "59": "Média", "60": "Média",
+  "61": "Infrastructure", "62": "SaaS", "63": "SaaS",
+  // Finance et assurance
+  "64": "Fintech", "65": "InsurTech", "66": "Fintech",
+  // Immobilier
+  "68": "Immobilier",
+  // Services scientifiques et techniques
+  "69": "Conseil", "70": "Conseil", "71": "Conseil",
+  "72": "Deeptech", "73": "Média", "74": "Conseil", "75": "Services B2B",
+  // Services administratifs et de soutien
+  "77": "Services B2B", "78": "HRtech", "79": "Services B2B",
+  "80": "Sécurité privée", "81": "Propreté & Facility", "82": "Services B2B",
+  // Administration, enseignement, santé
+  "84": "Services B2B", "85": "Formation",
+  "86": "Santé & Médico-social", "87": "Santé & Médico-social", "88": "Santé & Médico-social",
+  // Arts, autres services
+  "90": "Média", "91": "Média", "92": "Sport", "93": "Sport",
+  "94": "Social", "95": "Services B2B", "96": "Services B2B",
+};
+
+/**
+ * Déduit le secteur du référentiel à partir d'un code NAF/APE.
+ * Tolère les formats "43.21A", "4321A", "43.21", "43" (avec espaces).
+ * Renvoie null si le code est absent ou hors nomenclature.
+ */
+export function sectorFromNaf(naf: string | null | undefined): string | null {
+  if (!naf) return null;
+  const digits = naf.replace(/[^0-9]/g, "");
+  if (digits.length < 2) return null;
+  return NAF_DIVISION_TO_SECTOR[digits.slice(0, 2)] ?? null;
+}
 
 /** Normalise n'importe quelle valeur de secteur deal vers le référentiel */
 export function normalizeDealSector(sector: string | null | undefined): string | null {
