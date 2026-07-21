@@ -126,7 +126,7 @@ async function Content() {
   const lost    = deals.filter(d => d.deal_status === "lost");
   const dormantCount = open.filter(d => isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status)).length;
   const closed  = [...won, ...lost]; // affichés ensemble en grisé
-  const types   = ["ma_sell","ma_buy","cfo_advisor"];
+  const types   = ["ma_sell","ma_buy"];
   const groups  = types.map(t => ({
     t, dt: DT[t],
     open:   open.filter(d => d.deal_type === t),

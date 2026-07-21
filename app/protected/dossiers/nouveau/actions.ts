@@ -277,9 +277,6 @@ export async function createDealWizardAction(
       dealInsert.strategic_rationale = payload.strategic_rationale;
       dealInsert.deal_timing = payload.deal_timing;
       break;
-    case "cfo_advisor":
-      dealInsert.target_amount = payload.target_amount;
-      break;
   }
 
   const { data: deal, error } = await supabase

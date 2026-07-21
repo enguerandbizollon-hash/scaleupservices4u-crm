@@ -48,7 +48,6 @@ export type FeeBaseSource =
   | "target_ev_mid"
   | "acquisition_budget_mid"
   | "target_amount"
-  | "retainer_duration"
   | null;
 
 export interface FeeComputeResult {
@@ -56,7 +55,7 @@ export interface FeeComputeResult {
   estimated: number | null;
   /** Base retenue pour le calcul (ex: 3 000 000 de levée) */
   base: number | null;
-  /** Pourcentage appliqué (ex: 3 pour 3%) — null pour CFO (forfaitaire) */
+  /** Pourcentage appliqué (ex: 3 pour 3%) */
   percent: number | null;
   /** Origine de la base dans les données — utile pour tracer l'auditabilité */
   source: FeeBaseSource;
@@ -84,25 +83,12 @@ function pickFirst(...vals: (number | null | undefined)[]): number | null {
   return null;
 }
 
-/** Calcule la durée d'un mandat en mois entiers (min 1) */
-function mandateDurationMonths(m: MandateForFee): number | null {
-  const start = m.start_date ?? null;
-  const endCandidate = m.end_date ?? m.target_close_date ?? null;
-  if (!start || !endCandidate) return null;
-  const s = new Date(start).getTime();
-  const e = new Date(endCandidate).getTime();
-  if (isNaN(s) || isNaN(e) || e <= s) return null;
-  const months = Math.round((e - s) / (30.44 * 86_400_000));
-  return Math.max(1, months);
-}
-
 // ── Calcul principal ──────────────────────────────────────────────────────────
 
 /**
  * Calcule le success fee estimé pour un mandat, selon les règles CLAUDE.md.
  * Le deal est optionnel : sans deal, seul l'override `operation_amount` est
- * utilisable. Pour les mandats CFO Advisory, le calcul devient retainer ×
- * durée et ignore `success_fee_percent`.
+ * utilisable.
  */
 export function computeSuccessFee(
   mandate: MandateForFee,
@@ -111,31 +97,6 @@ export function computeSuccessFee(
   const currency = mandate.currency ?? "EUR";
   const notes: string[] = [];
   const type = mandate.type;
-
-  // ── Cas CFO Advisory : retainer × durée ─────────────────────────────────
-  if (type === "cfo_advisor") {
-    const retainer = mandate.retainer_monthly;
-    const months = mandateDurationMonths(mandate);
-    if (!retainer || retainer <= 0) {
-      notes.push("Retainer mensuel non renseigné.");
-      return { estimated: null, base: null, percent: null, source: null, currency, notes };
-    }
-    if (!months) {
-      notes.push("Durée du mandat non renseignée (start_date + end/target_close_date).");
-      return {
-        estimated: null, base: retainer, percent: null,
-        source: "retainer_duration", currency, notes,
-      };
-    }
-    return {
-      estimated: retainer * months,
-      base: retainer,
-      percent: null,
-      source: "retainer_duration",
-      currency,
-      notes: [`Retainer ${retainer} × ${months} mois`],
-    };
-  }
 
   // ── Cas avec success_fee_percent ────────────────────────────────────────
   const percent = mandate.success_fee_percent ?? null;

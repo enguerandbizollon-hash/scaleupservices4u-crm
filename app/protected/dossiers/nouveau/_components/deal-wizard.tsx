@@ -22,7 +22,7 @@ const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type DealType = "ma_sell" | "ma_buy" | "cfo_advisor";
+type DealType = "ma_sell" | "ma_buy";
 
 interface MandateOption { id: string; name: string; type: string; status: string; client_name: string | null }
 interface OrgOption { id: string; name: string }
@@ -37,7 +37,6 @@ interface Props {
 const DEAL_TYPE_LABELS: Record<string, string> = {
   ma_sell: "M&A Sell-side",
   ma_buy: "M&A Buy-side",
-  cfo_advisor: "CFO Advisor",
 };
 
 const DEAL_STAGES = [
@@ -52,10 +51,6 @@ const DEAL_STAGES = [
   { value: "ongoing_support", label: "Suivi" },
 ];
 
-// Pour CFO Advisor on saute la Step 2 (pas de colonnes dédiées pertinentes)
-function needsStep2(dt: string): boolean {
-  return dt !== "cfo_advisor";
-}
 
 // ── Styles partagés ──────────────────────────────────────────────────────────
 
@@ -276,13 +271,13 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
 
   const canNext1 = step1Valid && step1ClientOk && step1MandateOk && step1DirigeantOk;
 
-  // Navigation entre étapes (skip Step 2 pour CFO)
+  // Navigation entre étapes
   function goNext() {
-    if (step === 1) setStep(needsStep2(dealType) ? 2 : 3);
+    if (step === 1) setStep(2);
     else if (step === 2) setStep(3);
   }
   function goPrev() {
-    if (step === 3) setStep(needsStep2(dealType) ? 2 : 1);
+    if (step === 3) setStep(2);
     else if (step === 2) setStep(1);
   }
 
@@ -463,7 +458,7 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   // ── Progress bar ────────────────────────────────────────────────────────
   const steps = [
     { n: 1, label: "Identité & contexte" },
-    ...(needsStep2(dealType) ? [{ n: 2, label: "Spécificités" }] : []),
+    { n: 2, label: "Spécificités" },
     { n: 3, label: "Données financières" },
   ];
 

@@ -204,8 +204,8 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
     }
   }
 
-  // KPIs financiers (si données disponibles) — pour fundraising, ma_sell, ma_buy
-  if (deal.deal_type !== "cfo_advisor" && financialData.length > 0) {
+  // KPIs financiers (si données disponibles)
+  if (financialData.length > 0) {
     const sorted = [...financialData].sort((a, b) => b.fiscal_year - a.fiscal_year);
     const latest = sorted[0]!;
     if (latest.revenue != null) {

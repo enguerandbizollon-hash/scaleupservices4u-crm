@@ -243,7 +243,6 @@ export function MandateDetail({ mandate, initialFees, deals }: {
             const opLabel: Record<string, string> = {
               ma_sell:     "Valorisation cible (EV)",
               ma_buy:      "Budget d'acquisition",
-              cfo_advisor: "Budget mission",
             };
             const feeBaseLabel: Record<string, string> = {
               ev: "sur EV", revenue: "sur CA", salary: "sur salaire",

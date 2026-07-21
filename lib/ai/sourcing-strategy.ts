@@ -166,8 +166,6 @@ function buildUserPrompt(input: SourcingStrategyInput): string {
     if (d.round_type) parts.push(`Type de tour : ${d.round_type}`);
     if (d.use_of_funds) parts.push(`\nUse of funds :\n${d.use_of_funds}`);
     parts.push(`\nObjectif : identifier des INVESTISSEURS potentiels (VC / PE / FO / CVC / BA avec thèse alignée).`);
-  } else if (d.deal_type === "cfo_advisor") {
-    parts.push(`\nObjectif : identifier des PARTENAIRES pertinents (experts-comptables de réseau, conseils financiers complémentaires, logiciels).`);
   }
 
   parts.push(`

@@ -245,27 +245,6 @@ const PLAYBOOKS: Record<PlaybookKey, Playbook> = {
     ],
   },
 
-  // ── CFO Advisory ─────────────────────────────────────────────────────────
-  [key("cfo_advisor", "kickoff")]: {
-    title: "Kickoff CFO Advisory",
-    intent: "Cadrer le périmètre, comprendre l'existant et lancer le diagnostic.",
-    actions: [
-      { title: "Diagnostic initial : comptes, processus, équipe", type: "task", due_in_days: 14 },
-      { title: "Accès aux outils et données du client", type: "task", due_in_days: 5 },
-      { title: "Définir KPIs et reporting cible", type: "task", due_in_days: 10 },
-      { title: "Cadrer les livrables mensuels", type: "meeting", due_in_days: 7 },
-    ],
-  },
-  [key("cfo_advisor", "ongoing_support")]: {
-    title: "Support CFO continu",
-    intent: "Délivrer le reporting mensuel et accompagner les décisions stratégiques.",
-    actions: [
-      { title: "Reporting financier mensuel", type: "task", due_in_days: 30 },
-      { title: "Comité de direction mensuel", type: "meeting", due_in_days: 30 },
-      { title: "Suivi cash et runway", type: "task", due_in_days: 14 },
-      { title: "Prévisionnel rolling 12 mois", type: "task", due_in_days: 30 },
-    ],
-  },
 };
 
 export function getPlaybook(dealType: string, stage: string | null | undefined): Playbook | null {
