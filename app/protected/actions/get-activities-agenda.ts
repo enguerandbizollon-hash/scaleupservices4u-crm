@@ -59,7 +59,6 @@ export async function getAgendaFiltersMetaAction() {
       { id: "deadline", label: "Deadline", category: "Events" },
       { id: "delivery", label: "Livraison", category: "Events" },
       { id: "closing", label: "Closing", category: "Events" },
-      { id: "cfo_advisory", label: "Conseil CFO", category: "Advisory" },
       {
         id: "investor_meeting",
         label: "Réunion investisseur",

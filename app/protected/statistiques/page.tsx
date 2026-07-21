@@ -13,12 +13,10 @@ function pct(a: number, b: number) { return b === 0 ? 0 : Math.round(a / b * 100
 
 const TYPE_LABELS: Record<string, string> = {
   ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
   ma_sell:     { bg: "#FFF7ED", tx: "#C2410C" },
   ma_buy:      { bg: "#FFFBEB", tx: "#92400E" },
-  cfo_advisor: { bg: "#F0FDF4", tx: "#166534" },
 };
 
 // ── Server data ──────────────────────────────────────────────────────────────

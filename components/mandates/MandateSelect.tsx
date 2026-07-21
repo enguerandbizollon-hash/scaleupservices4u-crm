@@ -26,7 +26,6 @@ interface Props {
 const TYPE_LABELS: Record<string, string> = {
   ma_sell:     "M&A Sell",
   ma_buy:      "M&A Buy",
-  cfo_advisor: "CFO Advisor",
 };
 
 // ── Component ────────────────────────────────────────────────────────────────

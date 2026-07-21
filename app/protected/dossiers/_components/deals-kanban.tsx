@@ -53,7 +53,6 @@ interface Props {
 const TYPE_META: Record<string, { label: string; icon: string; bg: string; tx: string; border: string }> = {
   ma_sell:     { label: "M&A Sell",    icon: "🏢", bg: "var(--sell-bg)",  tx: "var(--sell-tx)",  border: "var(--sell-mid)" },
   ma_buy:      { label: "M&A Buy",     icon: "🎯", bg: "var(--buy-bg)",   tx: "var(--buy-tx)",   border: "var(--buy-mid)"  },
-  cfo_advisor: { label: "CFO Advisor", icon: "💼", bg: "var(--cfo-bg)",   tx: "var(--cfo-tx)",   border: "var(--cfo-mid)"  },
 };
 
 const PRIO_COLOR: Record<string, string> = {

@@ -51,9 +51,8 @@ type Contact = { id:string; first_name:string; last_name:string; email?:string; 
 const DT: Record<string,{bg:string;tx:string;border:string}> = {
   ma_sell:{bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
   ma_buy:{bg:"var(--buy-bg)",tx:"var(--buy-tx)",border:"var(--buy-mid)"},
-  cfo_advisor:{bg:"var(--cfo-bg)",tx:"var(--cfo-tx)",border:"var(--cfo-mid)"},
 };
-const TYPE_LABELS: Record<string,string> = { ma_sell:"M&A Sell", ma_buy:"M&A Buy", cfo_advisor:"CFO Advisor" };
+const TYPE_LABELS: Record<string,string> = { ma_sell:"M&A Sell", ma_buy:"M&A Buy" };
 // V55 : libellés unifiés via stageLabel() depuis matching-maps. Map gardée
 // vide pour éviter toute référence oubliée (remplacée une à une).
 const STAGE_LABELS: Record<string,string> = {};
@@ -165,7 +164,6 @@ function MandateTabContent({
 }) {
   const MANDATE_TYPE_LABELS: Record<string, string> = {
     fundraising: "Fundraising", ma_sell: "M&A Sell-side", ma_buy: "M&A Buy-side",
-    cfo_advisor: "CFO Advisor",
   };
   const STATUS_COLORS: Record<string, { bg: string; tx: string; label: string }> = {
     draft:   { bg: "var(--surface-3)", tx: "var(--text-4)",  label: "Brouillon" },

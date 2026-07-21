@@ -15,8 +15,7 @@ export type DealView = {
   targetDate: string;
   description: string;
   // Nouveaux : support multi-service
-  dealTypes?: string[]; // e.g., ['fundraising', 'cfo_advisory']
-  cfoAdvisoryScope?: string;
+  dealTypes?: string[]; // e.g., ['ma_sell', 'ma_buy']
 };
 
 export type OrganizationView = {
@@ -72,7 +71,7 @@ export type UnifiedActivityType =
   // Originaux agenda/events
   | 'deadline' | 'delivery' | 'closing'
   // Nouveaux : services
-  | 'cfo_advisory' | 'investor_meeting' | 'due_diligence'
+  | 'investor_meeting' | 'due_diligence'
   | 'other';
 
 export type ActivityStatus = 'open' | 'done' | 'cancelled';

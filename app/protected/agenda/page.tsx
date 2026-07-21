@@ -116,7 +116,6 @@ const ACTIVITY_TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
   deadline: { bg: "#FECDD3", tx: "#BE185D" },
   delivery: { bg: "#F1E2FF", tx: "#7C3AED" },
   closing: { bg: "#D1FAE5", tx: "#065F46" },
-  cfo_advisory: { bg: "#F5D0A9", tx: "#92400E" },
   investor_meeting: { bg: "#F0FDFA", tx: "#0D9488" },
   due_diligence: { bg: "#E0E7FF", tx: "#3B82F6" },
   note: { bg: "#F3F4F6", tx: "#6B7280" },

@@ -18,7 +18,6 @@ const PRIO: Record<string,string> = { high:"var(--rec-dot)", medium:"var(--sell-
 const DT: Record<string,{label:string;bg:string;tx:string;border:string}> = {
   ma_sell:    {label:"M&A Sell",   bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
   ma_buy:     {label:"M&A Buy",    bg:"var(--buy-bg)", tx:"var(--buy-tx)", border:"var(--buy-mid)"},
-  cfo_advisor:{label:"CFO Advisor",bg:"var(--cfo-bg)", tx:"var(--cfo-tx)", border:"var(--cfo-mid)"},
 };
 // V55 : libellés unifiés via stageLabel() depuis matching-maps.
 const STAGE: Record<string,string> = {};

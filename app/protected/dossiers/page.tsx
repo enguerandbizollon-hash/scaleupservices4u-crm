@@ -14,7 +14,6 @@ export const revalidate = 60;
 const DT: Record<string, { label:string; icon:string; bg:string; tx:string; dot:string; border:string }> = {
   ma_sell:     { label:"M&A Sell",    icon:"🏢", bg:"var(--sell-bg)", tx:"var(--sell-tx)", dot:"var(--sell-dot)", border:"var(--sell-mid)" },
   ma_buy:      { label:"M&A Buy",     icon:"🎯", bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  dot:"var(--buy-dot)",  border:"var(--buy-mid)"  },
-  cfo_advisor: { label:"CFO Advisor", icon:"💼", bg:"var(--cfo-bg)",  tx:"var(--cfo-tx)",  dot:"var(--cfo-dot)",  border:"var(--cfo-mid)"  },
 };
 // V55 : libellés unifiés via stageLabel() depuis matching-maps (legacy map
 // maintenue pour rétro-compat pendant la transition).

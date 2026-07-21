@@ -1,7 +1,6 @@
 export const dealTypeLabels: Record<string, string> = {
   ma_sell: "M&A Sell-side",
   ma_buy: "M&A Buy-side",
-  cfo_advisor: "CFO Advisor",
 };
 
 export const dealStatusLabels: Record<string, string> = {
@@ -164,7 +163,6 @@ export const unifiedActivityTypeLabels: Record<string, string> = {
   delivery: "Rendu",
   closing: "Closing",
   // Nouveaux : services
-  cfo_advisory: "Advisory CFO",
   investor_meeting: "Réunion investisseur",
   due_diligence: "Due diligence",
   other: "Autre",
@@ -174,14 +172,4 @@ export const activityStatusLabels: Record<string, string> = {
   open: "Ouverte",
   done: "Terminée",
   cancelled: "Annulée",
-};
-
-export const cfoAdvisoryTypeLabels: Record<string, string> = {
-  financial_planning: "Planification financière",
-  investor_relations: "Relations investisseurs",
-  m_and_a_support: "Support M&A",
-  capital_raising: "Levée de fonds",
-  operational_optimization: "Optimisation opérationnelle",
-  tax_strategy: "Stratégie fiscale",
-  other: "Autre",
 };

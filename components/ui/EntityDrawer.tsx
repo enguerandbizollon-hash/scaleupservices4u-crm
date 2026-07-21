@@ -166,7 +166,6 @@ const ORG_TYPE_LABEL: Record<string, string> = {
 };
 const DEAL_TYPE_LABEL: Record<string, string> = {
   ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisor",
 };
 
 function ContactBody({ contact }: { contact: ContactSummary }) {

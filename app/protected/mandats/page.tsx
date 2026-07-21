@@ -7,12 +7,10 @@ import { ExportCSVButton, type ExportRow } from "@/components/exports/export-csv
 
 const TYPE_LABELS: Record<string, string> = {
   ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-  cfo_advisor: "CFO Advisory",
 };
 const TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
   ma_sell:     { bg: "var(--sell-bg)", tx: "var(--sell-tx)" },
   ma_buy:      { bg: "var(--buy-bg)",  tx: "var(--buy-tx)"  },
-  cfo_advisor: { bg: "var(--cfo-bg)",  tx: "var(--cfo-tx)"  },
 };
 const STATUS_LABELS: Record<string, string> = {
   draft: "Brouillon", active: "Actif", on_hold: "En pause",
