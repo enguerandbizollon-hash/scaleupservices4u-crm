@@ -330,22 +330,18 @@ export const STAGE_LABELS_BY_KEY: Record<string, string> = {
   post_closing:      "Post-closing",
 };
 
-export type DealTypeKey = "fundraising" | "ma_sell" | "ma_buy" | "cfo_advisor";
+export type DealTypeKey = "ma_sell" | "ma_buy";
 
 export const DEAL_STAGES_BY_TYPE: Record<DealTypeKey, readonly string[]> = {
-  fundraising: ["kickoff", "preparation", "outreach", "meetings", "term_sheets", "closing", "post_closing"],
   ma_sell:     ["kickoff", "preparation", "outreach", "meetings", "loi", "dd", "spa", "closing", "post_closing"],
   ma_buy:      ["kickoff", "criteria", "sourcing", "outreach", "loi", "dd", "spa", "closing"],
-  cfo_advisor: ["kickoff", "onboarding", "delivery", "support"],
 } as const;
 
 // Stages affichés par défaut dans le kanban actif (exclut les états "après
 // l'opération" qui polluent le pipeline opérationnel).
 export const DEAL_STAGES_MAIN_BY_TYPE: Record<DealTypeKey, readonly string[]> = {
-  fundraising: ["kickoff", "preparation", "outreach", "meetings", "term_sheets", "closing"],
   ma_sell:     ["kickoff", "preparation", "outreach", "meetings", "loi", "dd", "spa", "closing"],
   ma_buy:      ["kickoff", "criteria", "sourcing", "outreach", "loi", "dd", "spa", "closing"],
-  cfo_advisor: ["kickoff", "onboarding", "delivery", "support"],
 } as const;
 
 export function stagesForDealType(type: string | null | undefined): readonly string[] {
@@ -397,8 +393,6 @@ export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number]["value"];
 export const SUGGESTION_ROLES = [
   { value: "target",    label: "Cible",        context: "ma_sell,ma_buy" },
   { value: "acquirer",  label: "Acquéreur",    context: "ma_sell"         },
-  { value: "investor",  label: "Investisseur", context: "fundraising"     },
-  { value: "partner",   label: "Partenaire",   context: "cfo_advisor"     },
   { value: "other",     label: "Autre",        context: "*"                },
 ] as const;
 
@@ -436,10 +430,8 @@ export function connectorSourceLabel(source: string | null | undefined): string 
 // suggestions pour pré-remplir role_suggested).
 export function defaultSuggestionRoleForDealType(dealType: string | null | undefined): SuggestionRole {
   switch (dealType) {
-    case "fundraising": return "investor";
     case "ma_sell":     return "acquirer";
     case "ma_buy":      return "target";
-    case "cfo_advisor": return "partner";
     default:            return "other";
   }
 }
