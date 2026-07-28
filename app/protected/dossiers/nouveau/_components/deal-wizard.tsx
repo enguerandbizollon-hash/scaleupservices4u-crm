@@ -24,12 +24,10 @@ const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
 
 type DealType = "ma_sell" | "ma_buy";
 
-interface MandateOption { id: string; name: string; type: string; status: string; client_name: string | null }
 interface OrgOption { id: string; name: string }
 interface ContactOption { id: string; first_name: string; last_name: string; email: string | null }
 
 interface Props {
-  mandates: MandateOption[];
   organisations: OrgOption[];
   contacts: ContactOption[];
 }
@@ -166,7 +164,7 @@ function MultiSelect({ values, onChange, options, placeholder }: {
 
 // ── Wizard principal ─────────────────────────────────────────────────────────
 
-export function DealWizard({ mandates, organisations, contacts }: Props) {
+export function DealWizard({ organisations, contacts }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [saving, setSaving] = useState(false);
@@ -204,13 +202,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   const [dirigeantEmail, setDirigeantEmail] = useState("");
   const [dirigeantPhone, setDirigeantPhone] = useState("");
   const [dirigeantTitle, setDirigeantTitle] = useState("");
-
-  // Step 1 — mandat (3 modes)
-  const [mandateMode, setMandateMode] = useState<"none" | "existing" | "new">("none");
-  const [mandateId, setMandateId] = useState<string>("");
-  const [newMandateName, setNewMandateName] = useState("");
-  const [newMandateStart, setNewMandateStart] = useState("");
-  const [newMandateClose, setNewMandateClose] = useState("");
 
   // Step 2 — M&A Sell
   const [targetAmount, setTargetAmount] = useState("");
@@ -262,14 +253,12 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
   const step1ClientOk = clientOrgMode === "new"
     ? clientOrgName.trim().length > 0
     : !!clientOrgId;
-  // Création mandat inline : si mode = new, nom requis (l'org est toujours présente)
-  const step1MandateOk = mandateMode !== "new" || newMandateName.trim().length > 0;
   // Création dirigeant libre : si mode = new, prénom + nom requis
   const step1DirigeantOk = dirigeantMode !== "new" || (
     dirigeantFirstName.trim().length > 0 && dirigeantLastName.trim().length > 0
   );
 
-  const canNext1 = step1Valid && step1ClientOk && step1MandateOk && step1DirigeantOk;
+  const canNext1 = step1Valid && step1ClientOk && step1DirigeantOk;
 
   // Navigation entre étapes
   function goNext() {
@@ -395,16 +384,6 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
         : (dirigeantMode === "existing" ? (contacts.find(c => c.id === dirigeantId)?.email ?? null) : null),
       dirigeant_telephone: dirigeantMode === "new" ? (dirigeantPhone.trim() || null) : null,
       dirigeant_titre: dirigeantMode === "new" ? (dirigeantTitle.trim() || null) : null,
-
-      mandate_id: mandateMode === "existing" ? (mandateId || null) : null,
-      create_mandate: mandateMode === "new" && resolvedClientOrgId ? {
-        name: newMandateName.trim(),
-        type: dealType,
-        client_organization_id: resolvedClientOrgId,
-        start_date: newMandateStart || null,
-        target_close_date: newMandateClose || null,
-        currency,
-      } : null,
 
       // M&A Sell
       target_amount: numOrNull(targetAmount),
@@ -674,53 +653,8 @@ export function DealWizard({ mandates, organisations, contacts }: Props) {
               </div>
             </div>
 
-            {/* Bloc Mandat */}
-            <div style={sectionCard}>
-              <div style={sectionTitle}>Mandat associé</div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                {(["none", "existing", "new"] as const).map(m => (
-                  <button key={m} type="button" onClick={() => setMandateMode(m)}
-                    style={{
-                      padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
-                      background: mandateMode === m ? "var(--su-500, #1a56db)" : "var(--surface-2)",
-                      color: mandateMode === m ? "#fff" : "var(--text-3)",
-                      fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                    }}>
-                    {m === "none" ? "Aucun" : m === "existing" ? "Sélectionner existant" : "Créer nouveau"}
-                  </button>
-                ))}
-              </div>
-              {mandateMode === "existing" && (
-                <select value={mandateId} onChange={e => setMandateId(e.target.value)} style={inp}>
-                  <option value="">— Choisir un mandat —</option>
-                  {mandates.filter(m => m.status === "active" || m.status === "draft").map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}{m.client_name ? ` — ${m.client_name}` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {mandateMode === "new" && (
-                <>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={lbl}>Nom du mandat *</label>
-                    <input value={newMandateName} onChange={e => setNewMandateName(e.target.value)}
-                      placeholder={`Mandat — ${name || "nouveau dossier"}`} style={inp} />
-                  </div>
-                  <div style={grid2}>
-                    <div>
-                      <label style={lbl}>Date de début</label>
-                      <input type="date" value={newMandateStart} onChange={e => setNewMandateStart(e.target.value)} style={inp} />
-                    </div>
-                    <div>
-                      <label style={lbl}>Date cible closing</label>
-                      <input type="date" value={newMandateClose} onChange={e => setNewMandateClose(e.target.value)} style={inp} />
-                    </div>
-                  </div>
-                  <div style={hint}>Le mandat prendra automatiquement le type et la devise du dossier.</div>
-                </>
-              )}
-            </div>
+            {/* Bloc Mandat : supprimé (fusion mandats → dossiers, temps 5).
+                Les honoraires se cadrent dans l'onglet Honoraires de la fiche. */}
 
             {/* Bloc Dirigeant */}
             <div style={sectionCard}>

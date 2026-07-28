@@ -402,6 +402,9 @@ const NUMBER_FIELDS = new Set<string>([
   "acquisition_budget_min", "acquisition_budget_max",
   "target_revenue_min", "target_revenue_max",
   "target_ev_min", "target_ev_max",
+  // Honoraires (v65) — confirmed_fee_amount exclu : maintenu par trigger DB.
+  "estimated_fee_amount", "retainer_monthly",
+  "success_fee_percent", "operation_amount",
 ]);
 
 const TEXT_FIELDS = new Set<string>([
@@ -417,6 +420,7 @@ const SELECT_FIELDS = new Set<string>([
   "deal_status", "priority_level", "currency",
   "deal_timing", "company_stage", "company_geography",
   "target_stage",
+  "success_fee_base",
 ]);
 
 const EDITABLE_FIELDS = new Set<string>([

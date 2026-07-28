@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
 import { SECTORS, COMPANY_STAGES } from "@/lib/crm/matching-maps";
 import { GeoSelectField } from "@/components/ui/GeoSelectField";
-import { MandateSelect } from "@/components/mandates/MandateSelect";
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,24 +12,11 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: deal } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,next_action_date,mandate_id,company_stage")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_amount,currency,description,start_date,target_date,next_action_date,company_stage")
     .eq("id", id)
     .maybeSingle();
 
   if (!deal) notFound();
-
-  const { data: mandatesRaw } = await supabase
-    .from("mandates")
-    .select("id,name,type,status,organizations:client_organization_id(name)")
-    .order("created_at", { ascending: false });
-
-  const mandates = (mandatesRaw ?? []).map((m: any) => ({
-    id: m.id,
-    name: m.name,
-    type: m.type,
-    status: m.status,
-    client_name: Array.isArray(m.organizations) ? m.organizations[0]?.name : m.organizations?.name ?? null,
-  }));
 
   const inp = "width:100%;padding:9px 13px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:#111";
   const sel = inp;
@@ -146,15 +132,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                   <option value="CHF">CHF</option>
                   <option value="USD">USD</option>
                 </select>
-              </div>
-
-              <div style={{ gridColumn:"1 / -1" }}>
-                <label style={{ cssText: lbl } as any}>Mandat associé</label>
-                <MandateSelect
-                  name="mandate_id"
-                  mandates={mandates}
-                  defaultValue={(deal as any).mandate_id ?? null}
-                />
               </div>
 
               {/* Profil matching — M&A */}

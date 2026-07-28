@@ -1,6 +1,6 @@
 // Health score automatique des dossiers
 // Calcule un score 0-100 reflétant la santé d'un dossier selon 4 axes :
-//   - Complétude fiche (30 pts) : org, dirigeant, mandat, financier
+//   - Complétude fiche (30 pts) : org, dirigeant, honoraires, financier
 //   - Activité récente (30 pts) : dernière activité
 //   - Avancement (20 pts) : stade dans la séquence du type
 //   - Engagement commercial (20 pts) : tâches, prochaine action, fees
@@ -19,12 +19,14 @@ export interface DealHealthInput {
   priority_level?: string | null;
   organization_id?: string | null;
   client_organization_id?: string | null;
-  mandate_id?: string | null;
   dirigeant_id?: string | null;
   dirigeant_nom?: string | null;
   target_amount?: number | null;
   target_date?: string | null;
   next_action_date?: string | null;
+  // Honoraires portés par le dossier (fusion mandats, v65)
+  estimated_fee_amount?: number | null;
+  success_fee_percent?: number | null;
 }
 
 export interface DealHealthSignals {
@@ -75,7 +77,8 @@ export function computeDealHealth(
   if (hasDirigeant) { score += 10; reasons.push("+10 dirigeant identifié"); }
   else { reasons.push("-10 dirigeant manquant"); }
 
-  if (deal.mandate_id) { score += 5; reasons.push("+5 mandat lié"); }
+  const hasFeeFrame = !!((deal.estimated_fee_amount && deal.estimated_fee_amount > 0) || (deal.success_fee_percent && deal.success_fee_percent > 0));
+  if (hasFeeFrame) { score += 5; reasons.push("+5 honoraires cadrés"); }
   if (signals.has_financial_data) { score += 5; reasons.push("+5 données financières"); }
 
   // ── Activité (30 pts) ──────────────────────────────────────────────────

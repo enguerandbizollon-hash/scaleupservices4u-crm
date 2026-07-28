@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createMandate } from "@/actions/mandates";
 import { upsertFinancialData } from "@/actions/financial-data";
 
 function ns(v: FormDataEntryValue | null): string | null {
@@ -34,7 +33,6 @@ export async function createDealAction(formData: FormData) {
     target_date:       ns(formData.get("target_date")),
     company_stage:     ns(formData.get("company_stage")),
     company_geography: ns(formData.get("company_geography")),
-    mandate_id:        ns(formData.get("mandate_id")),
     client_organization_id: null,  // Les orgs se lient aux dossiers, pas l'inverse
     user_id: user.id,
   }).select("id").single();
@@ -68,7 +66,6 @@ export async function updateDealAction(formData: FormData) {
     next_action_date:  ns(formData.get("next_action_date")),
     target_amount:     targetAmount ? Number(targetAmount) : null,
     currency:       ns(formData.get("currency")) ?? "EUR",
-    mandate_id:     ns(formData.get("mandate_id")),
   };
 
   // Profil de matching M&A — seulement si champs présents dans le form
@@ -85,7 +82,8 @@ export async function updateDealAction(formData: FormData) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Wizard de création de dossier (3 étapes)
-//   1. Identité + dirigeant + mandat (création inline possible)
+//   1. Identité + dirigeant (les honoraires se cadrent ensuite dans
+//      l'onglet Honoraires de la fiche dossier — fusion mandats, temps 5)
 //   2. Spécificités par deal_type (M&A Sell / M&A Buy)
 //   3. Données financières initiales N-1 (optionnelles)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -118,16 +116,6 @@ export interface WizardDealPayload {
   dirigeant_email: string | null;
   dirigeant_telephone: string | null;
   dirigeant_titre: string | null;
-  mandate_id: string | null;
-  // Création mandat inline (si non nul, on crée puis on lie)
-  create_mandate?: {
-    name: string;
-    type: string;
-    client_organization_id: string;
-    start_date: string | null;
-    target_close_date: string | null;
-    currency: string;
-  } | null;
 
   // Step 2 — spécificités
   // M&A Sell
@@ -199,30 +187,7 @@ export async function createDealWizardAction(
     if (stageErr) warnings.push(`Taille d'entreprise : ${stageErr.message}`);
   }
 
-  // 1. Création mandat inline si demandée (avant le deal pour pouvoir le lier)
-  let mandateId = payload.mandate_id;
-  if (payload.create_mandate) {
-    const m = payload.create_mandate;
-    if (!m.name.trim() || !m.client_organization_id) {
-      return { success: false, error: "Mandat : nom et client obligatoires" };
-    }
-    const res = await createMandate({
-      name: m.name.trim(),
-      type: m.type,
-      client_organization_id: m.client_organization_id,
-      start_date: m.start_date,
-      target_close_date: m.target_close_date,
-      currency: m.currency,
-      status: "draft",
-      priority: "medium",
-    });
-    if (!res.success) {
-      return { success: false, error: `Mandat : ${res.error}` };
-    }
-    mandateId = res.id;
-  }
-
-  // 2. Création du deal avec tous les champs identité + spécificités
+  // 1. Création du deal avec tous les champs identité + spécificités
   const dealInsert: Record<string, unknown> = {
     user_id: user.id,
     name,
@@ -238,7 +203,6 @@ export async function createDealWizardAction(
     target_date: payload.target_date,
     description: payload.description,
     currency: payload.currency || "EUR",
-    mandate_id: mandateId,
     // V54 : le sujet du dossier = l'organisation cliente. FK directe sur deals.
     organization_id: payload.client_organization_id,
     client_organization_id: null, // legacy column, remplacée par organization_id
@@ -288,12 +252,12 @@ export async function createDealWizardAction(
   if (error) return { success: false, error: error.message };
   if (!deal?.id) return { success: false, error: "Erreur création dossier" };
 
-  // 3. V54 : la liaison client est maintenant capturée par deals.organization_id
+  // 2. V54 : la liaison client est maintenant capturée par deals.organization_id
   // (écrit à l'étape 2). Plus de double-saisie via deal_organizations role='client'.
   // Les autres rôles (banque, avocat, cible, acquéreur, investisseur...) restent
   // gérés via deal_organizations depuis deal-detail.tsx.
 
-  // 4. Données financières N-1 (optionnel, non bloquant)
+  // 3. Données financières N-1 (optionnel, non bloquant)
   if (payload.financial) {
     const f = payload.financial;
     const u = (v: number | null) => (v == null ? undefined : v);

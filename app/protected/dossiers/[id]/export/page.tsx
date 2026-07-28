@@ -9,7 +9,7 @@
  *   - Rendu mono-colonne A4 portrait
  *   - Header avec nom du dossier, type, stade, montant cible
  *   - Sections : Synthèse, Données financières N/N-1/N-2, Pipeline /
- *     Investisseurs, Activité récente, Mandat & fees
+ *     Investisseurs, Activité récente, Honoraires
  *
  * Pas de Server Action ni de génération côté backend : le rendu HTML
  * brut est imprimé par le navigateur, ce qui produit un PDF propre
@@ -19,7 +19,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMandateByDealId } from "@/actions/mandates";
 import { stageLabel } from "@/lib/crm/matching-maps";
 import { ExportPrintBootstrap } from "./export-print-bootstrap";
 
@@ -77,7 +76,9 @@ async function Content({ params, searchParams }: {
       executive_summary,motivation_narrative,key_differentiators,key_risks,
       asking_price_min,asking_price_max,deal_timing,strategic_rationale,
       ai_valuation_low,ai_valuation_high,ai_financial_notes,
-      organization_id,mandate_id,
+      organization_id,
+      estimated_fee_amount,confirmed_fee_amount,retainer_monthly,
+      success_fee_percent,operation_amount,close_date,
       dirigeant_nom,dirigeant_email,dirigeant_telephone,dirigeant_titre
     `)
     .eq("id", id)
@@ -89,7 +90,7 @@ async function Content({ params, searchParams }: {
     ? (await supabase.from("organizations").select("id,name,sector,location,website").eq("id", deal.organization_id).maybeSingle()).data
     : null;
 
-  const [orgsRes, financialRes, recentActsRes, mandateInfo] = await Promise.all([
+  const [orgsRes, financialRes, recentActsRes] = await Promise.all([
     supabase.from("deal_organizations")
       .select("organization_id,role_in_dossier,organizations(id,name,organization_type,base_status,location)")
       .eq("deal_id", id),
@@ -103,7 +104,6 @@ async function Content({ params, searchParams }: {
       .eq("deal_id", id)
       .order("created_at", { ascending: false })
       .limit(10),
-    getMandateByDealId(id),
   ]);
 
   const orgs = (orgsRes.data ?? []).map(r => {
@@ -306,23 +306,27 @@ async function Content({ params, searchParams }: {
           </section>
         )}
 
-        {/* Bloc 6 — Mandat */}
-        {mandateInfo && (
+        {/* Bloc 6 — Honoraires (portés par le dossier depuis v65) */}
+        {(deal.estimated_fee_amount != null || deal.success_fee_percent != null || deal.retainer_monthly != null || (deal.confirmed_fee_amount ?? 0) > 0) && (
           <section style={{ marginBottom: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 700, color: "#1f2937", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: ".06em" }}>
-              Mandat
+              Honoraires
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-              <KpiBox label="Nom" value={mandateInfo.name ?? "—"} />
-              <KpiBox label="Statut" value={mandateInfo.status ?? "—"} />
-              {mandateInfo.estimated_fee_amount != null && (
-                <KpiBox label="Honoraires estimés" value={fmtMoney(mandateInfo.estimated_fee_amount, mandateInfo.currency)} />
+              {deal.estimated_fee_amount != null && (
+                <KpiBox label="Honoraires estimés" value={fmtMoney(deal.estimated_fee_amount, deal.currency)} />
               )}
-              {mandateInfo.success_fee_percent != null && (
-                <KpiBox label="Success fee" value={`${mandateInfo.success_fee_percent}%`} />
+              {(deal.confirmed_fee_amount ?? 0) > 0 && (
+                <KpiBox label="Encaissés" value={fmtMoney(deal.confirmed_fee_amount, deal.currency)} />
               )}
-              {mandateInfo.target_close_date && (
-                <KpiBox label="Closing cible" value={fmtDate(mandateInfo.target_close_date)} />
+              {deal.success_fee_percent != null && (
+                <KpiBox label="Success fee" value={`${deal.success_fee_percent}%`} />
+              )}
+              {deal.retainer_monthly != null && (
+                <KpiBox label="Retainer mensuel" value={fmtMoney(deal.retainer_monthly, deal.currency)} />
+              )}
+              {deal.target_date && (
+                <KpiBox label="Closing cible" value={fmtDate(deal.target_date)} />
               )}
             </div>
           </section>
