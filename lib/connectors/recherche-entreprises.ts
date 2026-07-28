@@ -17,7 +17,7 @@ import type { ConnectorRecord } from "./base";
 const API_BASE = "https://recherche-entreprises.api.gouv.fr";
 
 // ── Forme brute de l'API (subset utilisé) ─────────────────────────────────
-interface RawEntreprise {
+export interface RawEntreprise {
   siren: string;
   nom_complet?: string;
   nom_raison_sociale?: string;
@@ -44,6 +44,8 @@ interface RawEntreprise {
     prenoms?: string;
     qualite?: string;
     type_dirigeant?: string;
+    date_de_naissance?: string | null;   // "AAAA-MM" (précision mois, vérifié en réel)
+    annee_de_naissance?: string | null;
     siren?: string; // si personne morale
     denomination?: string; // si personne morale
   }>;
@@ -205,6 +207,275 @@ export async function searchEntreprisesByName(query: string, limit = 5): Promise
   if (!res.ok) throw new Error(`API recherche-entreprises a répondu ${res.status}`);
   const json = (await res.json()) as SearchResponse;
   return (json.results ?? []).map(normalizeOne);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SCREENING (phase 2, temps 2) — le composeur de chasses.
+//
+// Tout est vérifié en réel (2026-07-28) :
+//   - le filtre âge dirigeant fonctionne SANS nom (date_naissance_personne_*),
+//     sémantique « au moins un dirigeant dans la tranche » → post-filtre
+//     applicatif findDirigeantPrincipal ;
+//   - les commissaires aux comptes figurent dans dirigeants → exclus par
+//     qualite ;
+//   - ca_min/max, resultat_net_min, multi-NAF (codes complets uniquement,
+//     virgule), departement, region, tranche_effectif_salarie,
+//     categorie_entreprise, etat_administratif=A ;
+//   - fenêtre 10 000 résultats par requête → découpage par départements ;
+//   - rafale 10/10 tolérée → throttle prudent ~4 req/s + retry sur 429.
+// ═════════════════════════════════════════════════════════════════════════
+
+export interface ScreeningFilters {
+  /** Codes NAF complets (ex. "43.21A"). L'API refuse les divisions nues. */
+  naf?: string[];
+  ca_min?: number | null;
+  ca_max?: number | null;
+  resultat_net_min?: number | null;
+  age_dirigeant_min?: number | null;
+  age_dirigeant_max?: number | null;
+  departements?: string[];
+  regions?: string[];
+  /** Codes INSEE de tranches d'effectif (ex. "12" = 20-49). */
+  effectif_tranches?: string[];
+  categorie?: string | null; // PME | ETI | GE
+  /** Défaut true : exclut les entreprises cessées (13% du brut, vérifié). */
+  actives_seulement?: boolean;
+}
+
+export const SCREENING_WINDOW = 10_000;
+export const SCREENING_PER_PAGE = 25; // max accepté par l'API
+
+export const DEPARTEMENTS_FR: readonly string[] = [
+  ...Array.from({ length: 19 }, (_, i) => String(i + 1).padStart(2, "0")),
+  "2A", "2B",
+  ...Array.from({ length: 75 }, (_, i) => String(i + 21)),
+  "971", "972", "973", "974", "976",
+];
+
+/**
+ * Convertit une tranche d'âge en bornes de dates de naissance API.
+ * âge ≥ min → né au plus tard il y a `min` ans (date_naissance_personne_max) ;
+ * âge ≤ max → né au plus tôt il y a `max + 1` ans + 1 jour (…_min).
+ */
+export function birthDateRangeForAges(
+  ageMin: number | null | undefined,
+  ageMax: number | null | undefined,
+  now: Date = new Date(),
+): { min?: string; max?: string } {
+  const out: { min?: string; max?: string } = {};
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  if (ageMin != null && ageMin > 0) {
+    const d = new Date(now);
+    d.setUTCFullYear(d.getUTCFullYear() - ageMin);
+    out.max = iso(d);
+  }
+  if (ageMax != null && ageMax > 0) {
+    const d = new Date(now);
+    d.setUTCFullYear(d.getUTCFullYear() - ageMax - 1);
+    d.setUTCDate(d.getUTCDate() + 1);
+    out.min = iso(d);
+  }
+  return out;
+}
+
+/** Construit les paramètres d'une requête de screening. Pur, testable. */
+export function buildScreeningParams(
+  filters: ScreeningFilters,
+  page: number,
+  perPage: number = SCREENING_PER_PAGE,
+  now: Date = new Date(),
+): URLSearchParams {
+  const p = new URLSearchParams();
+  if (filters.naf?.length) p.set("activite_principale", filters.naf.join(","));
+  if (filters.ca_min != null) p.set("ca_min", String(filters.ca_min));
+  if (filters.ca_max != null) p.set("ca_max", String(filters.ca_max));
+  if (filters.resultat_net_min != null) p.set("resultat_net_min", String(filters.resultat_net_min));
+  if (filters.departements?.length) p.set("departement", filters.departements.join(","));
+  if (filters.regions?.length) p.set("region", filters.regions.join(","));
+  if (filters.effectif_tranches?.length) p.set("tranche_effectif_salarie", filters.effectif_tranches.join(","));
+  if (filters.categorie) p.set("categorie_entreprise", filters.categorie);
+  if (filters.actives_seulement !== false) p.set("etat_administratif", "A");
+
+  const birth = birthDateRangeForAges(filters.age_dirigeant_min, filters.age_dirigeant_max, now);
+  if (birth.min) p.set("date_naissance_personne_min", birth.min);
+  if (birth.max) p.set("date_naissance_personne_max", birth.max);
+
+  p.set("page", String(page));
+  p.set("per_page", String(perPage));
+  return p;
+}
+
+/** Âge en années depuis une date "AAAA-MM" ou "AAAA-MM-JJ". Null si invalide. */
+export function computeAgeFromBirth(birth: string | null | undefined, now: Date = new Date()): number | null {
+  if (!birth) return null;
+  const m = birth.match(/^(\d{4})-(\d{2})/);
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  if (!Number.isFinite(year) || year < 1900) return null;
+  let age = now.getUTCFullYear() - year;
+  if (now.getUTCMonth() + 1 < month) age -= 1;
+  return age;
+}
+
+const QUALITE_DIRIGEANT_RE = /g[ée]rant|pr[ée]sident|directeur g[ée]n[ée]ral|associ[ée]/i;
+const QUALITE_EXCLUE_RE = /commissaire/i;
+
+export interface DirigeantPrincipal {
+  nom: string;
+  prenoms: string | null;
+  qualite: string | null;
+  date_de_naissance: string | null;
+  age: number | null;
+}
+
+/**
+ * Post-filtre du screening : identifie le dirigeant personne physique
+ * exerçant réellement (gérant, président, DG — jamais le commissaire aux
+ * comptes), le plus âgé, optionnellement contraint à une tranche d'âge.
+ * Retourne null si aucun dirigeant ne satisfait la contrainte.
+ */
+export function findDirigeantPrincipal(
+  raw: RawEntreprise,
+  ageMin?: number | null,
+  ageMax?: number | null,
+  now: Date = new Date(),
+): DirigeantPrincipal | null {
+  const candidates: DirigeantPrincipal[] = [];
+  for (const d of raw.dirigeants ?? []) {
+    if (d.denomination) continue; // personne morale
+    if (!d.nom) continue;
+    const qualite = d.qualite ?? d.type_dirigeant ?? null;
+    if (qualite && QUALITE_EXCLUE_RE.test(qualite)) continue;
+    if (qualite && !QUALITE_DIRIGEANT_RE.test(qualite)) continue;
+    const age = computeAgeFromBirth(d.date_de_naissance, now);
+    if (ageMin != null && (age === null || age < ageMin)) continue;
+    if (ageMax != null && (age === null || age > ageMax)) continue;
+    candidates.push({
+      nom: d.nom,
+      prenoms: d.prenoms ?? null,
+      qualite,
+      date_de_naissance: d.date_de_naissance ?? null,
+      age,
+    });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
+  return candidates[0];
+}
+
+// ── Exécution ─────────────────────────────────────────────────────────────
+
+const THROTTLE_MS = 250;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function fetchScreeningPage(params: URLSearchParams): Promise<SearchResponse> {
+  const url = `${API_BASE}/search?${params}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (res.ok) return (await res.json()) as SearchResponse;
+    if ((res.status === 429 || res.status >= 500) && attempt === 0) {
+      await sleep(1_500);
+      continue;
+    }
+    const body = await res.text().catch(() => "");
+    throw new Error(`Recherche d'Entreprises ${res.status} : ${body.slice(0, 200)}`);
+  }
+  throw new Error("Recherche d'Entreprises : échec après retry");
+}
+
+/** Compteur live du composeur : total de cibles pour des filtres donnés. */
+export async function countScreening(filters: ScreeningFilters, now: Date = new Date()): Promise<number> {
+  const params = buildScreeningParams(filters, 1, 1, now);
+  const json = await fetchScreeningPage(params);
+  return json.total_results ?? 0;
+}
+
+export interface ScreeningHit {
+  raw: RawEntreprise;
+  normalized: NormalizedEntreprise;
+  dirigeant_principal: DirigeantPrincipal | null;
+}
+
+export interface ScreeningRunResult {
+  hits: ScreeningHit[];
+  /** Somme des totaux API par requête (avant post-filtre dirigeant). */
+  total_api: number;
+  /** Nombre de fiches écartées par le post-filtre dirigeant. */
+  filtered_out: number;
+  /** True si une sous-requête a touché la fenêtre des 10 000. */
+  truncated: boolean;
+  /** Nombre de requêtes de découpage exécutées. */
+  queries: number;
+}
+
+/**
+ * Exécute un screening complet : découpage automatique par départements si
+ * le total dépasse la fenêtre API, pagination, throttle, post-filtre
+ * dirigeant. `maxResults` est un garde-fou (défaut 50 000, taille max de
+ * l'univers décidée au plan).
+ */
+export async function runScreening(
+  filters: ScreeningFilters,
+  opts?: { maxResults?: number; now?: Date },
+): Promise<ScreeningRunResult> {
+  const now = opts?.now ?? new Date();
+  const maxResults = opts?.maxResults ?? 50_000;
+  const needsAgeFilter = filters.age_dirigeant_min != null || filters.age_dirigeant_max != null;
+
+  // Plan de requêtes : direct, ou découpé par départements si trop large.
+  let slices: ScreeningFilters[] = [filters];
+  const total = await countScreening(filters, now);
+  if (total > SCREENING_WINDOW && !filters.departements?.length) {
+    slices = DEPARTEMENTS_FR.map((d) => ({ ...filters, departements: [d] }));
+  }
+
+  const hits: ScreeningHit[] = [];
+  const seen = new Set<string>();
+  let totalApi = 0;
+  let filteredOut = 0;
+  let truncated = false;
+  let queries = 0;
+
+  for (const slice of slices) {
+    let page = 1;
+    for (;;) {
+      const params = buildScreeningParams(slice, page, SCREENING_PER_PAGE, now);
+      const json = await fetchScreeningPage(params);
+      queries++;
+      if (page === 1) {
+        totalApi += json.total_results ?? 0;
+        if ((json.total_results ?? 0) > SCREENING_WINDOW) truncated = true;
+      }
+
+      for (const raw of json.results ?? []) {
+        if (seen.has(raw.siren)) continue;
+        seen.add(raw.siren);
+        const dirigeant = findDirigeantPrincipal(
+          raw,
+          filters.age_dirigeant_min,
+          filters.age_dirigeant_max,
+          now,
+        );
+        if (needsAgeFilter && !dirigeant) {
+          filteredOut++;
+          continue;
+        }
+        hits.push({ raw, normalized: normalizeOne(raw), dirigeant_principal: dirigeant });
+      }
+
+      if (hits.length >= maxResults) {
+        truncated = true;
+        return { hits, total_api: totalApi, filtered_out: filteredOut, truncated, queries };
+      }
+      if (page >= (json.total_pages ?? 1) || (json.results ?? []).length === 0) break;
+      page++;
+      await sleep(THROTTLE_MS);
+    }
+    await sleep(THROTTLE_MS);
+  }
+
+  return { hits, total_api: totalApi, filtered_out: filteredOut, truncated, queries };
 }
 
 // ── ConnectorRecord helper (pour cohérence avec autres connecteurs) ───────
