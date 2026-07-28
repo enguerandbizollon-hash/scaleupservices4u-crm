@@ -16,6 +16,7 @@ import {
   type ScreeningHit,
 } from "@/lib/connectors/recherche-entreprises";
 import { sectorFromNaf } from "@/lib/crm/matching-maps";
+import { computeCedabilite } from "@/lib/crm/cedabilite";
 
 const UPSERT_BATCH = 500;
 
@@ -200,6 +201,74 @@ export async function runScreeningIngest(input: {
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Erreur screening" };
   }
+}
+
+// ── Radar de cédabilité (temps 4) ────────────────────────────────────────────
+
+/**
+ * Recalcule le score de cédabilité de tout l'univers, par pages de 500,
+ * en croisant les signaux BODACC portés par chaque SIREN. Déterministe,
+ * relançable à volonté (gratuit).
+ */
+export async function recomputeCedabilite(): Promise<ProspectionActionResult<{ scored: number }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const nowIso = new Date().toISOString();
+  let scored = 0;
+
+  for (let from = 0; ; from += 500) {
+    const { data: page, error } = await supabase
+      .from("univers_entreprises")
+      .select("siren, nom, age_dirigeant_principal, date_creation, finances")
+      .order("siren", { ascending: true })
+      .range(from, from + 499);
+    if (error) return { success: false, error: error.message };
+    if (!page || page.length === 0) break;
+
+    const { data: sigs } = await supabase
+      .from("signaux")
+      .select("siren, signal_type")
+      .in("siren", page.map((p) => p.siren));
+    const typesBySiren = new Map<string, string[]>();
+    for (const s of sigs ?? []) {
+      const arr = typesBySiren.get(s.siren) ?? [];
+      arr.push(s.signal_type);
+      typesBySiren.set(s.siren, arr);
+    }
+
+    const updates = page.map((f) => {
+      const r = computeCedabilite(
+        {
+          age_dirigeant_principal: f.age_dirigeant_principal,
+          date_creation: f.date_creation,
+          finances: f.finances,
+        },
+        { types: typesBySiren.get(f.siren) ?? [] },
+      );
+      // nom inclus : requis par le chemin INSERT de l'upsert (NOT NULL),
+      // jamais emprunté en pratique puisque toutes les lignes existent.
+      return {
+        siren: f.siren,
+        nom: f.nom,
+        cedabilite_score: r.score,
+        cedabilite_raisons: r.raisons,
+        updated_at: nowIso,
+      };
+    });
+
+    const { error: upErr } = await supabase
+      .from("univers_entreprises")
+      .upsert(updates, { onConflict: "siren" });
+    if (upErr) return { success: false, error: upErr.message };
+
+    scored += updates.length;
+    if (page.length < 500) break;
+  }
+
+  revalidatePath("/protected/prospection");
+  return { success: true, data: { scored } };
 }
 
 // ── Univers : tri et promotion ───────────────────────────────────────────────

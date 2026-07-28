@@ -10,20 +10,22 @@ export const maxDuration = 300;
 const PAGE_SIZE = 50;
 const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "ecarte", "promu"]);
 
-async function Content({ searchParams }: { searchParams: Promise<{ statut?: string; page?: string }> }) {
-  const { statut, page: pageParam } = await searchParams;
+async function Content({ searchParams }: { searchParams: Promise<{ statut?: string; page?: string; tri?: string }> }) {
+  const { statut, page: pageParam, tri } = await searchParams;
   const supabase = await createClient();
 
   const activeStatut = statut && VALID_STATUTS.has(statut) ? statut : null;
+  const sortRadar = tri === "radar";
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
   let universQuery = supabase
     .from("univers_entreprises")
-    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, age_dirigeant_principal, statut, organization_id, last_seen_at", { count: "exact" })
-    .order("last_seen_at", { ascending: false })
-    .order("siren", { ascending: true })
-    .range(from, from + PAGE_SIZE - 1);
+    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, last_seen_at", { count: "exact" });
+  universQuery = sortRadar
+    ? universQuery.order("cedabilite_score", { ascending: false, nullsFirst: false })
+    : universQuery.order("last_seen_at", { ascending: false });
+  universQuery = universQuery.order("siren", { ascending: true }).range(from, from + PAGE_SIZE - 1);
   if (activeStatut) universQuery = universQuery.eq("statut", activeStatut);
 
   const countByStatut = (s: string) =>
@@ -67,13 +69,14 @@ async function Content({ searchParams }: { searchParams: Promise<{ statut?: stri
       universTotal={universRes.count ?? 0}
       statCounts={statCounts}
       activeStatut={activeStatut}
+      sortRadar={sortRadar}
       page={page}
       pageSize={PAGE_SIZE}
     />
   );
 }
 
-export default function ProspectionPage({ searchParams }: { searchParams: Promise<{ statut?: string; page?: string }> }) {
+export default function ProspectionPage({ searchParams }: { searchParams: Promise<{ statut?: string; page?: string; tri?: string }> }) {
   return (
     <Suspense fallback={<div style={{ padding: 32 }}><div style={{ height: 400, borderRadius: 14, background: "var(--surface-2)" }} /></div>}>
       <Content searchParams={searchParams} />

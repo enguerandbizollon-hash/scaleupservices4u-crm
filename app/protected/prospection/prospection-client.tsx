@@ -8,13 +8,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Crosshair, Play, Save, Trash2, ArrowUpRight, Building2,
-  ChevronLeft, ChevronRight, Loader2, AlertTriangle,
+  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge,
 } from "lucide-react";
 import {
   countScreeningAction, saveScreeningProfile, deleteScreeningProfile,
   runScreeningIngest, updateUniversStatut, promoteUniversToOrganization,
+  recomputeCedabilite,
   type UniversStatut,
 } from "@/actions/prospection";
+import { cedabiliteBand } from "@/lib/crm/cedabilite";
 import type { ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
 import { NAF_DIVISION_TO_SECTOR } from "@/lib/crm/matching-maps";
 import { nafCodesForDivisions } from "@/lib/crm/naf-codes";
@@ -33,6 +35,8 @@ export type UniversRow = {
   categorie: string | null;
   finances: Record<string, { ca?: number | null; resultat_net?: number | null }>;
   age_dirigeant_principal: number | null;
+  cedabilite_score: number | null;
+  cedabilite_raisons: string[] | null;
   statut: string;
   organization_id: string | null;
   last_seen_at: string;
@@ -127,12 +131,13 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, univers, universTotal, statCounts, activeStatut, page, pageSize }: {
+export function ProspectionClient({ profiles, univers, universTotal, statCounts, activeStatut, sortRadar, page, pageSize }: {
   profiles: ProfileRow[];
   univers: UniversRow[];
   universTotal: number;
   statCounts: Record<string, number>;
   activeStatut: string | null;
+  sortRadar: boolean;
   page: number;
   pageSize: number;
 }) {
@@ -272,8 +277,24 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
     color: active ? "var(--bg)" : "var(--text-3)",
   });
 
-  const statutHref = (s: string | null) => `/protected/prospection${s ? `?statut=${s}` : ""}`;
+  const statutHref = (s: string | null, radar: boolean = sortRadar) => {
+    const p = new URLSearchParams();
+    if (s) p.set("statut", s);
+    if (radar) p.set("tri", "radar");
+    const qs = p.toString();
+    return `/protected/prospection${qs ? `?${qs}` : ""}`;
+  };
   const totalPages = Math.max(1, Math.ceil(universTotal / pageSize));
+
+  const [scoring, setScoring] = useState(false);
+  async function handleRecompute() {
+    setScoring(true);
+    const res = await recomputeCedabilite();
+    setScoring(false);
+    setBanner(res.success
+      ? { kind: "ok", text: `Radar recalculé sur ${res.data.scored.toLocaleString("fr-FR")} fiches.` }
+      : { kind: "err", text: res.error });
+  }
 
   return (
     <div style={{ padding: "28px 24px", minHeight: "100vh", background: "var(--bg)" }}>
@@ -455,6 +476,15 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
               {meta.label} ({(statCounts[key] ?? 0).toLocaleString("fr-FR")})
             </Link>
           ))}
+          <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 2px" }} />
+          <Link href={statutHref(activeStatut, !sortRadar)} style={{ ...toggleChip(sortRadar), display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <Gauge size={12} /> Tri radar
+          </Link>
+          <button onClick={handleRecompute} disabled={scoring}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", cursor: "pointer", fontFamily: "inherit", opacity: scoring ? 0.6 : 1 }}>
+            {scoring ? <Loader2 size={11} className="animate-spin" /> : <Gauge size={11} />}
+            {scoring ? "Calcul…" : "Recalculer le radar"}
+          </button>
         </div>
 
         <div style={{ ...card, overflow: "hidden", marginBottom: 8 }}>
@@ -494,6 +524,16 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
                 <div style={{ fontSize: 12, color: "var(--text-3)", flexShrink: 0, minWidth: 58, textAlign: "center" }}>
                   {u.age_dirigeant_principal != null ? `${u.age_dirigeant_principal} ans` : "—"}
                 </div>
+                {(() => {
+                  const band = cedabiliteBand(u.cedabilite_score);
+                  return (
+                    <span
+                      title={(u.cedabilite_raisons ?? []).join("\n") || "Lancez « Recalculer le radar »"}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: band.bg, color: band.tx, flexShrink: 0, cursor: "help", minWidth: 46, textAlign: "center" }}>
+                      {u.cedabilite_score != null ? u.cedabilite_score : "—"}
+                    </span>
+                  );
+                })()}
                 <select value={statut} onChange={e => handleStatut(u.siren, e.target.value as UniversStatut)}
                   disabled={statut === "promu"}
                   style={{ fontSize: 11.5, padding: "3px 7px", borderRadius: 20, border: `1px solid ${sm.bg}`, background: sm.bg, color: sm.tx, cursor: "pointer", fontFamily: "inherit", outline: "none", flexShrink: 0 }}>
@@ -521,14 +561,14 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
         {totalPages > 1 && (
           <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", fontSize: 12.5, color: "var(--text-4)" }}>
             {page > 1 && (
-              <Link href={`/protected/prospection?${new URLSearchParams({ ...(activeStatut ? { statut: activeStatut } : {}), page: String(page - 1) })}`}
+              <Link href={`/protected/prospection?${new URLSearchParams({ ...(activeStatut ? { statut: activeStatut } : {}), ...(sortRadar ? { tri: "radar" } : {}), page: String(page - 1) })}`}
                 style={{ display: "flex", alignItems: "center", color: "var(--text-3)" }}>
                 <ChevronLeft size={14} />
               </Link>
             )}
             <span>page {page} / {totalPages}</span>
             {page < totalPages && (
-              <Link href={`/protected/prospection?${new URLSearchParams({ ...(activeStatut ? { statut: activeStatut } : {}), page: String(page + 1) })}`}
+              <Link href={`/protected/prospection?${new URLSearchParams({ ...(activeStatut ? { statut: activeStatut } : {}), ...(sortRadar ? { tri: "radar" } : {}), page: String(page + 1) })}`}
                 style={{ display: "flex", alignItems: "center", color: "var(--text-3)" }}>
                 <ChevronRight size={14} />
               </Link>
