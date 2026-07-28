@@ -169,66 +169,40 @@ components/[module]/            → composants UI par module
 
 ---
 
-## Mandats — modèle formalisé
+## Honoraires — modèle formalisé (fusion mandats → dossiers, v65)
 
-Les mandats sont le cadre commercial de chaque mission du cabinet.
-Un mandat = une relation contractuelle avec un client.
-Un mandat contient un ou plusieurs dossiers opérationnels (deals).
+Le dossier (deal) est l'unique entité de pilotage : il porte lui-même son
+cadre commercial. L'entité mandat a été absorbée par le dossier (phase 1,
+temps 5). Le terme « mandat » reste le vocabulaire métier de la lettre de
+mission signée, mais n'est plus un objet du CRM.
 
-### Table : mandates
-- id (uuid PK)
-- user_id (uuid)
-- name (text NOT NULL) — intitulé du mandat
-- type (text NOT NULL) — fundraising | ma_sell | ma_buy |
-                          cfo_advisor | recruitment
-- client_organization_id (uuid FK organisations NOT NULL)
-- description (text)
-- status (text) — draft | active | on_hold | won | lost | closed
-- priority (text) — low | medium | high
-- owner_id (uuid FK users) — responsable du mandat
-- start_date (date)
-- target_close_date (date)
-- end_date (date)
-- currency (text default 'EUR')
-- estimated_fee_amount (numeric) — honoraires estimés total
-- confirmed_fee_amount (numeric) — honoraires confirmés / facturés
-- retainer_monthly (numeric) — retainer mensuel si applicable
-- success_fee_percent (numeric) — % success fee si applicable
-- success_fee_base (text) — ev | revenue | raise_amount | salary
-- notes (text)
-- created_at (timestamptz)
-- updated_at (timestamptz)
+### Colonnes honoraires de deals (v65)
+- estimated_fee_amount (numeric) — honoraires totaux estimés du dossier
+- confirmed_fee_amount (numeric NOT NULL default 0) — somme des jalons
+  payés. Maintenu par trigger DB, ne JAMAIS écrire à la main ni via l'UI
+- retainer_monthly (numeric) — retainer mensuel négocié (informatif,
+  les encaissements passent par les jalons)
+- success_fee_percent (numeric) — % success fee (ex : 3 pour 3%)
+- success_fee_base (text) — base de calcul explicite :
+  closed_amount | asking_price_mid | target_ev_mid |
+  acquisition_budget_mid | target_amount. NULL = résolution automatique
+- operation_amount (numeric) — montant d'opération saisi à la main,
+  override prioritaire sur toute base dérivée
 
-RLS : auth.uid() = user_id.
-
-### Relations mandats
-1 mandat → N deals (dossiers opérationnels)
-1 mandat → N fee_milestones (jalons de facturation)
-1 mandat → N documents
-1 mandat → 1 organisation cliente
-
-### Règles mandats
-- owner_id obligatoire pour tout mandat actif
-- type obligatoire pour tout mandat actif
-- Un deal doit idéalement être rattaché à un mandat
-- Quand un deal passe en won → mandat.status = won si dernier deal actif
-- Quand un mandat passe en won/closed → deal.status doit être cohérent
-
----
-
-## Honoraires et fees — modèle complet
-
-Le cabinet génère trois types de revenus :
-retainers (récurrents) · success fees (à la performance) · forfaits ponctuels.
+Le dossier porte aussi target_date (closing cible), close_date (closing
+effectif) et gcal_closing_event_id (synchro agenda), qui existaient déjà.
 
 ### Table : fee_milestones (jalons de facturation)
 - id (uuid PK)
 - user_id (uuid)
-- mandate_id (uuid FK mandates NOT NULL)
-- deal_id (uuid FK deals, nullable)
-- name (text) — ex: "Signing mandat", "Closing deal", "Livraison BP"
+- deal_id (uuid FK deals ON DELETE CASCADE) — clé de rattachement.
+  NOT NULL à venir avec la migration de DROP
+- mandate_id — colonne dormante (ex-FK mandates), DROP ultérieur
+- name (text) — ex: "Signing", "Success fee closing", "Livraison BP"
 - milestone_type (text) — retainer | success_fee | fixed | expense
 - amount (numeric NOT NULL)
+- ticket_amount (numeric) — montant de la tranche d'opération
+  (base de l'auto-calcul du fee via success_fee_percent)
 - currency (text default 'EUR')
 - due_date (date) — date prévue
 - invoiced_date (date) — date facturée
@@ -236,42 +210,40 @@ retainers (récurrents) · success fees (à la performance) · forfaits ponctuel
 - status (text) — pending | invoiced | paid | cancelled
 - invoice_reference (text)
 - notes (text)
+- gcal_event_id (text)
 - created_at (timestamptz)
 
 RLS : auth.uid() = user_id.
 
-### Calcul success fee par deal_type
+### Calcul success fee (lib/crm/fee-calculator.ts)
 
-Fundraising :
-success_fee = raise_amount × success_fee_percent
-Ex : levée 3M CHF × 3% = 90K CHF
+computeSuccessFee(deal) — signature unique deal-centric.
+Résolution de la base, par priorité :
+1. operation_amount (override manuel, écrase tout)
+2. success_fee_base explicite, si calculable sur le dossier
+3. automatique par deal_type :
+   - ma_sell : closed_amount > milieu asking_price > target_amount
+   - ma_buy : closed_amount > milieu acquisition_budget >
+     milieu target_ev > target_amount
 
-M&A Sell-side :
-success_fee = ev_deal × success_fee_percent
-Avec possible minimum garanti (min_fee)
-
-M&A Buy-side :
-success_fee = acquisition_price × success_fee_percent
-Ou forfait si défini dans le mandat
-
-Recrutement :
-success_fee = annual_salary_placed × success_fee_percent
-Placement standard : 15-25% du salaire annuel brut
-
-CFO Advisory :
-retainer_monthly × duration_months + forfaits livrables
+Toutes les entrées sont nullable : le calculateur retourne la meilleure
+estimation, trace la source retenue (FeeBaseSource) et note les manques.
+Aucun throw.
 
 ### Règles fees
-- Devise du jalon = devise du mandat par défaut
+- Devise du jalon = devise du dossier par défaut
 - Conversion automatique pour affichage dashboard (voir multi-devise)
-- Alerte si jalon pending dépassant due_date de 30+ jours
-- fee_milestones.status = 'paid' déclenche mise à jour
-  mandate.confirmed_fee_amount
+- Alerte si jalon pending dépassant due_date de 30+ jours (cron)
+- deals.confirmed_fee_amount = SUM(jalons paid) recalculé par le trigger
+  tr_fee_milestones_recompute_deal_fee sur INSERT/UPDATE/DELETE
+  (gère les retours arrière paid → pending et les suppressions)
+- organizations.is_client dérivé de deals : TRUE dès qu'un dossier non
+  archivé a l'organisation pour sujet (trigger deals_update_org_is_client)
 
-### Affichage dashboard fees
-Par mandat : jalons à venir · en retard · encaissés
-Global cabinet : pipeline fees (pending) · encaissé YTD · projeté année
-Par collaborateur : CA généré par owner_id
+### Affichage fees
+Onglet Honoraires de la fiche dossier : paramètres éditables, calcul
+auto traçable, KPIs estimé/pipeline/facturé/encaissé/en retard, jalons.
+Global cabinet (statistiques) : pipeline fees · encaissé YTD · projeté
 
 ---
 
@@ -280,8 +252,8 @@ Par collaborateur : CA généré par owner_id
 Le cabinet opère en EUR, CHF et USD principalement.
 
 ### Règles de stockage
-- Toutes les valeurs sont stockées dans la devise native du deal/mandat
-- Le champ currency est obligatoire sur deals, mandates, fee_milestones,
+- Toutes les valeurs sont stockées dans la devise native du dossier
+- Le champ currency est obligatoire sur deals, fee_milestones,
   financial_data
 - Ne jamais convertir à la volée en base — stocker la valeur native
 
@@ -327,7 +299,7 @@ object_tags (table de liaison générique) :
 - id (uuid PK)
 - user_id (uuid)
 - tag_id (uuid FK tags)
-- object_type (text) — organisation | contact | deal | candidate | mandate
+- object_type (text) — organisation | contact | deal
 - object_id (uuid) — FK vers l'objet concerné
 - created_at (timestamptz)
 
@@ -336,9 +308,8 @@ Index sur (object_type, object_id) pour filtrage rapide.
 ### Utilisation des tags
 - Sur les organisations : "réseau PE", "fonds top tier", "ex-client"
 - Sur les contacts : "décideur", "ex-Lazard", "board member"
-- Sur les candidats : "ex-Rothschild", "bilingue anglais", "DAF expérimenté"
 - Sur les deals : "deal phare", "référence secteur", "closing Q1 2024"
-- Sur les mandats : "mandat récurrent", "client stratégique"
+- Sur les organisations : "client stratégique", "acquéreur récurrent"
 
 ### Règles tags
 - Tags libres — pas de liste fermée imposée
@@ -819,7 +790,7 @@ KPIs recrutement
 ### Dashboard organisation
 Bloc profil · contacts clés · tags
 Bloc financier N/N-1/N-2 (devise native + conversion)
-Bloc relations CRM : dossiers · mandats · activités
+Bloc relations CRM : dossiers · activités
 Bloc RH si client recrutement
 Bloc matching si investisseur
 
@@ -883,7 +854,6 @@ deal_type : fundraising | ma_sell | ma_buy | cfo_advisor | recruitment
 deal_stage : kickoff | preparation | outreach | management meetings | dd |
              negotiation | closing | Post_closing | Ongoing_support | search
 deal_status : open | won | lost | paused
-mandate_status : draft | active | on_hold | won | lost | closed
 base_status : active | to_qualify | inactive
 task_status : open | done | cancelled
 agenda_event_type : deadline | follow_up | meeting | call | delivery |
@@ -957,9 +927,9 @@ Données financières — transversal
   Table financial_data unifiée · Import multi-canaux
   Analyse IA documents · Dashboards N/N-1/N-2
 
-Mandats et honoraires
-  Tables mandates + fee_milestones · Calcul fees par deal_type
-  Dashboard fees cabinet
+Honoraires (fusion mandats → dossiers, v65)
+  Colonnes honoraires de deals + table fee_milestones
+  Calcul fees deal-centric (fee-calculator) · Dashboard fees cabinet
 
 Données transversales
   Tags · Déduplication · Versioning documents
