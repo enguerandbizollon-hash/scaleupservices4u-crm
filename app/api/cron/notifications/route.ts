@@ -38,8 +38,8 @@ interface OverdueMilestone {
   amount: number | null;
   currency: string | null;
   due_date: string;
-  mandate_id: string;
-  mandates: { name: string | null } | { name: string | null }[] | null;
+  deal_id: string | null;
+  deals: { name: string | null } | { name: string | null }[] | null;
 }
 
 function todayISO(): string {
@@ -120,7 +120,7 @@ export async function GET(req: Request) {
 
   const { data: milestonesData, error: milestonesErr } = await supabase
     .from("fee_milestones")
-    .select("id, user_id, name, amount, currency, due_date, mandate_id, mandates(name)")
+    .select("id, user_id, name, amount, currency, due_date, deal_id, deals(name)")
     .eq("status", "pending")
     .not("due_date", "is", null)
     .lt("due_date", overdueCutoff);
@@ -135,9 +135,9 @@ export async function GET(req: Request) {
     for (const m of milestones) {
       scannedMilestones++;
       const lateDays = Math.abs(daysBetween(today, m.due_date));
-      const mandateName = Array.isArray(m.mandates)
-        ? m.mandates[0]?.name ?? null
-        : m.mandates?.name ?? null;
+      const dealName = Array.isArray(m.deals)
+        ? m.deals[0]?.name ?? null
+        : m.deals?.name ?? null;
       const amountLabel = m.amount != null
         ? ` (${m.amount} ${m.currency ?? "EUR"})`
         : "";
@@ -146,8 +146,8 @@ export async function GET(req: Request) {
         user_id: m.user_id,
         kind: "fee_overdue",
         title: `Jalon en retard : ${m.name}${amountLabel}`,
-        body: `En retard de ${lateDays} jour(s) depuis ${m.due_date}${mandateName ? ` · Mandat : ${mandateName}` : ""}.`,
-        link_url: `/protected/mandats/${m.mandate_id}`,
+        body: `En retard de ${lateDays} jour(s) depuis ${m.due_date}${dealName ? ` · Dossier : ${dealName}` : ""}.`,
+        link_url: m.deal_id ? `/protected/dossiers/${m.deal_id}` : "/protected/dossiers",
         source_type: "fee_milestone",
         source_id: m.id,
         trigger_date: today,

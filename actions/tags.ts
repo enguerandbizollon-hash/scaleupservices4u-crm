@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ObjectType = "organisation" | "contact" | "deal" | "mandate";
+export type ObjectType = "organisation" | "contact" | "deal";
 
 export interface TagInput {
   name: string;

@@ -61,22 +61,19 @@ function fmtDate(d: string | null) {
   return new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"short", year:"numeric" }).format(new Date(d));
 }
 
-type Tab = "contacts" | "dossiers" | "activites" | "profil" | "mandats" | "financier";
+type Tab = "contacts" | "dossiers" | "activites" | "profil" | "clientdeals" | "financier";
 
-const MANDATE_TYPE_LABELS: Record<string, string> = {
+const CLIENT_DEAL_TYPE_LABELS: Record<string, string> = {
   ma_sell: "M&A Sell", ma_buy: "M&A Buy",
 };
-const MANDATE_STATUS: Record<string, { bg: string; tx: string }> = {
-  draft:   { bg: "var(--surface-3)", tx: "var(--text-5)" },
-  active:  { bg: "#D1FAE5",          tx: "#065F46"        },
-  on_hold: { bg: "#FEF3C7",          tx: "#92400E"        },
-  won:     { bg: "#DBEAFE",          tx: "#1D4ED8"        },
-  lost:    { bg: "#FEE2E2",          tx: "#991B1B"        },
-  closed:  { bg: "var(--surface-3)", tx: "var(--text-4)"  },
+const CLIENT_DEAL_STATUS: Record<string, { bg: string; tx: string; label: string }> = {
+  open:   { bg: "#D1FAE5",          tx: "#065F46", label: "En cours" },
+  won:    { bg: "#DBEAFE",          tx: "#1D4ED8", label: "Gagné"    },
+  lost:   { bg: "#FEE2E2",          tx: "#991B1B", label: "Perdu"    },
+  paused: { bg: "#FEF3C7",          tx: "#92400E", label: "En pause" },
 };
-
-export function OrgDetail({ org, contacts, deals, mandates, financialData, actionsCount }: {
-  org: any; contacts: any[]; deals: any[]; mandates: any[]; financialData: FinancialRow[]; actionsCount: number;
+export function OrgDetail({ org, contacts, deals, clientDeals, financialData, actionsCount }: {
+  org: any; contacts: any[]; deals: any[]; clientDeals: any[]; financialData: FinancialRow[]; actionsCount: number;
 }) {
   const [tab, setTab] = useState<Tab>("contacts");
   const sc = STATUS_COLORS[org.base_status] ?? STATUS_COLORS.to_qualify;
@@ -191,7 +188,7 @@ export function OrgDetail({ org, contacts, deals, mandates, financialData, actio
           { icon:BarChart2,  label:"Profil",    val:"",                tab:"profil" as Tab,    noCount:true  },
           { icon:Users,      label:"Contacts",  val:contacts.length,   tab:"contacts" as Tab,  noCount:false },
           { icon:FolderOpen, label:"Dossiers",  val:deals.length,      tab:"dossiers" as Tab,  noCount:false },
-          { icon:FileCheck,  label:"Mandats",   val:mandates.length,   tab:"mandats" as Tab,   noCount:false },
+          { icon:FileCheck,  label:"Client de", val:clientDeals.length, tab:"clientdeals" as Tab, noCount:false },
           { icon:TrendingUp, label:"Finances",  val:financialData.length, tab:"financier" as Tab, noCount:false },
           { icon:Activity,   label:"Activités", val:actionsCount,      tab:"activites" as Tab, noCount:false },
         ].map(({ icon:Icon, label, val, tab:t, noCount }) => (
@@ -533,22 +530,23 @@ export function OrgDetail({ org, contacts, deals, mandates, financialData, actio
         </div>
       )}
 
-      {/* Onglet Mandats */}
-      {tab === "mandats" && (
+      {/* Onglet Dossiers client — dossiers dont l'organisation est le sujet
+          (fusion mandats → dossiers, v65 : les honoraires vivent sur le deal) */}
+      {tab === "clientdeals" && (
         <div>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
-            <Link href={`/protected/mandats/nouveau`}
+            <Link href={`/protected/dossiers/nouveau`}
               style={{ fontSize:12.5, fontWeight:600, color:"var(--text-1)", textDecoration:"none", padding:"7px 14px", borderRadius:9, background:"var(--surface)", border:"1px solid var(--border)" }}>
-              + Nouveau mandat
+              + Nouveau dossier
             </Link>
           </div>
           <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden" }}>
-            {mandates.length === 0 ? (
+            {clientDeals.length === 0 ? (
               <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
-                Aucun mandat pour cette organisation
+                Cette organisation n&apos;est cliente d&apos;aucun dossier
               </div>
-            ) : mandates.map((m, i) => {
-              const sc = MANDATE_STATUS[m.status] ?? MANDATE_STATUS.draft;
+            ) : clientDeals.map((d, i) => {
+              const sc = CLIENT_DEAL_STATUS[d.deal_status] ?? CLIENT_DEAL_STATUS.open;
               const fmtAmt = (n: number | null) => {
                 if (!n) return "—";
                 if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M`;
@@ -556,32 +554,32 @@ export function OrgDetail({ org, contacts, deals, mandates, financialData, actio
                 return String(n);
               };
               return (
-                <Link key={m.id} href={`/protected/mandats/${m.id}`} style={{
+                <Link key={d.id} href={`/protected/dossiers/${d.id}`} style={{
                   display:"flex", alignItems:"center", gap:14, padding:"14px 20px",
-                  borderBottom: i < mandates.length-1 ? "1px solid var(--border)" : "none",
+                  borderBottom: i < clientDeals.length-1 ? "1px solid var(--border)" : "none",
                   textDecoration:"none", transition:"background .1s",
                 }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--surface-2)"}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
                 >
                   <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"var(--surface-2)", color:"var(--text-3)", flexShrink:0 }}>
-                    {MANDATE_TYPE_LABELS[m.type] ?? m.type}
+                    {CLIENT_DEAL_TYPE_LABELS[d.deal_type] ?? d.deal_type}
                   </span>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:14, fontWeight:600, color:"var(--text-1)" }}>{m.name}</div>
-                    {m.target_close_date && (
+                    <div style={{ fontSize:14, fontWeight:600, color:"var(--text-1)" }}>{d.name}</div>
+                    {d.target_date && (
                       <div style={{ fontSize:12, color:"var(--text-5)", marginTop:2 }}>
-                        🎯 {fmtDate(m.target_close_date)}
+                        🎯 {fmtDate(d.target_date)}
                       </div>
                     )}
                   </div>
-                  {m.estimated_fee_amount && (
+                  {d.estimated_fee_amount && (
                     <div style={{ fontSize:13, fontWeight:700, color:"var(--text-2)", flexShrink:0 }}>
-                      {fmtAmt(m.estimated_fee_amount)} {m.currency ?? "EUR"}
+                      {fmtAmt(d.estimated_fee_amount)} {d.currency ?? "EUR"}
                     </div>
                   )}
                   <span style={{ fontSize:11, fontWeight:600, padding:"3px 9px", borderRadius:20, background:sc.bg, color:sc.tx, flexShrink:0 }}>
-                    {m.status === "draft" ? "Brouillon" : m.status === "active" ? "Actif" : m.status === "on_hold" ? "En pause" : m.status === "won" ? "Gagné" : m.status === "lost" ? "Perdu" : "Clôturé"}
+                    {sc.label}
                   </span>
                   <ChevronRight size={14} color="var(--text-5)"/>
                 </Link>

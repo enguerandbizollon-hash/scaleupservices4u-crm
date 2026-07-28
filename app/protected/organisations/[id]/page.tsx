@@ -25,16 +25,17 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   // Les activités/tâches de l'organisation sont chargées côté client par
   // <ActionTimeline filters={{ organization_id: id }} /> dans OrgDetail.
   // On récupère juste le count ici pour l'afficher dans la barre d'onglets.
-  const [{ data: orgContacts }, { data: dealOrgs }, { data: mandates }, { data: financialData }, { count: actionsCount }] = await Promise.all([
+  const [{ data: orgContacts }, { data: dealOrgs }, { data: clientDeals }, { data: financialData }, { count: actionsCount }] = await Promise.all([
     supabase.from("organization_contacts")
       .select("contact_id,role_label,is_primary,contacts(id,first_name,last_name,title,email,phone,linkedin_url,base_status,last_contact_date)")
       .eq("organization_id", id),
     supabase.from("deal_organizations")
       .select("deal_id,deals(id,name,deal_type,deal_status,deal_stage,priority_level,target_date,target_amount,currency)")
       .eq("organization_id", id),
-    supabase.from("mandates")
-      .select("id,name,type,status,estimated_fee_amount,confirmed_fee_amount,currency,start_date,target_close_date")
-      .eq("client_organization_id", id)
+    // Dossiers dont l'organisation est le sujet/client (fusion mandats, v65)
+    supabase.from("deals")
+      .select("id,name,deal_type,deal_status,estimated_fee_amount,confirmed_fee_amount,currency,start_date,target_date")
+      .eq("organization_id", id)
       .order("created_at", { ascending: false }),
     supabase.from("financial_data")
       .select("*")
@@ -55,7 +56,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     return d;
   }).filter(Boolean);
 
-  return <OrgDetail org={org} contacts={contacts} deals={deals} mandates={mandates ?? []} financialData={financialData ?? []} actionsCount={actionsCount ?? 0} />;
+  return <OrgDetail org={org} contacts={contacts} deals={deals} clientDeals={clientDeals ?? []} financialData={financialData ?? []} actionsCount={actionsCount ?? 0} />;
 }
 
 export default function OrgPage({ params }: { params: Promise<{ id: string }> }) {

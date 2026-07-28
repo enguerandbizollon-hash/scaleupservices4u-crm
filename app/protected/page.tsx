@@ -155,7 +155,7 @@ async function Content() {
   const alerts: DashboardAlert[] = [
     { kind: "inbox_to_review", count: inboxRes.count ?? 0,        href: "/protected/inbox" },
     { kind: "tasks_overdue",   count: tasksOverdueRes.count ?? 0, href: "/protected/dossiers" },
-    { kind: "fees_overdue",    count: feesOverdueRes.count ?? 0,  href: "/protected/mandats" },
+    { kind: "fees_overdue",    count: feesOverdueRes.count ?? 0,  href: "/protected/dossiers" },
     { kind: "deals_dormant",   count: dormantDealsCount,          href: "/protected/dossiers?view=kanban" },
     { kind: "rgpd_expiring",   count: rgpdRes.count ?? 0,         href: "/protected/contacts" },
   ];

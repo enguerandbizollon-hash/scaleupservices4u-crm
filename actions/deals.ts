@@ -22,7 +22,6 @@ export interface DealInput {
   next_action_date?: string | null;
   company_stage?: string | null;
   company_geography?: string | null;
-  mandate_id?: string | null;
   // M&A Sell-side
   asking_price_min?: number | null;
   asking_price_max?: number | null;
@@ -166,7 +165,6 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
     next_action_date:   data.next_action_date   ?? null,
     company_stage:      data.company_stage      ?? null,
     company_geography: data.company_geography ?? null,
-    mandate_id:        data.mandate_id        ?? null,
     // M&A Sell-side
     asking_price_min:     data.asking_price_min     ?? null,
     asking_price_max:     data.asking_price_max     ?? null,

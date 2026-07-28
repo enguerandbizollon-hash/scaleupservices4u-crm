@@ -30,7 +30,8 @@ export interface KanbanDeal {
   next_action_date: string | null;
   screening_status: string | null;
   organization_id?: string | null;
-  mandate_id?: string | null;
+  estimated_fee_amount?: number | null;
+  success_fee_percent?: number | null;
   dirigeant_id?: string | null;
   dirigeant_nom?: string | null;
 }

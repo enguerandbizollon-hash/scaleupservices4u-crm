@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, FolderOpen, Building2, User, Briefcase, Activity, ArrowRight, Plus, Inbox, BarChart2, CheckSquare } from "lucide-react";
+import { Search, FolderOpen, Building2, User, Activity, ArrowRight, Plus, Inbox, BarChart2, CheckSquare } from "lucide-react";
 import { searchGlobal, type SearchHit } from "@/actions/search";
 
 const KIND_META: Record<SearchHit["kind"], { label: string; icon: typeof FolderOpen; color: string }> = {
   deal:         { label: "Dossier",      icon: FolderOpen,  color: "var(--fund-tx)" },
   organization: { label: "Organisation", icon: Building2,   color: "var(--sell-tx)" },
   contact:      { label: "Contact",      icon: User,        color: "var(--buy-tx)"  },
-  mandate:      { label: "Mandat",       icon: Briefcase,   color: "var(--cfo-tx)"  },
   action:       { label: "Action",       icon: Activity,    color: "var(--rec-tx)"  },
 };
 
@@ -29,7 +28,6 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "create-deal",     kind: "create",   label: "Nouveau dossier",        href: "/protected/dossiers/nouveau",      icon: FolderOpen,  color: "var(--fund-tx)", keywords: "dossier deal mission" },
   { id: "create-contact",  kind: "create",   label: "Nouveau contact",        href: "/protected/contacts/nouveau",      icon: User,        color: "var(--buy-tx)",  keywords: "contact personne" },
   { id: "create-org",      kind: "create",   label: "Nouvelle organisation",  href: "/protected/organisations/nouveau", icon: Building2,   color: "var(--sell-tx)", keywords: "organisation entreprise fonds investisseur" },
-  { id: "create-mandate",  kind: "create",   label: "Nouveau mandat",         href: "/protected/mandats/nouveau",       icon: Briefcase,   color: "var(--cfo-tx)",  keywords: "mandat client" },
   { id: "go-inbox",        kind: "navigate", label: "Boîte de tri (emails)",  href: "/protected/inbox",                 icon: Inbox,       color: "#E11D48",        keywords: "inbox emails tri" },
   { id: "go-tasks",        kind: "navigate", label: "Tâches à faire",         href: "/protected/taches",                icon: CheckSquare, color: "#7E57C2",        keywords: "taches todo a faire" },
   { id: "go-stats",        kind: "navigate", label: "Statistiques",           href: "/protected/statistiques",          icon: BarChart2,   color: "#0F766E",        keywords: "stats fees performance" },
@@ -40,7 +38,6 @@ function hrefFor(hit: SearchHit): string {
     case "deal":         return `/protected/dossiers/${hit.id}`;
     case "organization": return `/protected/organisations/${hit.id}`;
     case "contact":      return `/protected/contacts/${hit.id}`;
-    case "mandate":      return `/protected/mandats/${hit.id}`;
     case "action":       return hit.deal_id ? `/protected/dossiers/${hit.deal_id}` : "/protected/dossiers";
   }
 }
@@ -198,7 +195,7 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Rechercher dossiers, organisations, contacts, mandats, actions."
+            placeholder="Rechercher dossiers, organisations, contacts, actions."
             style={{
               flex: 1,
               border: "none", outline: "none",

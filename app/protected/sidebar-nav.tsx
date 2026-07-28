@@ -3,12 +3,11 @@ import { GlobalSearch } from "./components/global-search";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, FileCheck, BarChart2, CalendarDays, CheckSquare, Inbox } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, BarChart2, CalendarDays, CheckSquare, Inbox } from "lucide-react";
 
 const NAV = [
   { href:"/protected",               label:"Dashboard",     dot:"#3468B0", bg:"rgba(52,104,176,.18)",  icon:LayoutDashboard },
   { href:"/protected/dossiers",      label:"Dossiers",      dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
-  { href:"/protected/mandats",       label:"Mandats",       dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:FileCheck },
   { href:"/protected/contacts",      label:"Contacts",      dot:"#A8306A", bg:"rgba(168,48,106,.18)",  icon:Users },
   { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
   { href:"/protected/taches",        label:"Tâches",        dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },

@@ -7,7 +7,6 @@ const TABLE_MAP: Record<string, { table: string; col: string }> = {
   task:            { table: "tasks",          col: "gcal_event_id" },
   deal_relance:    { table: "deals",          col: "gcal_relance_event_id" },
   deal_closing:    { table: "deals",          col: "gcal_closing_event_id" },
-  mandate_closing: { table: "mandates",       col: "gcal_closing_event_id" },
   fee_milestone:   { table: "fee_milestones", col: "gcal_event_id" },
 };
 

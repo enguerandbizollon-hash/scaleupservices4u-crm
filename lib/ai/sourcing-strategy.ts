@@ -340,7 +340,7 @@ export function buildFallbackPlan(input: SourcingStrategyInput): SourcingPlan {
       geographies: d.target_geographies?.length ? d.target_geographies : (d.company_geography ? [d.company_geography] : ["france"]),
       employee_min: d.target_revenue_min ? Math.max(1, Math.floor(d.target_revenue_min / 200_000)) : null,
       employee_max: d.target_revenue_max ? Math.ceil(d.target_revenue_max / 100_000) : null,
-      rationale: "Entreprises correspondant aux critères acquisition du mandat.",
+      rationale: "Entreprises correspondant aux critères acquisition du dossier.",
     });
   }
 

@@ -60,7 +60,7 @@ export function GlobalSearch() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Cmd+K est désormais géré par CommandPalette (palette globale plus
-      // complète : dossiers + orgas + contacts + mandats + actions, nav
+      // complète : dossiers + orgas + contacts + actions, nav
       // clavier, modal central). On garde seulement ESC pour fermer le
       // dropdown de la sidebar si ouvert.
       if (e.key === "Escape") setOpen(false);

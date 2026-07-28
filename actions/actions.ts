@@ -39,7 +39,6 @@ export interface ActionInput {
   document_url?: string | null;
   deal_id?: string | null;
   organization_id?: string | null;
-  mandate_id?: string | null;
   contact_ids?: { id: string; role?: string; attended?: boolean }[];
   organization_ids?: { id: string; role?: string }[];
 }
@@ -74,7 +73,6 @@ export interface ActionRow {
   document_url: string | null;
   deal_id: string | null;
   organization_id: string | null;
-  mandate_id: string | null;
   gcal_event_id: string | null;
   created_at: string;
   updated_at: string;
@@ -92,7 +90,6 @@ export async function getActions(filters?: {
   deal_id?: string;
   organization_id?: string;
   contact_id?: string;
-  mandate_id?: string;
   type?: string[];
   status?: string[];
   from?: string;
@@ -116,7 +113,6 @@ export async function getActions(filters?: {
 
   if (filters?.deal_id)         query = query.eq("deal_id", filters.deal_id);
   if (filters?.organization_id) query = query.eq("organization_id", filters.organization_id);
-  if (filters?.mandate_id)      query = query.eq("mandate_id", filters.mandate_id);
   if (filters?.type?.length)    query = query.in("type", filters.type);
   if (filters?.status?.length)  query = query.in("status", filters.status);
   if (filters?.from)            query = query.gte("due_date", filters.from);
@@ -177,7 +173,6 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
     document_url:     input.document_url ?? null,
     deal_id:          input.deal_id ?? null,
     organization_id:  input.organization_id ?? null,
-    mandate_id:       input.mandate_id ?? null,
   }).select("id").single();
 
   if (error) return { success: false, error: error.message };
@@ -250,7 +245,6 @@ export async function createAction(input: ActionInput): Promise<{ success: boole
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/mandats");
   if (input.deal_id) revalidatePath(`/protected/dossiers/${input.deal_id}`);
   if (input.organization_id) revalidatePath(`/protected/organisations/${input.organization_id}`);
   return { success: true, id: action.id };
@@ -270,7 +264,7 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
     "gmail_thread_id", "gmail_message_id", "email_subject", "email_direction",
     "email_from", "email_to", "email_cc",
     "document_url",
-    "deal_id", "organization_id", "mandate_id",
+    "deal_id", "organization_id",
   ];
   for (const f of fields) {
     if ((input as Record<string, unknown>)[f] !== undefined) payload[f] = (input as Record<string, unknown>)[f];
@@ -350,7 +344,6 @@ export async function updateAction(id: string, input: Partial<ActionInput>): Pro
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/mandats");
   if (input.deal_id) revalidatePath(`/protected/dossiers/${input.deal_id}`);
   if (input.organization_id) revalidatePath(`/protected/organisations/${input.organization_id}`);
   return { success: true };
@@ -383,7 +376,6 @@ export async function deleteAction(id: string): Promise<{ success: boolean; erro
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/mandats");
   if (existing?.deal_id) revalidatePath(`/protected/dossiers/${existing.deal_id}`);
   if (existing?.organization_id) revalidatePath(`/protected/organisations/${existing.organization_id}`);
   return { success: true };
@@ -417,7 +409,6 @@ export async function completeAction(id: string, notes?: string): Promise<{ succ
   revalidatePath("/protected/dossiers");
   revalidatePath("/protected/organisations");
   revalidatePath("/protected/contacts");
-  revalidatePath("/protected/mandats");
   if (action.deal_id) revalidatePath(`/protected/dossiers/${action.deal_id}`);
   if (action.organization_id) revalidatePath(`/protected/organisations/${action.organization_id}`);
   return { success: true };

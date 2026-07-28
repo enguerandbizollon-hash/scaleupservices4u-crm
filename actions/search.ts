@@ -6,7 +6,6 @@ export type SearchHit =
   | { kind: "deal"; id: string; title: string; subtitle: string | null; meta: string | null }
   | { kind: "organization"; id: string; title: string; subtitle: string | null; meta: string | null }
   | { kind: "contact"; id: string; title: string; subtitle: string | null; meta: string | null }
-  | { kind: "mandate"; id: string; title: string; subtitle: string | null; meta: string | null }
   | { kind: "action"; id: string; title: string; subtitle: string | null; meta: string | null; deal_id: string | null };
 
 export async function searchGlobal(query: string): Promise<SearchHit[]> {
@@ -20,7 +19,7 @@ export async function searchGlobal(query: string): Promise<SearchHit[]> {
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
   const limit = 5;
 
-  const [dealsRes, orgsRes, contactsRes, mandatesRes, actionsRes] = await Promise.all([
+  const [dealsRes, orgsRes, contactsRes, actionsRes] = await Promise.all([
     supabase
       .from("deals")
       .select("id,name,deal_type,deal_status,deal_stage,sector")
@@ -37,12 +36,6 @@ export async function searchGlobal(query: string): Promise<SearchHit[]> {
       .from("contacts")
       .select("id,first_name,last_name,email,title")
       .or(`first_name.ilike.${like},last_name.ilike.${like},email.ilike.${like}`)
-      .eq("user_id", user.id)
-      .limit(limit),
-    supabase
-      .from("mandates")
-      .select("id,name,type,status")
-      .ilike("name", like)
       .eq("user_id", user.id)
       .limit(limit),
     supabase
@@ -80,15 +73,6 @@ export async function searchGlobal(query: string): Promise<SearchHit[]> {
       title: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.email || "Contact",
       subtitle: c.title,
       meta: c.email,
-    });
-  }
-  for (const m of mandatesRes.data ?? []) {
-    hits.push({
-      kind: "mandate",
-      id: m.id,
-      title: m.name,
-      subtitle: [m.type, m.status].filter(Boolean).join(" · "),
-      meta: null,
     });
   }
   for (const a of actionsRes.data ?? []) {

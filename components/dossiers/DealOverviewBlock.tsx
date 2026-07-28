@@ -44,19 +44,6 @@ type FinancialRow = {
   arr?: number | null;
 };
 
-type MandateLite = {
-  type?: string | null;
-  estimated_fee_amount: number | null;
-  confirmed_fee_amount: number | null;
-  currency: string | null;
-  success_fee_percent?: number | null;
-  retainer_monthly?: number | null;
-  operation_amount?: number | null;
-  start_date?: string | null;
-  target_close_date?: string | null;
-  end_date?: string | null;
-} | null;
-
 function fmtMoney(n: number | null | undefined, currency: string | null | undefined): string {
   if (n == null) return "—";
   const c = currency ?? "EUR";
@@ -90,13 +77,11 @@ type KPI = { label: string; value: string; sublabel?: string; icon: typeof Trend
 export function DealOverviewBlock({
   deal,
   financialData,
-  mandate,
 }: {
   deal: Deal;
   financialData?: FinancialRow[];
-  mandate?: MandateLite;
 }) {
-  const kpis = buildKPIs(deal, financialData ?? [], mandate ?? null);
+  const kpis = buildKPIs(deal, financialData ?? []);
   if (kpis.length === 0) return null;
 
   return (
@@ -150,7 +135,7 @@ export function DealOverviewBlock({
   );
 }
 
-function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLite): KPI[] {
+function buildKPIs(deal: Deal, financialData: FinancialRow[]): KPI[] {
   const out: KPI[] = [];
   const currency = deal.currency ?? "EUR";
 
@@ -241,10 +226,10 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
     }
   }
 
-  // Honoraires — portés par le dossier (fallback mandat lié, transitoire temps 5)
-  const estimatedFee = deal.estimated_fee_amount ?? mandate?.estimated_fee_amount ?? null;
-  const confirmedFee = deal.confirmed_fee_amount ?? mandate?.confirmed_fee_amount ?? null;
-  const feeCurrency = mandate?.currency ?? currency;
+  // Honoraires — portés par le dossier (fusion mandats, v65)
+  const estimatedFee = deal.estimated_fee_amount ?? null;
+  const confirmedFee = deal.confirmed_fee_amount ?? null;
+  const feeCurrency = currency;
   if (estimatedFee != null && estimatedFee > 0) {
     out.push({
       label: "Fees estimés",
@@ -262,9 +247,9 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
     const fee = computeSuccessFee({
       deal_type: deal.deal_type,
       currency: feeCurrency,
-      success_fee_percent: deal.success_fee_percent ?? mandate?.success_fee_percent,
+      success_fee_percent: deal.success_fee_percent,
       success_fee_base: deal.success_fee_base,
-      operation_amount: deal.operation_amount ?? mandate?.operation_amount,
+      operation_amount: deal.operation_amount,
       closed_amount: deal.closed_amount,
       asking_price_min: deal.asking_price_min,
       asking_price_max: deal.asking_price_max,

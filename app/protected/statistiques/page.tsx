@@ -29,32 +29,22 @@ async function Content() {
   const year = new Date().getFullYear();
   const yearStart = `${year}-01-01`;
 
-  // Parallel queries
+  // Parallel queries — les honoraires sont portés par les dossiers (v65)
   const [
     { data: fees },
     { data: deals },
-    { data: mandates },
-    { data: feesAllTime },
   ] = await Promise.all([
     supabase.from("fee_milestones")
-      .select("amount, currency, status, paid_date, invoiced_date, mandate_id")
+      .select("amount, currency, status, paid_date, invoiced_date, deal_id")
       .eq("user_id", user.id)
       .neq("status", "cancelled"),
     supabase.from("deals")
-      .select("id, deal_type, deal_status, deal_stage, currency, created_at")
+      .select("id, deal_type, deal_status, deal_stage, currency, created_at, estimated_fee_amount, confirmed_fee_amount")
       .eq("user_id", user.id),
-    supabase.from("mandates")
-      .select("id, type, status, estimated_fee_amount, confirmed_fee_amount, currency")
-      .eq("user_id", user.id),
-    supabase.from("fee_milestones")
-      .select("amount, currency, status, paid_date")
-      .eq("user_id", user.id)
-      .eq("status", "paid"),
   ]);
 
   const allFees       = fees ?? [];
   const allDeals      = deals ?? [];
-  const allMandates   = mandates ?? [];
 
   // ── Fees ────────────────────────────────────────────────────────────────
   const paidYtd     = allFees.filter(f => f.status === "paid"     && f.paid_date?.startsWith(String(year)));
@@ -64,7 +54,7 @@ async function Content() {
   const paidYtdTotal     = paidYtd.reduce((s, f) => s + (f.amount ?? 0), 0);
   const invoicedYtdTotal = invoicedYtd.reduce((s, f) => s + (f.amount ?? 0), 0);
   const pendingTotal     = pending.reduce((s, f) => s + (f.amount ?? 0), 0);
-  const pipelineTotal    = allMandates.reduce((s, m) => s + (m.estimated_fee_amount ?? 0), 0);
+  const pipelineTotal    = allDeals.reduce((s, d) => s + (d.estimated_fee_amount ?? 0), 0);
 
   // Projection linéaire : extrapolation sur le reste de l'année
   const dayOfYear   = Math.floor((Date.now() - new Date(yearStart).getTime()) / 86400000);
@@ -85,16 +75,14 @@ async function Content() {
     const won   = group.filter(d => d.deal_status === "won").length;
     const lost  = group.filter(d => d.deal_status === "lost").length;
     const total = group.length;
-    const mandate = allMandates.filter(m => m.type === type);
-    const feesPipeline = mandate.reduce((s, m) => s + (m.estimated_fee_amount ?? 0), 0);
-    const feesConfirmed = mandate.reduce((s, m) => s + (m.confirmed_fee_amount ?? 0), 0);
+    const feesPipeline = group.reduce((s, d) => s + (d.estimated_fee_amount ?? 0), 0);
+    const feesConfirmed = group.reduce((s, d) => s + (d.confirmed_fee_amount ?? 0), 0);
     return { type, total, open, won, lost, winRate: pct(won, won + lost), feesPipeline, feesConfirmed };
   });
 
-  // ── Mandats ──────────────────────────────────────────────────────────────
-  const activeMandates = allMandates.filter(m => m.status === "active").length;
-  const wonMandates    = allMandates.filter(m => m.status === "won").length;
-  const confirmedTotal = allMandates.reduce((s, m) => s + (m.confirmed_fee_amount ?? 0), 0);
+  // ── Honoraires cumulés (portés par les dossiers depuis v65) ─────────────
+  const estimatedTotal = pipelineTotal;
+  const confirmedTotal = allDeals.reduce((s, d) => s + (d.confirmed_fee_amount ?? 0), 0);
 
   // ── Stages pipeline ──────────────────────────────────────────────────────
   const stageOrder = ["kickoff","preparation","outreach","management_meetings","dd","negotiation","closing"];
@@ -156,7 +144,7 @@ async function Content() {
           {pipelineTotal > 0 && (
             <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-4)", marginBottom: 6 }}>
-                <span>Réalisé vs pipeline estimé mandats ({fmtAmt(pipelineTotal)})</span>
+                <span>Réalisé vs pipeline estimé dossiers ({fmtAmt(pipelineTotal)})</span>
                 <span style={{ fontWeight: 600 }}>{fmtPct(pct(confirmedTotal, pipelineTotal))}</span>
               </div>
               <div style={{ height: 8, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
@@ -197,25 +185,25 @@ async function Content() {
             )}
           </div>
 
-          {/* ── Mandats ────────────────────────────────────────────────── */}
+          {/* ── Honoraires cumulés ─────────────────────────────────────── */}
           <div style={card}>
-            <div style={sectionTitle}>Mandats</div>
+            <div style={sectionTitle}>Honoraires</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
               <div>
-                <div style={kpiVal}>{activeMandates}</div>
-                <div style={kpiLbl}>Actifs</div>
+                <div style={{ ...kpiVal, color: "#065F46" }}>{fmtAmt(confirmedTotal)}</div>
+                <div style={kpiLbl}>Encaissé total</div>
               </div>
               <div>
-                <div style={{ ...kpiVal, color: "#065F46" }}>{wonMandates}</div>
-                <div style={kpiLbl}>Gagnés</div>
+                <div style={{ ...kpiVal, color: "#1D4ED8" }}>{fmtAmt(estimatedTotal)}</div>
+                <div style={kpiLbl}>Estimé total</div>
               </div>
               <div>
-                <div style={{ ...kpiVal, color: "#1D4ED8" }}>{allMandates.length}</div>
-                <div style={kpiLbl}>Total</div>
+                <div style={kpiVal}>{estimatedTotal > 0 ? `${pct(confirmedTotal, estimatedTotal)}%` : "—"}</div>
+                <div style={kpiLbl}>Taux de réalisation</div>
               </div>
             </div>
             <div style={{ fontSize: 12, color: "var(--text-4)" }}>
-              Encaissé total : <strong style={{ color: "var(--text-1)" }}>{fmtAmt(confirmedTotal)}</strong>
+              Honoraires portés par les dossiers, encaissements suivis via les jalons.
             </div>
           </div>
         </div>

@@ -389,7 +389,7 @@ async function KanbanContent() {
   const supabase = await createClient();
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date,screening_status,organization_id,mandate_id,dirigeant_id,dirigeant_nom")
+    .select("id,name,deal_type,deal_status,deal_stage,priority_level,sector,target_amount,target_date,currency,next_action_date,screening_status,organization_id,dirigeant_id,dirigeant_nom,estimated_fee_amount,success_fee_percent")
     .order("priority_level");
 
   const dealIds = (deals ?? []).map(d => d.id);
