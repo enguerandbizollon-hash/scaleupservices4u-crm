@@ -8,12 +8,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Crosshair, Play, Save, Trash2, ArrowUpRight, Building2,
-  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge,
+  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge, Bell, BellOff,
 } from "lucide-react";
 import {
   countScreeningAction, saveScreeningProfile, deleteScreeningProfile,
   runScreeningIngest, updateUniversStatut, promoteUniversToOrganization,
-  recomputeCedabilite,
+  recomputeCedabilite, toggleProfileWatch,
   type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -332,6 +332,11 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
                   {p.last_total_results != null && (
                     <span style={{ opacity: 0.6, marginLeft: 5 }}>{p.last_total_results.toLocaleString("fr-FR")}</span>
                   )}
+                </button>
+                <button onClick={() => toggleProfileWatch(p.id, !p.watch_enabled)}
+                  title={p.watch_enabled ? "Veille hebdo active : les nouvelles cibles remonteront en signaux. Cliquer pour désactiver." : "Activer la veille hebdo de ce profil"}
+                  style={{ all: "unset", cursor: "pointer", display: "flex", opacity: p.watch_enabled ? 1 : 0.45, color: p.watch_enabled ? "#B45309" : undefined }}>
+                  {p.watch_enabled ? <Bell size={11} /> : <BellOff size={11} />}
                 </button>
                 <button onClick={() => handleDeleteProfile(p.id)} title="Supprimer"
                   style={{ all: "unset", cursor: "pointer", display: "flex", opacity: 0.55 }}>

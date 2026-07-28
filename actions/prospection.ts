@@ -80,6 +80,23 @@ export async function saveScreeningProfile(input: {
   return { success: true, data: { id: data.id } };
 }
 
+/** Active/désactive la veille hebdomadaire d'un profil (cron veille-profils). */
+export async function toggleProfileWatch(
+  id: string,
+  enabled: boolean,
+): Promise<ProspectionActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+  const { error } = await supabase
+    .from("screening_profiles")
+    .update({ watch_enabled: enabled, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/protected/prospection");
+  return { success: true, data: undefined };
+}
+
 export async function deleteScreeningProfile(id: string): Promise<ProspectionActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

@@ -38,6 +38,7 @@ const SEVERITY_DOT: Record<string, string> = {
 
 const FILTERS: { value: string | null; label: string }[] = [
   { value: null,                    label: "Tous" },
+  { value: "entree_screening",      label: "Nouvelles cibles" },
   { value: "vente_cession",         label: "Cessions" },
   { value: "procedure_collective",  label: "Procédures collectives" },
   { value: "radiation",             label: "Radiations" },
