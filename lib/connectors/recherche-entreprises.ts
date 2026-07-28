@@ -336,7 +336,7 @@ export interface DirigeantPrincipal {
  * Retourne null si aucun dirigeant ne satisfait la contrainte.
  */
 export function findDirigeantPrincipal(
-  raw: RawEntreprise,
+  raw: Pick<RawEntreprise, "dirigeants">,
   ageMin?: number | null,
   ageMax?: number | null,
   now: Date = new Date(),

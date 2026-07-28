@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
   countScreening,
+  findDirigeantPrincipal,
   runScreening,
   type ScreeningFilters,
   type ScreeningHit,
@@ -308,10 +309,56 @@ export async function updateUniversStatut(
   return { success: true, data: undefined };
 }
 
+interface FichePourPromotion {
+  siren: string;
+  nom: string;
+  naf: string | null;
+  secteur: string | null;
+  ville: string | null;
+  date_creation: string | null;
+}
+
+/**
+ * Garantit une organisation CRM pour une fiche univers.
+ * Dédup par SIREN d'abord (règle v64) : si une organisation porte déjà ce
+ * SIREN, on rattache sans créer de doublon. Partagé entre la promotion
+ * simple et la création de dossier.
+ */
+async function ensureOrganizationFromFiche(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  fiche: FichePourPromotion,
+): Promise<{ orgId: string; created: boolean } | { error: string }> {
+  const { data: existing } = await supabase
+    .from("organizations")
+    .select("id")
+    .eq("siren", fiche.siren)
+    .maybeSingle();
+  if (existing?.id) return { orgId: existing.id, created: false };
+
+  const foundedYear = fiche.date_creation ? parseInt(String(fiche.date_creation).slice(0, 4), 10) : null;
+  const { data: org, error } = await supabase
+    .from("organizations")
+    .insert({
+      user_id: userId,
+      name: fiche.nom,
+      organization_type: "other",
+      base_status: "to_qualify",
+      siren: fiche.siren,
+      naf: fiche.naf,
+      sector: fiche.secteur,
+      location: fiche.ville,
+      country: "France",
+      founded_year: Number.isFinite(foundedYear as number) ? foundedYear : null,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  return { orgId: org.id, created: true };
+}
+
 /**
  * Promotion d'une fiche univers vers une organisation CRM réelle.
- * Dédup par SIREN (colonne v64) : si une organisation porte déjà ce SIREN,
- * on rattache sans créer de doublon.
  */
 export async function promoteUniversToOrganization(
   siren: string,
@@ -327,46 +374,196 @@ export async function promoteUniversToOrganization(
     .maybeSingle();
   if (!fiche) return { success: false, error: "Fiche univers introuvable" };
 
-  // Dédup SIREN d'abord (règle v64).
-  const { data: existing } = await supabase
-    .from("organizations")
-    .select("id")
-    .eq("siren", siren)
-    .maybeSingle();
-
-  let orgId = existing?.id ?? null;
-  let created = false;
-
-  if (!orgId) {
-    const foundedYear = fiche.date_creation ? parseInt(String(fiche.date_creation).slice(0, 4), 10) : null;
-    const { data: org, error } = await supabase
-      .from("organizations")
-      .insert({
-        user_id: user.id,
-        name: fiche.nom,
-        organization_type: "other",
-        base_status: "to_qualify",
-        siren: fiche.siren,
-        naf: fiche.naf,
-        sector: fiche.secteur,
-        location: fiche.ville,
-        country: "France",
-        founded_year: Number.isFinite(foundedYear as number) ? foundedYear : null,
-      })
-      .select("id")
-      .single();
-    if (error) return { success: false, error: error.message };
-    orgId = org.id;
-    created = true;
-  }
+  const ensured = await ensureOrganizationFromFiche(supabase, user.id, fiche);
+  if ("error" in ensured) return { success: false, error: ensured.error };
 
   const { error: linkErr } = await supabase
     .from("univers_entreprises")
-    .update({ statut: "promu", organization_id: orgId, updated_at: new Date().toISOString() })
+    .update({ statut: "promu", organization_id: ensured.orgId, updated_at: new Date().toISOString() })
     .eq("siren", siren);
   if (linkErr) return { success: false, error: linkErr.message };
 
   revalidatePath("/protected/prospection");
   revalidatePath("/protected/organisations");
-  return { success: true, data: { organization_id: orgId as string, created } };
+  return { success: true, data: { organization_id: ensured.orgId, created: ensured.created } };
+}
+
+// ── Fiche détail + création de dossier (retour d'usage 2026-07-29) ───────────
+// « Quand on a trouvé une entreprise qui nous intéresse, la suite » :
+// tout ce qui est déjà stocké devient visible (finances, dirigeants, raisons
+// du score, signaux du SIREN), et la cible chaude devient un dossier en un clic.
+
+export interface UniversDirigeant {
+  nom: string | null;
+  prenoms: string | null;
+  qualite: string | null;
+  date_de_naissance: string | null;
+}
+
+export interface UniversSignalItem {
+  id: string;
+  signal_type: string;
+  signal_date: string;
+  titre: string;
+  severity: string;
+}
+
+export interface UniversFicheDetail {
+  siren: string;
+  nom: string;
+  naf: string | null;
+  secteur: string | null;
+  departement: string | null;
+  ville: string | null;
+  date_creation: string | null;
+  effectif_label: string | null;
+  categorie: string | null;
+  finances: Record<string, { ca?: number | null; resultat_net?: number | null }>;
+  dirigeants: UniversDirigeant[];
+  age_dirigeant_principal: number | null;
+  cedabilite_score: number | null;
+  cedabilite_raisons: string[] | null;
+  statut: string;
+  organization_id: string | null;
+  first_seen_at: string;
+  signaux: UniversSignalItem[];
+  deal: { id: string; name: string } | null;
+}
+
+export async function getUniversFicheDetail(
+  siren: string,
+): Promise<ProspectionActionResult<UniversFicheDetail>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: fiche, error } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (error) return { success: false, error: error.message };
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const { data: signaux } = await supabase
+    .from("signaux")
+    .select("id, signal_type, signal_date, titre, severity")
+    .eq("siren", siren)
+    .order("signal_date", { ascending: false })
+    .limit(20);
+
+  let deal: { id: string; name: string } | null = null;
+  if (fiche.organization_id) {
+    const { data: d } = await supabase
+      .from("deals")
+      .select("id, name")
+      .eq("organization_id", fiche.organization_id)
+      .eq("user_id", user.id)
+      .eq("deal_status", "open")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    deal = d ?? null;
+  }
+
+  return {
+    success: true,
+    data: { ...(fiche as Omit<UniversFicheDetail, "signaux" | "deal">), signaux: (signaux ?? []) as UniversSignalItem[], deal },
+  };
+}
+
+/**
+ * La cible chaude devient un dossier M&A sell-side en un clic :
+ * organisation garantie (dédup SIREN), dossier ouvert au stade kickoff avec
+ * dirigeant principal prérempli, liaison pivot en rôle client. Si un dossier
+ * ouvert existe déjà pour l'organisation, on le renvoie sans doubler.
+ */
+export async function createDossierFromUnivers(
+  siren: string,
+): Promise<ProspectionActionResult<{ deal_id: string; deal_name: string; organization_id: string; created_deal: boolean }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, naf, secteur, ville, departement, date_creation, dirigeants")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const ensured = await ensureOrganizationFromFiche(supabase, user.id, fiche);
+  if ("error" in ensured) return { success: false, error: ensured.error };
+  const orgId = ensured.orgId;
+
+  const linkUnivers = () => supabase
+    .from("univers_entreprises")
+    .update({ statut: "promu", organization_id: orgId, updated_at: new Date().toISOString() })
+    .eq("siren", siren);
+
+  // Anti-doublon : un dossier ouvert existe déjà pour cette organisation.
+  const { data: existingDeal } = await supabase
+    .from("deals")
+    .select("id, name")
+    .eq("organization_id", orgId)
+    .eq("user_id", user.id)
+    .eq("deal_status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingDeal) {
+    await linkUnivers();
+    revalidatePath("/protected/prospection");
+    return {
+      success: true,
+      data: { deal_id: existingDeal.id, deal_name: existingDeal.name, organization_id: orgId, created_deal: false },
+    };
+  }
+
+  // Dirigeant principal prérempli (même post-filtre qualité que le screening).
+  const dirs = ((fiche.dirigeants ?? []) as UniversDirigeant[]).map((d) => ({
+    nom: d.nom ?? undefined,
+    prenoms: d.prenoms ?? undefined,
+    qualite: d.qualite ?? undefined,
+    date_de_naissance: d.date_de_naissance ?? undefined,
+  }));
+  const principal = findDirigeantPrincipal({ dirigeants: dirs });
+
+  const dealName = `Cession ${fiche.nom}`;
+  const { data: deal, error: dealErr } = await supabase
+    .from("deals")
+    .insert({
+      user_id: user.id,
+      name: dealName,
+      deal_type: "ma_sell",
+      deal_status: "open",
+      deal_stage: "kickoff",
+      priority_level: "medium",
+      organization_id: orgId,
+      sector: fiche.secteur,
+      location: fiche.ville,
+      currency: "EUR",
+      description: `Cible issue de la prospection marché (SIREN ${fiche.siren}).`,
+      dirigeant_nom: principal ? [principal.prenoms, principal.nom].filter(Boolean).join(" ") : null,
+      dirigeant_titre: principal?.qualite ?? null,
+    })
+    .select("id")
+    .single();
+  if (dealErr) return { success: false, error: dealErr.message };
+
+  await supabase.from("deal_organizations").upsert(
+    { deal_id: deal.id, organization_id: orgId, user_id: user.id, role_in_dossier: "client" },
+    { onConflict: "deal_id,organization_id" },
+  );
+
+  const { error: linkErr } = await linkUnivers();
+  if (linkErr) return { success: false, error: linkErr.message };
+
+  revalidatePath("/protected/prospection");
+  revalidatePath("/protected/dossiers");
+  revalidatePath("/protected/organisations");
+  return {
+    success: true,
+    data: { deal_id: deal.id, deal_name: dealName, organization_id: orgId, created_deal: true },
+  };
 }

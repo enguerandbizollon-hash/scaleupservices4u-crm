@@ -20,6 +20,8 @@ import { cedabiliteBand } from "@/lib/crm/cedabilite";
 import type { ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
 import { NAF_DIVISION_TO_SECTOR } from "@/lib/crm/matching-maps";
 import { nafCodesForDivisions } from "@/lib/crm/naf-codes";
+import { FicheUniversDrawer } from "@/components/prospection/FicheUniversDrawer";
+import { STATUT_META } from "@/components/prospection/statut-meta";
 
 // ── Types partagés avec la page serveur ──────────────────────────────────────
 
@@ -76,14 +78,6 @@ const EFFECTIF_OPTIONS = [
   { code: "31", label: "200-249" },
   { code: "32", label: "250-499" },
 ];
-
-const STATUT_META: Record<string, { label: string; bg: string; tx: string }> = {
-  nouveau:     { label: "Nouveau",      bg: "#DBEAFE", tx: "#1D4ED8" },
-  a_approcher: { label: "À approcher",  bg: "#FEF3C7", tx: "#92400E" },
-  approche:    { label: "Approché",     bg: "#EDE9FE", tx: "#5B21B6" },
-  ecarte:      { label: "Écarté",       bg: "var(--surface-3)", tx: "var(--text-5)" },
-  promu:       { label: "Promu",        bg: "#D1FAE5", tx: "#065F46" },
-};
 
 const EMPTY_UI: UiState = {
   secteurs: [], nafExtra: "", caMin: "", caMax: "", ageMin: "", ageMax: "",
@@ -152,6 +146,9 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
 
   // Statuts optimistes de l'univers (le serveur revalide derrière).
   const [localStatuts, setLocalStatuts] = useState<Record<string, string>>({});
+
+  // Fiche ouverte dans le tiroir de détail.
+  const [openedFiche, setOpenedFiche] = useState<{ siren: string; nom: string; statut: string } | null>(null);
 
   const secteursDisponibles = useMemo(
     () => [...new Set(Object.values(NAF_DIVISION_TO_SECTOR))].sort((a, b) => a.localeCompare(b, "fr")),
@@ -508,9 +505,12 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
                 borderBottom: i < univers.length - 1 ? "1px solid var(--border)" : "none",
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <button
+                    onClick={() => setOpenedFiche({ siren: u.siren, nom: u.nom, statut })}
+                    title="Ouvrir la fiche"
+                    style={{ all: "unset", cursor: "pointer", display: "block", maxWidth: "100%", fontSize: 13.5, fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {u.nom}
-                  </div>
+                  </button>
                   <div style={{ display: "flex", gap: 9, marginTop: 2, fontSize: 11.5, color: "var(--text-5)", flexWrap: "wrap" }}>
                     {u.secteur && <span>{u.secteur}</span>}
                     {u.ville && <span>{u.ville}{u.departement ? ` (${u.departement})` : ""}</span>}
@@ -579,6 +579,16 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
               </Link>
             )}
           </div>
+        )}
+
+        {openedFiche && (
+          <FicheUniversDrawer
+            siren={openedFiche.siren}
+            nomSeed={openedFiche.nom}
+            statutSeed={localStatuts[openedFiche.siren] ?? openedFiche.statut}
+            onClose={() => setOpenedFiche(null)}
+            onLocalStatut={(siren, statut) => setLocalStatuts(prev => ({ ...prev, [siren]: statut }))}
+          />
         )}
       </div>
     </div>
