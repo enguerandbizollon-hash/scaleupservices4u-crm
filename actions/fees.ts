@@ -7,8 +7,10 @@ import { syncToGCal } from "@/lib/gcal/sync-helper";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface FeeInput {
-  mandate_id: string;
+  /** Clé de rattachement depuis v65 : les jalons appartiennent au dossier. */
   deal_id?: string | null;
+  /** Transitoire : disparaît avec l'entité mandat (temps 5, commit 3). */
+  mandate_id?: string | null;
   name: string;
   milestone_type: string;   // retainer|success_fee|fixed|expense
   amount: number;
@@ -16,12 +18,21 @@ export interface FeeInput {
   due_date?: string | null;
   notes?: string | null;
   status?: string;          // pending|invoiced|paid|cancelled
-  ticket_amount?: number | null;  // tranche d'investissement (base calcul success fee)
+  ticket_amount?: number | null;  // tranche d'opération (base calcul success fee)
 }
 
 export type FeeActionResult =
   | { success: true; id: string }
   | { success: false; error: string };
+
+// NOTE : deals.confirmed_fee_amount est maintenu par le trigger DB
+// tr_fee_milestones_recompute_deal_fee (v65, recalcul complet sur
+// INSERT/UPDATE/DELETE). Aucun recalcul applicatif ici — source unique.
+
+function revalidateFeePaths(dealId?: string | null, mandateId?: string | null) {
+  if (dealId) revalidatePath(`/protected/dossiers/${dealId}`);
+  if (mandateId) revalidatePath(`/protected/mandats/${mandateId}`);
+}
 
 // ── CRUD jalons ────────────────────────────────────────────────────────────────
 
@@ -30,14 +41,14 @@ export async function createFee(data: FeeInput): Promise<FeeActionResult> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
 
-  if (!data.name?.trim())    return { success: false, error: "Nom du jalon requis" };
-  if (!data.mandate_id)      return { success: false, error: "Mandat requis" };
-  if (!(data.amount > 0))    return { success: false, error: "Montant invalide" };
+  if (!data.name?.trim())                    return { success: false, error: "Nom du jalon requis" };
+  if (!data.deal_id && !data.mandate_id)     return { success: false, error: "Dossier requis" };
+  if (!(data.amount > 0))                    return { success: false, error: "Montant invalide" };
 
   const { data: milestone, error } = await supabase.from("fee_milestones").insert({
     user_id:        user.id,
-    mandate_id:     data.mandate_id,
     deal_id:        data.deal_id        ?? null,
+    mandate_id:     data.mandate_id     ?? null,
     name:           data.name.trim(),
     milestone_type: data.milestone_type ?? "fixed",
     amount:         data.amount,
@@ -53,13 +64,16 @@ export async function createFee(data: FeeInput): Promise<FeeActionResult> {
   // Sync GCal jalon
   if (data.due_date) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const sourceUrl = data.deal_id
+      ? `${baseUrl}/protected/dossiers/${data.deal_id}`
+      : `${baseUrl}/protected/mandats/${data.mandate_id}`;
     syncToGCal({
       action: "create", source_type: "fee_milestone", source_id: milestone.id,
-      event: { summary: `Jalon : ${data.name}`, start: data.due_date, end: data.due_date, allDay: true, sourceUrl: `${baseUrl}/protected/mandats/${data.mandate_id}` },
+      event: { summary: `Jalon : ${data.name}`, start: data.due_date, end: data.due_date, allDay: true, sourceUrl },
     });
   }
 
-  revalidatePath(`/protected/mandats/${data.mandate_id}`);
+  revalidateFeePaths(data.deal_id, data.mandate_id);
   return { success: true, id: milestone.id };
 }
 
@@ -81,36 +95,35 @@ export async function updateFee(
   if (data.ticket_amount  !== undefined) payload.ticket_amount  = data.ticket_amount;
   if (data.status         !== undefined) {
     payload.status = data.status;
-    if (data.status === "invoiced") payload.invoiced_date = new Date().toISOString().split("T")[0];
-    if (data.status === "paid")     payload.paid_date     = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
+    // Dates cohérentes avec le statut, y compris en cas de retour arrière :
+    // paid → pose paid_date (facture conservée si paiement direct) ;
+    // invoiced → pose invoiced_date, efface paid_date ;
+    // pending → efface les deux ; cancelled → efface paid_date, garde la facture.
+    if (data.status === "paid") {
+      payload.paid_date = today;
+    } else if (data.status === "invoiced") {
+      payload.invoiced_date = today;
+      payload.paid_date = null;
+    } else {
+      payload.paid_date = null;
+      if (data.status === "pending") payload.invoiced_date = null;
+    }
   }
+  // Overrides explicites du caller — prioritaires sur les dates dérivées du statut.
+  if (data.invoiced_date !== undefined) payload.invoiced_date = data.invoiced_date;
+  if (data.paid_date     !== undefined) payload.paid_date     = data.paid_date;
 
-  // Récupérer le mandate_id pour revalidatePath
+  // Rattachements pour revalidation des pages concernées
   const { data: existing } = await supabase
-    .from("fee_milestones").select("mandate_id").eq("id", id).eq("user_id", user.id).maybeSingle();
+    .from("fee_milestones").select("deal_id, mandate_id").eq("id", id).eq("user_id", user.id).maybeSingle();
 
   const { error } = await supabase.from("fee_milestones")
     .update(payload).eq("id", id).eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
 
-  if (existing?.mandate_id) {
-    // Sync confirmed_fee_amount si statut paid
-    if (data.status === "paid") {
-      const { data: paidRows } = await supabase
-        .from("fee_milestones")
-        .select("amount")
-        .eq("mandate_id", existing.mandate_id)
-        .eq("user_id", user.id)
-        .eq("status", "paid");
-      const total = (paidRows ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
-      await supabase.from("mandates")
-        .update({ confirmed_fee_amount: total })
-        .eq("id", existing.mandate_id)
-        .eq("user_id", user.id);
-    }
-    revalidatePath(`/protected/mandats/${existing.mandate_id}`);
-  }
+  revalidateFeePaths(existing?.deal_id, existing?.mandate_id);
 
   // Sync GCal jalon update
   if (data.due_date !== undefined) {
@@ -130,17 +143,33 @@ export async function deleteFee(id: string): Promise<{ success: boolean; error?:
   if (!user) return { success: false, error: "Non autorisé" };
 
   const { data: existing } = await supabase
-    .from("fee_milestones").select("mandate_id").eq("id", id).eq("user_id", user.id).maybeSingle();
+    .from("fee_milestones").select("deal_id, mandate_id").eq("id", id).eq("user_id", user.id).maybeSingle();
 
   const { error } = await supabase.from("fee_milestones").delete().eq("id", id).eq("user_id", user.id);
   if (error) return { success: false, error: error.message };
 
-  if (existing?.mandate_id) revalidatePath(`/protected/mandats/${existing.mandate_id}`);
+  revalidateFeePaths(existing?.deal_id, existing?.mandate_id);
   return { success: true };
 }
 
 // ── Lectures ───────────────────────────────────────────────────────────────────
 
+export async function getFeesByDeal(dealId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("fee_milestones")
+    .select("id,name,milestone_type,amount,currency,status,due_date,invoiced_date,paid_date,notes,ticket_amount")
+    .eq("deal_id", dealId)
+    .eq("user_id", user.id)
+    .order("due_date", { ascending: true, nullsFirst: false });
+
+  return data ?? [];
+}
+
+/** Transitoire : consommé par la fiche mandat, supprimé avec elle (commit 3). */
 export async function getFeesByMandate(mandateId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

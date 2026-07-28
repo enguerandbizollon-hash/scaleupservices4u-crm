@@ -2,7 +2,7 @@
 
 import { TrendingUp, Banknote, Target, Building2, Activity, Calendar, Sparkles } from "lucide-react";
 import { stageLabel } from "@/lib/crm/matching-maps";
-import { computeSuccessFee, type MandateForFee, type DealForFee } from "@/lib/crm/fee-calculator";
+import { computeSuccessFee } from "@/lib/crm/fee-calculator";
 
 type Deal = {
   id: string;
@@ -25,6 +25,13 @@ type Deal = {
   target_revenue_max?: number | null;
   target_ev_min?: number | null;
   target_ev_max?: number | null;
+  // Honoraires — portés par le dossier depuis v65
+  closed_amount?: number | null;
+  estimated_fee_amount?: number | null;
+  confirmed_fee_amount?: number | null;
+  success_fee_percent?: number | null;
+  success_fee_base?: string | null;
+  operation_amount?: number | null;
 };
 
 type FinancialRow = {
@@ -234,34 +241,31 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
     }
   }
 
-  // Fees du mandat (si présent et estimés)
-  if (mandate && mandate.estimated_fee_amount != null && mandate.estimated_fee_amount > 0) {
+  // Honoraires — portés par le dossier (fallback mandat lié, transitoire temps 5)
+  const estimatedFee = deal.estimated_fee_amount ?? mandate?.estimated_fee_amount ?? null;
+  const confirmedFee = deal.confirmed_fee_amount ?? mandate?.confirmed_fee_amount ?? null;
+  const feeCurrency = mandate?.currency ?? currency;
+  if (estimatedFee != null && estimatedFee > 0) {
     out.push({
       label: "Fees estimés",
-      value: fmtMoney(mandate.estimated_fee_amount, mandate.currency ?? currency),
-      sublabel: mandate.confirmed_fee_amount != null && mandate.confirmed_fee_amount > 0
-        ? `Confirmés : ${fmtMoney(mandate.confirmed_fee_amount, mandate.currency ?? currency)}`
+      value: fmtMoney(estimatedFee, feeCurrency),
+      sublabel: confirmedFee != null && confirmedFee > 0
+        ? `Confirmés : ${fmtMoney(confirmedFee, feeCurrency)}`
         : undefined,
       icon: Building2,
       tone: "neutral",
     });
-  } else if (mandate) {
+  } else {
     // Calcul live du success fee si pas d'estimé stocké, à partir des
-    // paramètres du mandat (% success fee) et des chiffres du dossier
-    // (asking_price / target_raise). Affiché avec une étoile
-    // pour signaler que c'est un calcul automatique.
-    const mandateForFee: MandateForFee = {
-      type: mandate.type ?? deal.deal_type,
-      currency: mandate.currency,
-      success_fee_percent: mandate.success_fee_percent,
-      retainer_monthly: mandate.retainer_monthly,
-      operation_amount: mandate.operation_amount,
-      start_date: mandate.start_date,
-      target_close_date: mandate.target_close_date,
-      end_date: mandate.end_date,
-    };
-    const dealForFee: DealForFee = {
+    // paramètres d'honoraires du dossier et de ses chiffres. Affiché avec
+    // une étoile pour signaler que c'est un calcul automatique.
+    const fee = computeSuccessFee({
       deal_type: deal.deal_type,
+      currency: feeCurrency,
+      success_fee_percent: deal.success_fee_percent ?? mandate?.success_fee_percent,
+      success_fee_base: deal.success_fee_base,
+      operation_amount: deal.operation_amount ?? mandate?.operation_amount,
+      closed_amount: deal.closed_amount,
       asking_price_min: deal.asking_price_min,
       asking_price_max: deal.asking_price_max,
       target_ev_min: deal.target_ev_min,
@@ -269,8 +273,7 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[], mandate: MandateLi
       acquisition_budget_min: deal.acquisition_budget_min,
       acquisition_budget_max: deal.acquisition_budget_max,
       target_amount: deal.target_amount,
-    };
-    const fee = computeSuccessFee(mandateForFee, dealForFee);
+    });
     if (fee.estimated != null && fee.estimated > 0) {
       out.push({
         label: "Fee estimé (auto)",

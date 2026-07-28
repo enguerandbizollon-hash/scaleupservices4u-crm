@@ -1,39 +1,39 @@
-// Calcul canonique des honoraires par type de mandat.
-// Source de vérité unique pour : UI fiche mandat, dashboard fees, rapports
-// client. Les règles reflètent la section "Calcul success fee par deal_type"
-// de CLAUDE.md.
+// Calcul canonique des honoraires d'un dossier.
+// Source de vérité unique pour : fiche dossier (onglet Honoraires), dashboard
+// fees, exports client. Les règles reflètent la section "Calcul success fee
+// par deal_type" de CLAUDE.md.
+//
+// Depuis la fusion mandats → dossiers (v65), le dossier porte lui-même son
+// économie : success_fee_percent, success_fee_base, operation_amount, currency.
 //
 // Principe : toutes les entrées sont nullable. Le calculateur retourne la
 // meilleure estimation possible, précise la base retenue et note les manques
-// qui empêcheraient une estimation fiable. Aucun throw — le caller affiche
-// les notes à l'utilisateur pour qu'il complète les champs manquants.
+// ou hypothèses. Aucun throw — le caller affiche les notes à l'utilisateur
+// pour qu'il complète les champs manquants.
+//
+// Résolution de la base, par priorité :
+//   1. operation_amount        — montant saisi à la main, écrase tout
+//   2. success_fee_base        — base choisie explicitement, si calculable
+//   3. automatique par deal_type (comportement historique)
 
 // ── Types d'entrée ─────────────────────────────────────────────────────────────
 
-export interface MandateForFee {
-  type: string;                          // ma_sell|ma_buy
-  currency?: string | null;              // défaut EUR
-  success_fee_percent?: number | null;   // % (ex: 3 pour 3%)
-  retainer_monthly?: number | null;      // retainer mensuel
-  operation_amount?: number | null;      // override manuel — prioritaire sur le deal
-  start_date?: string | null;            // ISO date
-  target_close_date?: string | null;     // ISO date
-  end_date?: string | null;              // ISO date
-}
-
 export interface DealForFee {
-  deal_type?: string | null;
+  deal_type?: string | null;             // ma_sell|ma_buy
+  currency?: string | null;              // défaut EUR
+  // Paramètres d'honoraires (portés par le dossier depuis v65)
+  success_fee_percent?: number | null;   // % (ex: 3 pour 3%)
+  success_fee_base?: string | null;      // clé FeeBaseSource explicite ; null = auto
+  operation_amount?: number | null;      // override manuel — prioritaire sur tout
+  // Chiffres du dossier
   closed_amount?: number | null;         // opération réalisée
-  // M&A (sell & buy)
-  asking_price_min?: number | null;
+  asking_price_min?: number | null;      // sell-side
   asking_price_max?: number | null;
   target_ev_min?: number | null;         // buy-side
-  target_ev_max?: number | null;         // buy-side
+  target_ev_max?: number | null;
   acquisition_budget_min?: number | null;
   acquisition_budget_max?: number | null;
-  // Générique
-  target_amount?: number | null;
-  committed_amount?: number | null;
+  target_amount?: number | null;         // générique
 }
 
 // ── Types de sortie ────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export type FeeBaseSource =
 export interface FeeComputeResult {
   /** Montant estimé du success fee ; null si entrées insuffisantes */
   estimated: number | null;
-  /** Base retenue pour le calcul (ex: 3 000 000 de levée) */
+  /** Base retenue pour le calcul (ex: 3 000 000 de cession) */
   base: number | null;
   /** Pourcentage appliqué (ex: 3 pour 3%) */
   percent: number | null;
@@ -80,35 +80,67 @@ function pickFirst(...vals: (number | null | undefined)[]): number | null {
   return null;
 }
 
+/** Valeur d'une base nommée sur le dossier ; null si non calculable (0 = absent). */
+function baseValue(key: Exclude<FeeBaseSource, null>, deal: DealForFee): number | null {
+  switch (key) {
+    case "operation_amount":        return pickFirst(deal.operation_amount);
+    case "closed_amount":           return pickFirst(deal.closed_amount);
+    case "asking_price_mid":        return mid(deal.asking_price_min, deal.asking_price_max);
+    case "target_ev_mid":           return mid(deal.target_ev_min, deal.target_ev_max);
+    case "acquisition_budget_mid":  return mid(deal.acquisition_budget_min, deal.acquisition_budget_max);
+    case "target_amount":           return pickFirst(deal.target_amount);
+  }
+}
+
+const EXPLICIT_BASE_KEYS: ReadonlySet<string> = new Set([
+  "operation_amount", "closed_amount", "asking_price_mid",
+  "target_ev_mid", "acquisition_budget_mid", "target_amount",
+]);
+
 // ── Calcul principal ──────────────────────────────────────────────────────────
 
 /**
- * Calcule le success fee estimé pour un mandat, selon les règles CLAUDE.md.
- * Le deal est optionnel : sans deal, seul l'override `operation_amount` est
- * utilisable.
+ * Calcule le success fee estimé d'un dossier, selon les règles CLAUDE.md.
+ * Priorité : operation_amount > success_fee_base explicite > auto par deal_type.
  */
-export function computeSuccessFee(
-  mandate: MandateForFee,
-  deal?: DealForFee | null,
-): FeeComputeResult {
-  const currency = mandate.currency ?? "EUR";
+export function computeSuccessFee(deal: DealForFee): FeeComputeResult {
+  const currency = deal.currency ?? "EUR";
   const notes: string[] = [];
-  const type = mandate.type;
+  const type = deal.deal_type;
 
-  // ── Cas avec success_fee_percent ────────────────────────────────────────
-  const percent = mandate.success_fee_percent ?? null;
+  const percent = deal.success_fee_percent ?? null;
   if (!percent || percent <= 0) {
     notes.push("Pourcentage de success fee non renseigné.");
   }
 
-  // Résolution de la base : override manuel > deal selon type
+  // ── Résolution de la base ───────────────────────────────────────────────
   let base: number | null = null;
   let source: FeeBaseSource = null;
 
-  if (mandate.operation_amount && mandate.operation_amount > 0) {
-    base = mandate.operation_amount;
+  // 1. Override manuel
+  if (deal.operation_amount && deal.operation_amount > 0) {
+    base = deal.operation_amount;
     source = "operation_amount";
-  } else if (deal) {
+  }
+
+  // 2. Base explicite choisie sur le dossier
+  if (base === null && deal.success_fee_base) {
+    if (EXPLICIT_BASE_KEYS.has(deal.success_fee_base)) {
+      const key = deal.success_fee_base as Exclude<FeeBaseSource, null>;
+      const v = baseValue(key, deal);
+      if (v !== null) {
+        base = v;
+        source = key;
+      } else {
+        notes.push(`Base choisie (${deal.success_fee_base}) sans donnée sur le dossier, résolution automatique.`);
+      }
+    } else {
+      notes.push(`Base (${deal.success_fee_base}) inconnue, résolution automatique.`);
+    }
+  }
+
+  // 3. Résolution automatique par type de dossier
+  if (base === null) {
     switch (type) {
       case "ma_sell": {
         base = pickFirst(deal.closed_amount, mid(deal.asking_price_min, deal.asking_price_max), deal.target_amount);

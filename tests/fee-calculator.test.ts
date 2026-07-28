@@ -1,5 +1,6 @@
 // Tests unitaires lib/crm/fee-calculator.ts
-// computeSuccessFee par deal_type, fallbacks et notes, agrégation de jalons.
+// computeSuccessFee par deal_type, priorités de base, fallbacks et notes,
+// agrégation de jalons. Signature deal-centric depuis la fusion mandats (v65).
 
 import { describe, it, expect } from "vitest";
 import {
@@ -7,10 +8,10 @@ import {
   sumMilestonesByStatus,
   projectYearEndFromYtd,
   filterOverdueMilestones,
-  type MandateForFee,
+  type DealForFee,
 } from "@/lib/crm/fee-calculator";
 
-function makeMandate(overrides: Partial<MandateForFee> & { type: string }): MandateForFee {
+function makeDeal(overrides: DealForFee): DealForFee {
   return { ...overrides };
 }
 
@@ -18,48 +19,48 @@ function makeMandate(overrides: Partial<MandateForFee> & { type: string }): Mand
 
 describe("computeSuccessFee — ma_sell", () => {
   it("base = milieu de fourchette asking_price", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 3 }),
-      { asking_price_min: 8_000_000, asking_price_max: 12_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 3,
+      asking_price_min: 8_000_000, asking_price_max: 12_000_000,
+    }));
     expect(result.base).toBe(10_000_000);
     expect(result.estimated).toBe(300_000);
     expect(result.source).toBe("asking_price_mid");
   });
 
   it("une seule borne asking_price suffit (mid = borne unique)", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 3 }),
-      { asking_price_min: 8_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 3,
+      asking_price_min: 8_000_000,
+    }));
     expect(result.base).toBe(8_000_000);
     expect(result.source).toBe("asking_price_mid");
   });
 
   it("closed_amount prioritaire sur asking_price", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 2 }),
-      { closed_amount: 9_000_000, asking_price_min: 8_000_000, asking_price_max: 12_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 2,
+      closed_amount: 9_000_000, asking_price_min: 8_000_000, asking_price_max: 12_000_000,
+    }));
     expect(result.base).toBe(9_000_000);
     expect(result.estimated).toBe(180_000);
     expect(result.source).toBe("closed_amount");
   });
 
   it("closed_amount à 0 est ignoré (pickFirst saute les zéros)", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 3 }),
-      { closed_amount: 0, asking_price_min: 2_000_000, asking_price_max: 2_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 3,
+      closed_amount: 0, asking_price_min: 2_000_000, asking_price_max: 2_000_000,
+    }));
     expect(result.base).toBe(2_000_000);
     expect(result.source).toBe("asking_price_mid");
   });
 
   it("fallback final sur target_amount", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 4 }),
-      { target_amount: 1_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 4,
+      target_amount: 1_000_000,
+    }));
     expect(result.estimated).toBe(40_000);
     expect(result.source).toBe("target_amount");
   });
@@ -69,85 +70,133 @@ describe("computeSuccessFee — ma_sell", () => {
 
 describe("computeSuccessFee — ma_buy", () => {
   it("acquisition_budget mid prioritaire sur target_ev mid", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_buy", success_fee_percent: 2 }),
-      {
-        acquisition_budget_min: 10_000_000,
-        acquisition_budget_max: 20_000_000,
-        target_ev_min: 5_000_000,
-        target_ev_max: 6_000_000,
-      },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_buy", success_fee_percent: 2,
+      acquisition_budget_min: 10_000_000,
+      acquisition_budget_max: 20_000_000,
+      target_ev_min: 5_000_000,
+      target_ev_max: 6_000_000,
+    }));
     expect(result.base).toBe(15_000_000);
     expect(result.estimated).toBe(300_000);
     expect(result.source).toBe("acquisition_budget_mid");
   });
 
   it("fallback sur target_ev mid si pas de budget", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_buy", success_fee_percent: 2 }),
-      { target_ev_min: 5_000_000, target_ev_max: 7_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_buy", success_fee_percent: 2,
+      target_ev_min: 5_000_000, target_ev_max: 7_000_000,
+    }));
     expect(result.base).toBe(6_000_000);
     expect(result.estimated).toBe(120_000);
     expect(result.source).toBe("target_ev_mid");
   });
 });
 
+// ── Base explicite (success_fee_base) ────────────────────────────────────────
+
+describe("computeSuccessFee — success_fee_base explicite", () => {
+  it("la base choisie l'emporte sur la résolution automatique du type", () => {
+    // ma_buy résoudrait acquisition_budget_mid en auto ; la base explicite
+    // target_ev_mid doit être honorée.
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_buy", success_fee_percent: 2,
+      success_fee_base: "target_ev_mid",
+      acquisition_budget_min: 10_000_000, acquisition_budget_max: 20_000_000,
+      target_ev_min: 5_000_000, target_ev_max: 7_000_000,
+    }));
+    expect(result.base).toBe(6_000_000);
+    expect(result.estimated).toBe(120_000);
+    expect(result.source).toBe("target_ev_mid");
+  });
+
+  it("operation_amount reste prioritaire sur la base explicite", () => {
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 5,
+      operation_amount: 1_000_000,
+      success_fee_base: "asking_price_mid",
+      asking_price_min: 8_000_000, asking_price_max: 12_000_000,
+    }));
+    expect(result.base).toBe(1_000_000);
+    expect(result.source).toBe("operation_amount");
+  });
+
+  it("base choisie sans donnée → note + repli automatique", () => {
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 3,
+      success_fee_base: "target_ev_mid",           // aucune donnée EV sur un sell
+      asking_price_min: 8_000_000, asking_price_max: 12_000_000,
+    }));
+    expect(result.base).toBe(10_000_000);
+    expect(result.source).toBe("asking_price_mid");
+    expect(result.notes.some(n => n.includes("sans donnée"))).toBe(true);
+  });
+
+  it("clé de base inconnue (valeur legacy) → note + repli automatique", () => {
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 3,
+      success_fee_base: "ev",                      // ancien vocabulaire v24
+      asking_price_min: 4_000_000, asking_price_max: 6_000_000,
+    }));
+    expect(result.base).toBe(5_000_000);
+    expect(result.source).toBe("asking_price_mid");
+    expect(result.notes.some(n => n.includes("inconnue"))).toBe(true);
+  });
+});
+
 // ── Cas transverses ──────────────────────────────────────────────────────────
 
 describe("computeSuccessFee — transverse", () => {
-  it("operation_amount (override manuel) est prioritaire sur le deal", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 5, operation_amount: 1_000_000 }),
-      { closed_amount: 3_000_000 },
-    );
+  it("operation_amount (override manuel) est prioritaire sur les chiffres du dossier", () => {
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 5,
+      operation_amount: 1_000_000, closed_amount: 3_000_000,
+    }));
     expect(result.base).toBe(1_000_000);
     expect(result.estimated).toBe(50_000);
     expect(result.source).toBe("operation_amount");
   });
 
   it("type inconnu → fallback générique target_amount puis closed_amount", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "advisory_autre", success_fee_percent: 10 }),
-      { target_amount: 100_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "advisory_autre", success_fee_percent: 10,
+      target_amount: 100_000,
+    }));
     expect(result.estimated).toBe(10_000);
     expect(result.source).toBe("target_amount");
   });
 
   it("pourcentage manquant → estimation null, base conservée, note ajoutée", () => {
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell" }),
-      { target_amount: 2_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", target_amount: 2_000_000,
+    }));
     expect(result.estimated).toBeNull();
     expect(result.base).toBe(2_000_000);
     expect(result.source).toBe("target_amount");
     expect(result.notes).toContain("Pourcentage de success fee non renseigné.");
   });
 
-  it("ni deal ni operation_amount → estimation null avec note base manquante", () => {
-    const result = computeSuccessFee(makeMandate({ type: "ma_sell", success_fee_percent: 5 }));
+  it("aucun chiffre ni operation_amount → estimation null avec note base manquante", () => {
+    const result = computeSuccessFee(makeDeal({ deal_type: "ma_sell", success_fee_percent: 5 }));
     expect(result.estimated).toBeNull();
     expect(result.base).toBeNull();
     expect(result.source).toBeNull();
     expect(result.notes).toContain("Aucune base de calcul disponible (operation_amount ou données deal).");
   });
 
-  it("devise : EUR par défaut, sinon celle du mandat", () => {
-    expect(computeSuccessFee(makeMandate({ type: "ma_sell" })).currency).toBe("EUR");
-    expect(computeSuccessFee(makeMandate({ type: "ma_sell", currency: "CHF" })).currency).toBe("CHF");
+  it("devise : EUR par défaut, sinon celle du dossier", () => {
+    expect(computeSuccessFee(makeDeal({ deal_type: "ma_sell" })).currency).toBe("EUR");
+    expect(computeSuccessFee(makeDeal({ deal_type: "ma_sell", currency: "CHF" })).currency).toBe("CHF");
   });
 
   it("documente le comportement actuel : percent = 0 note le manque mais calcule estimated = 0", () => {
     // Incohérence signalée dans le rapport : la note dit "non renseigné" mais
     // le calcul aboutit quand même (base × 0 = 0) car la garde finale ne
     // vérifie que percent === null, pas percent <= 0.
-    const result = computeSuccessFee(
-      makeMandate({ type: "ma_sell", success_fee_percent: 0 }),
-      { target_amount: 2_000_000 },
-    );
+    const result = computeSuccessFee(makeDeal({
+      deal_type: "ma_sell", success_fee_percent: 0,
+      target_amount: 2_000_000,
+    }));
     expect(result.notes).toContain("Pourcentage de success fee non renseigné.");
     expect(result.estimated).toBe(0);
   });
