@@ -5,6 +5,9 @@ import { DealDetail } from "./deal-detail";
 import { listSuggestionsForDeal } from "@/lib/crm/suggestions";
 
 export const revalidate = 0;
+// Les server actions de la page héritent de cette limite : la justification
+// IA du matching (jusqu'à 10 appels Claude) dépasse les 15 s par défaut.
+export const maxDuration = 300;
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
