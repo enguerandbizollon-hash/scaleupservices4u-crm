@@ -70,6 +70,8 @@ export type ProfileRow = {
 // ── Constantes UI ────────────────────────────────────────────────────────────
 
 const EFFECTIF_OPTIONS = [
+  { code: "01", label: "1-2" },
+  { code: "02", label: "3-5" },
   { code: "03", label: "6-9" },
   { code: "11", label: "10-19" },
   { code: "12", label: "20-49" },
