@@ -7,11 +7,10 @@
  * Produit : score 0-100 selon 4 critères (CLAUDE.md §Matching M&A),
  * fourchette valorisation, notes narratives.
  *
- * Modèle : claude-sonnet-4-20250514 (cf. CLAUDE.md §IA).
- * Appel : fetch direct vers l'API Anthropic (pattern cohérent avec
- * lib/ai/action-summary.ts).
+ * Appel : lib/ai/anthropic.ts (client central, modèle variabilisé, retry).
  */
 
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 import { formatBenchmarkForPrompt } from "@/lib/crm/financial-benchmarks";
 
 export interface FinancialYear {
@@ -65,36 +64,12 @@ export interface FinancialScoringResult {
 export async function analyzeDealFinancials(
   input: FinancialScoringInput,
 ): Promise<FinancialScoringResult | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
   if (input.years.length === 0) return null;
 
-  const prompt = buildPrompt(input);
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const json = await res.json();
-    const text = json.content?.[0]?.text;
-    if (typeof text !== "string") return null;
-
-    return parseResult(text);
-  } catch {
-    return null;
-  }
+  const res = await callClaude({ prompt: buildPrompt(input), maxTokens: 1500 });
+  if (!res) return null;
+  return parseResult(res.text);
 }
 
 // ─── Prompt ─────────────────────────────────────────────────────────────────

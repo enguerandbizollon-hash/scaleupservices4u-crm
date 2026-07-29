@@ -9,13 +9,13 @@
  *     en V50 par lib/ai/presentation-analysis.ts et document-extraction.ts)
  *   - d'un snapshot financier (dernière année disponible dans financial_data)
  *
- * Modèle : claude-sonnet-4-20250514 (cf. CLAUDE.md §IA).
- * Appel : fetch direct API Anthropic, pattern cohérent avec
- * lib/ai/financial-scoring.ts et lib/ai/action-summary.ts.
+ * Appel : lib/ai/anthropic.ts (client central, modèle variabilisé, retry).
  *
  * L'IA suggère, l'utilisateur valide. Aucun champ déjà rempli n'est
  * écrasé sans action explicite (la modale côté UI gère le choix).
  */
+
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 
 export interface BriefDocumentSummary {
   document_type: string;
@@ -173,34 +173,10 @@ function parseResponse(raw: string): ScreeningBriefSuggestion | null {
 export async function generateScreeningBrief(
   input: ScreeningBriefInput,
 ): Promise<ScreeningBriefSuggestion | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
 
   const userPrompt = buildUserPrompt(input);
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1800,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.content?.[0]?.text;
-    if (typeof text !== "string") return null;
-
-    return parseResponse(text);
-  } catch {
-    return null;
-  }
+  const res = await callClaude({ prompt: userPrompt, system: SYSTEM_PROMPT, maxTokens: 1800 });
+  if (!res) return null;
+  return parseResponse(res.text);
 }

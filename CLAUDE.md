@@ -832,7 +832,11 @@ Règles :
 - Appels dans actions/ai/[module].ts
 - Résultats dans colonnes dédiées (ai_*)
 - L'IA suggère, l'équipe valide
-- Modèle : claude-sonnet-4-20250514
+- Client central : lib/ai/anthropic.ts (callClaude/callClaudeRaw), jamais
+  de fetch Anthropic ni de modèle hardcodé chez un appelant
+- Modèles par tier : smart (défaut claude-sonnet-5, override ANTHROPIC_MODEL)
+  et fast pour la classification de masse (défaut claude-haiku-4-5-20251001,
+  override ANTHROPIC_MODEL_FAST)
 
 ---
 

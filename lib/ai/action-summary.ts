@@ -1,6 +1,8 @@
 /**
  * Génère un résumé IA structuré d'une action (meeting/call) via Claude API.
  */
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
+
 export async function generateActionSummary(action: {
   type: string;
   title: string;
@@ -10,8 +12,7 @@ export async function generateActionSummary(action: {
   contacts?: { name: string; role?: string }[];
   organizations?: { name: string; role?: string }[];
 }): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
 
   const prompt = `Tu es un assistant M&A pour un cabinet de conseil.
 Génère un résumé structuré et professionnel de cette action :
@@ -35,25 +36,6 @@ Format :
 - [action 1]
 - [action 2]`;
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.content?.[0]?.text ?? null;
-  } catch {
-    return null;
-  }
+  const res = await callClaude({ prompt, maxTokens: 1000 });
+  return res?.text ?? null;
 }

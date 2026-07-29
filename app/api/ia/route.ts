@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { claudeModel } from "@/lib/ai/anthropic";
 
 const client = new Anthropic();
 
@@ -229,7 +230,7 @@ Règles :
     // Boucle agent : max 5 itérations pour gérer les tool_use
     for (let i = 0; i < 5; i++) {
       const response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: claudeModel("smart"),
         max_tokens: 2000,
         system: systemPrompt,
         tools,

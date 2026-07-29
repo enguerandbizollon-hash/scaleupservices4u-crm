@@ -2,19 +2,21 @@
  * lib/ai/document-extraction.ts — Extraction IA depuis PDF (V58)
  *
  * Encode un PDF en base64 et l'envoie à l'API Anthropic via un content
- * block `type: "document"` (support natif Claude Sonnet 4 pour PDF).
+ * block `type: "document"` (support PDF natif de Claude).
  *
  * Utilise tool_use avec un schéma JSON unifié pour récupérer une sortie
  * structurée. Tous les champs sont nullable : l'IA remplit ce qu'elle
  * voit dans le document, le reste reste null.
  *
- * Modèle : claude-sonnet-4-20250514 (cf. CLAUDE.md §IA).
+ * Appel : lib/ai/anthropic.ts (client central, modèle variabilisé, retry).
  *
  * Limites côté Anthropic :
  *  - PDF max 32 MB
  *  - 100 pages max
  *  - Le PDF doit être un PDF natif (pas un PDF-image illisible)
  */
+
+import { callClaudeRaw, isClaudeConfigured } from "@/lib/ai/anthropic";
 
 // ── Schéma de sortie unifié (financial_data + métadonnées document) ──────────
 
@@ -194,8 +196,7 @@ export interface ExtractDocumentResult {
 export async function extractDataFromPdf(
   input: ExtractDocumentInput,
 ): Promise<ExtractDocumentResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { ok: false, error: "ANTHROPIC_API_KEY manquante" };
+  if (!isClaudeConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY manquante" };
 
   // Limite Anthropic : 32 MB. On garde marge à 30 MB.
   if (input.pdfBuffer.length > 30 * 1024 * 1024) {
@@ -207,59 +208,35 @@ export async function extractDataFromPdf(
     ? `Contexte : ${input.contextHint}\n\nAnalyse ce document et extrais les données via l'outil extract_document_data.`
     : `Analyse ce document et extrais les données via l'outil extract_document_data.`;
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+  const res = await callClaudeRaw({
+    maxTokens: 4096,
+    system: SYSTEM_PROMPT,
+    tools: [EXTRACTION_TOOL],
+    toolChoice: { type: "tool", name: "extract_document_data" },
+    content: [
+      {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: base64Pdf,
+        },
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        tools: [EXTRACTION_TOOL],
-        tool_choice: { type: "tool", name: "extract_document_data" },
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Pdf,
-              },
-            },
-            { type: "text", text: userMessage },
-          ],
-        }],
-      }),
-    });
+      { type: "text", text: userMessage },
+    ],
+  });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return { ok: false, error: `API Anthropic ${res.status} : ${text.slice(0, 200)}` };
-    }
+  if (!res.ok) return { ok: false, error: res.error };
 
-    const data = await res.json() as {
-      content?: Array<{ type: string; name?: string; input?: unknown }>;
-      stop_reason?: string;
-    };
-
-    const toolUse = data.content?.find(
-      (c) => c.type === "tool_use" && c.name === "extract_document_data",
-    );
-    if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) {
-      return { ok: false, error: "Pas de tool_use dans la réponse" };
-    }
-
-    const parsed = sanitizeExtraction(toolUse.input as Record<string, unknown>);
-    return { ok: true, data: parsed };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Erreur réseau Anthropic" };
+  const toolUse = res.content.find(
+    (c) => c.type === "tool_use" && c.name === "extract_document_data",
+  );
+  if (!toolUse || typeof toolUse.input !== "object" || toolUse.input === null) {
+    return { ok: false, error: "Pas de tool_use dans la réponse" };
   }
+
+  const parsed = sanitizeExtraction(toolUse.input as Record<string, unknown>);
+  return { ok: true, data: parsed };
 }
 
 // ── Helpers de sanitisation ──────────────────────────────────────────────────

@@ -7,13 +7,15 @@
  * L'IA peut aussi renvoyer null (deal_id null) si elle n'a pas assez
  * d'éléments. Dans ce cas, l'orchestrateur place le mail en boîte de tri.
  *
- * Modèle : claude-sonnet-4-20250514 (cf. CLAUDE.md §IA).
+ * Appel : lib/ai/anthropic.ts, tier "fast" (classification de masse).
  *
  * Choix d'archi : pas de tool_use ici. Les sorties JSON strictes via
  * system prompt + parsing tolérant (cohérent avec matching-brain.ts).
  * Pour les classifications de masse, on garde le call simple et borné
  * en max_tokens pour contrôler le coût.
  */
+
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 
 export interface ActiveDealCandidate {
   id: string;
@@ -123,8 +125,7 @@ function parseResponse(
 export async function classifyEmailWithAI(
   input: EmailClassifierInput,
 ): Promise<EmailClassifierOutput | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
 
   if (input.candidates.length === 0) {
     return { deal_id: null, confidence: 0, reason: "Aucun dossier actif pour ce user." };
@@ -133,28 +134,9 @@ export async function classifyEmailWithAI(
   const validIds = new Set(input.candidates.map((c) => c.id));
   const prompt = buildPrompt(input);
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 250,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.content?.[0]?.text;
-    if (typeof text !== "string") return null;
-    return parseResponse(text, validIds);
-  } catch {
-    return null;
-  }
+  // Tier fast : classification de masse (chaque email ingéré passe ici),
+  // la précision d'un petit modèle suffit et divise le coût.
+  const res = await callClaude({ prompt, system: SYSTEM_PROMPT, maxTokens: 250, tier: "fast" });
+  if (!res) return null;
+  return parseResponse(res.text, validIds);
 }

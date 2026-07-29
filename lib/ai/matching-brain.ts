@@ -10,13 +10,13 @@
  *      (email + LinkedIn) personnalisée à partir du dossier et du contact
  *      décideur de l'organisation cible.
  *
- * Modèle : claude-sonnet-4-20250514 (cf. CLAUDE.md §IA).
- * Appel : fetch direct API Anthropic (pattern cohérent avec
- * financial-scoring.ts et brief-engine.ts).
+ * Appel : lib/ai/anthropic.ts (client central, modèle variabilisé, retry).
  *
  * Retourne null si clé API absente ou réponse invalide. L'appelant décide
  * d'afficher un warning.
  */
+
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 
 export interface MatchingBrainDealContext {
   name: string;
@@ -179,35 +179,15 @@ function parseScoringResponse(raw: string): MatchingBrainOutput | null {
 export async function scoreSuggestionWithAI(
   input: MatchingBrainInput,
 ): Promise<MatchingBrainOutput | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
 
-  const prompt = buildScoringPrompt(input);
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 800,
-        system: SCORING_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.content?.[0]?.text;
-    if (typeof text !== "string") return null;
-    return parseScoringResponse(text);
-  } catch {
-    return null;
-  }
+  const res = await callClaude({
+    prompt: buildScoringPrompt(input),
+    system: SCORING_SYSTEM_PROMPT,
+    maxTokens: 800,
+  });
+  if (!res) return null;
+  return parseScoringResponse(res.text);
 }
 
 // ── Brief d'outreach ─────────────────────────────────────────────────────────
@@ -305,33 +285,13 @@ function parseOutreachResponse(raw: string): OutreachDraftOutput | null {
 export async function generateOutreachDraft(
   input: OutreachDraftInput,
 ): Promise<OutreachDraftOutput | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
 
-  const prompt = buildOutreachPrompt(input);
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1200,
-        system: OUTREACH_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.content?.[0]?.text;
-    if (typeof text !== "string") return null;
-    return parseOutreachResponse(text);
-  } catch {
-    return null;
-  }
+  const res = await callClaude({
+    prompt: buildOutreachPrompt(input),
+    system: OUTREACH_SYSTEM_PROMPT,
+    maxTokens: 1200,
+  });
+  if (!res) return null;
+  return parseOutreachResponse(res.text);
 }

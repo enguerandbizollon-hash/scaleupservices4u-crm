@@ -14,10 +14,12 @@
  * Ce plan est ensuite exécuté par l'orchestrateur (S2/S3) qui attaque le CRM
  * interne et les connecteurs externes en parallèle pour chaque segment.
  *
- * Modèle : claude-sonnet-4-20250514 (cf. CLAUDE.md §IA).
+ * Appel : lib/ai/anthropic.ts (client central, modèle variabilisé, retry).
  * Retourne null si API indisponible ou JSON invalide. L'appelant affiche un
  * warning dans l'UI et permet à l'utilisateur de composer son plan à la main.
  */
+
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 
 // ── Types publics ────────────────────────────────────────────────────────────
 
@@ -269,36 +271,15 @@ function parseResponse(raw: string): SourcingPlan | null {
 export async function generateSourcingPlan(
   input: SourcingStrategyInput,
 ): Promise<SourcingPlan | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!isClaudeConfigured()) return null;
 
-  const userPrompt = buildUserPrompt(input);
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.content?.[0]?.text;
-    if (typeof text !== "string") return null;
-
-    return parseResponse(text);
-  } catch {
-    return null;
-  }
+  const res = await callClaude({
+    prompt: buildUserPrompt(input),
+    system: SYSTEM_PROMPT,
+    maxTokens: 2500,
+  });
+  if (!res) return null;
+  return parseResponse(res.text);
 }
 
 // ── Plan par défaut (fallback si IA indisponible) ────────────────────────────
