@@ -3,7 +3,7 @@
 // (finances par année, dirigeants, décomposition du radar, signaux BODACC,
 // liens sources) et la suite du geste métier : promouvoir, créer le dossier.
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -48,6 +48,9 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   const [statut, setStatut] = useState(statutSeed);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Garde synchrone anti double-clic : `pending` ne bascule qu'au rendu
+  // suivant, un second clic rapide (à travers deux confirm) passerait sinon.
+  const busyRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -78,11 +81,14 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   }
 
   function handlePromote() {
+    if (busyRef.current) return;
     const nom = detail?.nom ?? nomSeed;
     if (!confirm(`Promouvoir « ${nom} » en organisation CRM ?`)) return;
+    busyRef.current = true;
     setActionError(null);
     startTransition(async () => {
       const res = await promoteUniversToOrganization(siren);
+      busyRef.current = false;
       if (res.success) {
         setStatut("promu");
         onLocalStatut(siren, "promu");
@@ -94,8 +100,10 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   }
 
   function handleCreateDossier() {
+    if (busyRef.current) return;
     const nom = detail?.nom ?? nomSeed;
     if (!confirm(`Créer le dossier « Cession ${nom} » (organisation liée, dirigeant prérempli) ?`)) return;
+    busyRef.current = true;
     setActionError(null);
     startTransition(async () => {
       const res = await createDossierFromUnivers(siren);
@@ -103,6 +111,7 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
         onLocalStatut(siren, "promu");
         router.push(`/protected/dossiers/${res.data.deal_id}`);
       } else {
+        busyRef.current = false;
         setActionError(res.error);
       }
     });
