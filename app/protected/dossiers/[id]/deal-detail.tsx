@@ -10,7 +10,7 @@ import { FinancialTab, type FinancialRow } from "./financial-tab";
 import {
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
   updateDealOrganizationStage, setDealClientOrganization,
-  updateDealField,
+  updateDealField, deleteDeal,
 } from "@/actions/deals";
 import { EditableField } from "@/components/ui/EditableField";
 import { DocumentsTab } from "./documents-tab";
@@ -319,6 +319,21 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
                 Exporter PDF
               </a>
               <Link href={`/protected/dossiers/${deal.id}/modifier`} style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}>Modifier</Link>
+              <button
+                onClick={async () => {
+                  if (!confirm(`Supprimer définitivement le dossier « ${deal.name} » ?\nJalons d'honoraires, liaisons et documents rattachés seront supprimés.`)) return;
+                  const res = await deleteDeal(deal.id);
+                  if (res.success) {
+                    router.push("/protected/dossiers");
+                  } else {
+                    alert(`Suppression impossible : ${res.error ?? "erreur inconnue"}`);
+                  }
+                }}
+                title="Supprimer le dossier"
+                style={{ padding:"8px 12px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"#991B1B", cursor:"pointer", fontFamily:"inherit", display:"inline-flex", alignItems:"center", gap:6 }}
+              >
+                <Trash2 size={13}/>
+              </button>
             </div>
           </div>
         </div>
