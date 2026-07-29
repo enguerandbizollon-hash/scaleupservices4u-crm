@@ -4,8 +4,9 @@ import { TimeSelect } from "../../components/time-select";
 import { LossReasonModal } from "../../components/loss-reason-modal";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import ActionModal from "@/components/actions/ActionModal";
-// MatchingTab et MaMatchingTab : supprimés, leur logique est désormais
-// intégrée comme sources internes dans le SourcingWizard (S4).
+// MatchingTab (investisseurs) : supprimé, logique intégrée au SourcingWizard (S4).
+// MaMatchingTab : remonté en onglet Acquéreurs (phase 3, scoring V2).
+import { MaMatchingTab } from "./ma-matching-tab";
 import { FinancialTab, type FinancialRow } from "./financial-tab";
 import {
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
@@ -187,7 +188,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "sourcing" | "honoraires" | "financier" | "documents">("dossier");
+  const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "acquereurs" | "sourcing" | "honoraires" | "financier" | "documents">("dossier");
 
   // Drawer latéral pour entités liées (contacts, organisations)
   const [drawerEntity, setDrawerEntity] = useState<EntityRef>(null);
@@ -341,11 +342,14 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
         {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
         <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
           {(isMa
-            ? (["dossier","screening","sourcing","honoraires","financier","documents"] as const)
+            ? (deal.deal_type === "ma_sell"
+              ? (["dossier","screening","acquereurs","sourcing","honoraires","financier","documents"] as const)
+              : (["dossier","screening","sourcing","honoraires","financier","documents"] as const))
             : (["dossier","screening","honoraires","financier","documents"] as const)
           ).map(tab => {
             const labels: Record<string, string> = {
-              dossier:"Dossier", screening:"Screening", sourcing:"Sourcing", honoraires:"Honoraires",
+              dossier:"Dossier", screening:"Screening", acquereurs:"Acquéreurs", sourcing:"Sourcing",
+              honoraires:"Honoraires",
               financier:"Financier",
               documents:"Documents",
             };
@@ -401,6 +405,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
         {/* Onglet Screening — qualification dossier avant ouverture vers l'extérieur (V53) */}
         {activeTab === "screening" && (
           <ScreeningSection dealId={deal.id} />
+        )}
+
+        {/* Onglet Acquéreurs — classement de la base par la grille V2 (phase 3) */}
+        {activeTab === "acquereurs" && deal.deal_type === "ma_sell" && (
+          <MaMatchingTab dealId={deal.id} dealType="ma_sell" />
         )}
 
         {/* Onglet Sourcing — stratégie IA + CRM + Apollo unifiés (S4) */}
