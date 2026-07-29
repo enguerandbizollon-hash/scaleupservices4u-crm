@@ -28,7 +28,7 @@ import { isScreeningReady } from "@/lib/crm/matching-maps";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
-import { COMPANY_STAGES, ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
+import { COMPANY_STAGES, ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, DEAL_CONTEXTS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
@@ -786,6 +786,7 @@ type SpecDeal = {
   management_retention: boolean | null;
   management_retention_notes: string | null;
   deal_timing: string | null;
+  deal_context?: string | null;
   // M&A Buy
   target_sectors: string[] | null;
   excluded_sectors: string[] | null;
@@ -955,6 +956,14 @@ function MaSellSpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
           selectOptions={DEAL_TIMING_OPTIONS.map(t => ({ value: t.value, label: t.label }))}
           formatter={(v) => v ? (DEAL_TIMING_OPTIONS.find(t => t.value === v)?.label ?? String(v)) : ""}
           placeholder="Choisir un timing"
+        />
+      </SpecRow>
+      <SpecRow label="Contexte d'opération">
+        <EditableSpec
+          dealId={dealId} field="deal_context" initialValue={deal.deal_context ?? null}
+          selectOptions={DEAL_CONTEXTS.map(cx => ({ value: cx.value, label: cx.label }))}
+          formatter={(v) => v ? (DEAL_CONTEXTS.find(cx => cx.value === v)?.label ?? String(v)) : ""}
+          placeholder="Succession, MBO, build-up..."
         />
       </SpecRow>
       {deal.partial_sale_ok !== null && (

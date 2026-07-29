@@ -1,7 +1,7 @@
 "use client";
 import { SectorsMultiSelect } from "./SectorsMultiSelect";
 import { GeoSelect } from "@/components/ui/GeoSelect";
-import { ACQUIRER_TYPES, ACQUISITION_MOTIVATIONS } from "@/lib/crm/matching-maps";
+import { ACQUIRER_TYPES, ACQUISITION_MOTIVATIONS, OPERATION_TYPES, DEAL_STANCES } from "@/lib/crm/matching-maps";
 
 export interface AcquirerProfileData {
   acquirer_type: string;
@@ -13,6 +13,10 @@ export interface AcquirerProfileData {
   target_ebitda_min: number | null;
   target_ebitda_max: number | null;
   acquisition_history: string;
+  // v67 — critères small cap du scoring
+  operation_types: string[];
+  deal_stance: string;
+  acquirer_summary: string;
 }
 
 interface AcquirerProfileFieldsProps {
@@ -33,6 +37,7 @@ export function AcquirerProfileFields({ data, onChange }: AcquirerProfileFieldsP
   const safeMotivations = data?.acquisition_motivations ?? [];
   const safeSectors = data?.target_sectors ?? [];
   const safeGeos = data?.target_geographies ?? [];
+  const safeOperations = data?.operation_types ?? [];
 
   function toggleMotivation(v: string) {
     const next = safeMotivations.includes(v)
@@ -40,6 +45,22 @@ export function AcquirerProfileFields({ data, onChange }: AcquirerProfileFieldsP
       : [...safeMotivations, v];
     onChange({ ...data, acquisition_motivations: next });
   }
+
+  function toggleOperation(v: string) {
+    const next = safeOperations.includes(v)
+      ? safeOperations.filter(o => o !== v)
+      : [...safeOperations, v];
+    onChange({ ...data, operation_types: next });
+  }
+
+  const chip = (active: boolean): React.CSSProperties => ({
+    padding: "5px 11px", borderRadius: 20,
+    border: `1.5px solid ${active ? "#1a56db" : "#e5e7eb"}`,
+    background: active ? "#EFF6FF" : "#fff",
+    color: active ? "#1a56db" : "#374151",
+    fontSize: 12.5, fontWeight: active ? 600 : 400,
+    cursor: "pointer", fontFamily: "inherit",
+  });
 
   return (
     <div>
@@ -81,6 +102,31 @@ export function AcquirerProfileFields({ data, onChange }: AcquirerProfileFieldsP
             );
           })}
         </div>
+      </div>
+
+      {/* Opérations pratiquées (v67 — pilote le score type d'opération) */}
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, marginBottom: 16 }}>
+        <label style={lbl}>Op&eacute;rations pratiqu&eacute;es</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {OPERATION_TYPES.map(o => {
+            const active = safeOperations.includes(o.value);
+            return (
+              <button key={o.value} type="button" onClick={() => toggleOperation(o.value)} style={chip(active)}>
+                {active && "✓ "}{o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Position capitalistique (v67) */}
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, marginBottom: 16 }}>
+        <label style={lbl}>Position capitalistique</label>
+        <select style={inp} value={data.deal_stance ?? ""}
+          onChange={e => onChange({ ...data, deal_stance: e.target.value })}>
+          <option value="">— Non renseign&eacute;e —</option>
+          {DEAL_STANCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
       </div>
 
       {/* Secteurs cibles */}
@@ -130,12 +176,21 @@ export function AcquirerProfileFields({ data, onChange }: AcquirerProfileFieldsP
       </div>
 
       {/* Historique acquisitions */}
-      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, marginBottom: 16 }}>
         <label style={lbl}>Historique d&apos;acquisitions</label>
         <textarea rows={3} style={{ ...inp, resize: "vertical" }}
           placeholder="Acquisitions passees, build-up en cours..."
           value={data.acquisition_history ?? ""}
           onChange={e => onChange({ ...data, acquisition_history: e.target.value })} />
+      </div>
+
+      {/* Thèse d'acquisition (v67 — champ canonique, futur vectoriel) */}
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
+        <label style={lbl}>Th&egrave;se d&apos;acquisition</label>
+        <textarea rows={2} style={{ ...inp, resize: "vertical" }}
+          placeholder="En une phrase : ce que cet acquereur cherche vraiment..."
+          value={data.acquirer_summary ?? ""}
+          onChange={e => onChange({ ...data, acquirer_summary: e.target.value })} />
       </div>
     </div>
   );

@@ -48,6 +48,9 @@ export interface OrgActionData {
   target_ebitda_min?: number | null;
   target_ebitda_max?: number | null;
   acquisition_history?: string | null;
+  operation_types?: string[];
+  deal_stance?: string | null;
+  acquirer_summary?: string | null;
 }
 
 export type OrgActionResult =
@@ -120,6 +123,9 @@ export async function createOrganisationAction(
       target_ebitda_min:       data.target_ebitda_min ?? null,
       target_ebitda_max:       data.target_ebitda_max ?? null,
       acquisition_history:     data.acquisition_history ?? null,
+      operation_types:         (data.operation_types ?? []).length > 0 ? data.operation_types : null,
+      deal_stance:             data.deal_stance ?? null,
+      acquirer_summary:        data.acquirer_summary ?? null,
       user_id: user.id,
     })
     .select("id")
@@ -185,6 +191,9 @@ export async function updateOrganisationAction(
       target_ebitda_min:       data.target_ebitda_min ?? null,
       target_ebitda_max:       data.target_ebitda_max ?? null,
       acquisition_history:     data.acquisition_history ?? null,
+      operation_types:         (data.operation_types ?? []).length > 0 ? data.operation_types : null,
+      deal_stance:             data.deal_stance ?? null,
+      acquirer_summary:        data.acquirer_summary ?? null,
     })
     .eq("id", id)
     .eq("user_id", user.id);

@@ -50,6 +50,108 @@ export const ACQUISITION_MOTIVATIONS = [
 
 export type AcquisitionMotivation = (typeof ACQUISITION_MOTIVATIONS)[number]["value"];
 
+// ── Critères small cap du matching acquéreurs (v67, phase 3) ─────────────────
+
+/** Contexte de l'opération côté cédant (deals.deal_context). */
+export const DEAL_CONTEXTS = [
+  { value: "succession",   label: "Succession / départ du dirigeant" },
+  { value: "mbo",          label: "MBO, reprise par le management" },
+  { value: "build_up",     label: "Cession à un consolidateur" },
+  { value: "carve_out",    label: "Carve-out / filiale détourée" },
+  { value: "croissance",   label: "Adossement pour croissance" },
+  { value: "retournement", label: "Retournement / situation spéciale" },
+] as const;
+
+export type DealContext = (typeof DEAL_CONTEXTS)[number]["value"];
+
+/** Opérations que pratique un acquéreur (organizations.operation_types). */
+export const OPERATION_TYPES = [
+  { value: "succession",             label: "Reprise en transmission" },
+  { value: "mbi",                    label: "MBI, reprise en direct" },
+  { value: "mbo_sponsor",            label: "Sponsor de MBO" },
+  { value: "build_up",               label: "Build-up / consolidation" },
+  { value: "carve_out",              label: "Carve-out" },
+  { value: "minoritaire_croissance", label: "Minoritaire de croissance" },
+  { value: "retournement",           label: "Retournement" },
+] as const;
+
+export type OperationType = (typeof OPERATION_TYPES)[number]["value"];
+
+/** Position capitalistique de l'acquéreur (organizations.deal_stance). */
+export const DEAL_STANCES = [
+  { value: "majority", label: "Majoritaire uniquement" },
+  { value: "minority", label: "Minoritaire uniquement" },
+  { value: "both",     label: "Majoritaire ou minoritaire" },
+] as const;
+
+export type DealStance = (typeof DEAL_STANCES)[number]["value"];
+
+/**
+ * Compatibilité contexte du dossier → opérations de l'acquéreur.
+ * exact = cœur de métier (20 pts) ; compatible = jouable (12 pts) ;
+ * incompatible = structurellement impossible. Une opération déclarée
+ * absente des trois listes est traitée « compatible » (tolérance).
+ * Éliminatoire seulement si TOUTES les opérations déclarées sont
+ * incompatibles (décision grille 2026-07-30).
+ */
+export const CONTEXT_OPERATION_COMPAT: Record<DealContext, {
+  exact: OperationType[];
+  incompatible: OperationType[];
+}> = {
+  succession:   { exact: ["succession", "mbi", "build_up"],  incompatible: ["minoritaire_croissance"] },
+  mbo:          { exact: ["mbo_sponsor"],                    incompatible: ["mbi"] },
+  build_up:     { exact: ["build_up"],                       incompatible: [] },
+  carve_out:    { exact: ["carve_out"],                      incompatible: ["minoritaire_croissance"] },
+  croissance:   { exact: ["minoritaire_croissance"],         incompatible: ["mbi", "succession"] },
+  retournement: { exact: ["retournement"],                   incompatible: ["minoritaire_croissance"] },
+};
+
+/**
+ * Adjacences sectorielles (référentiel SECTORS) pour le score secteur du
+ * matching acquéreurs : exact 20, adjacent 12. Relation symétrique : le
+ * scorer teste les deux sens, chaque paire n'est déclarée qu'une fois.
+ */
+export const SECTOR_ADJACENCY: Record<string, string[]> = {
+  "Industrie":       ["Métallurgie", "Plasturgie", "Chimie", "Emballage", "Automobile", "Aéronautique", "Hardware", "Bois & Ameublement", "Textile", "Imprimerie"],
+  "Métallurgie":     ["Automobile", "Aéronautique"],
+  "Plasturgie":      ["Emballage", "Chimie"],
+  "Chimie":          ["Pharma", "CleanTech"],
+  "Textile":         ["Luxe"],
+  "Bois & Ameublement": ["BTP"],
+  "Emballage":       ["Imprimerie"],
+  "Imprimerie":      ["Média"],
+  "Pharma":          ["BioTech", "MedTech", "Healthtech"],
+  "Aéronautique":    ["Défense"],
+  "Défense":         ["Cybersécurité", "Sécurité privée"],
+  "Automobile":      ["Transport"],
+  "BTP":             ["Immobilier", "Infrastructure"],
+  "Immobilier":      ["Infrastructure", "PropTech"],
+  "Infrastructure":  ["Energie"],
+  "Négoce":          ["Retail", "Logistique", "Services B2B"],
+  "Retail":          ["Food", "Luxe", "Marketplace"],
+  "Food":            ["Agroalimentaire", "Hôtellerie-Restauration"],
+  "Agroalimentaire": ["Agriculture"],
+  "Transport":       ["Logistique"],
+  "Services B2B":    ["Conseil", "Propreté & Facility", "Sécurité privée", "Formation", "HRtech"],
+  "Conseil":         ["Formation"],
+  "Propreté & Facility": ["Sécurité privée"],
+  "Formation":       ["Edtech"],
+  "Santé & Médico-social": ["Healthtech", "MedTech"],
+  "Hôtellerie-Restauration": ["Sport"],
+  "Energie":         ["CleanTech"],
+  "SaaS":            ["Marketplace", "Fintech", "HRtech", "Edtech", "RegTech", "InsurTech", "Cybersécurité", "PropTech"],
+  "Fintech":         ["InsurTech", "RegTech"],
+  "Healthtech":      ["MedTech", "BioTech"],
+  "Deeptech":        ["Hardware", "BioTech", "CleanTech"],
+  "Média":           ["Sport"],
+};
+
+/** Adjacence symétrique entre deux secteurs du référentiel. */
+export function sectorsAreAdjacent(a: string, b: string): boolean {
+  if (!a || !b || a === b) return false;
+  return (SECTOR_ADJACENCY[a] ?? []).includes(b) || (SECTOR_ADJACENCY[b] ?? []).includes(a);
+}
+
 // ── Maturité cession M&A (organizations type = target) ───────────────────────
 
 export const SALE_READINESS_OPTIONS = [

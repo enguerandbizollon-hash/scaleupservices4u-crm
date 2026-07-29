@@ -62,6 +62,9 @@ export interface OrgFormInitialData {
   target_ebitda_min?: number | null;
   target_ebitda_max?: number | null;
   acquisition_history?: string | null;
+  operation_types?: string[];
+  deal_stance?: string | null;
+  acquirer_summary?: string | null;
 }
 
 interface OrganisationFormProps {
@@ -138,8 +141,10 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     excluded_sectors:      initialData.excluded_sectors ?? [],
   });
 
-  // Acquirer profile (type = buyer, corporate, private_equity)
-  const ACQUIRER_PROFILE_TYPES = ["buyer", "corporate"];
+  // Acquirer profile — les fonds et family offices sont des acquéreurs
+  // à part entière en small cap (décision phase 3) : ils portent les
+  // critères d'acquisition en plus de leur profil investisseur.
+  const ACQUIRER_PROFILE_TYPES = ["buyer", "corporate", "investor", "family_office"];
   const [acquirerData, setAcquirerData] = useState<AcquirerProfileData>({
     acquirer_type:           initialData.acquirer_type ?? "",
     acquisition_motivations: initialData.acquisition_motivations ?? [],
@@ -150,6 +155,9 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     target_ebitda_min:       initialData.target_ebitda_min ?? null,
     target_ebitda_max:       initialData.target_ebitda_max ?? null,
     acquisition_history:     initialData.acquisition_history ?? "",
+    operation_types:         initialData.operation_types ?? [],
+    deal_stance:             initialData.deal_stance ?? "",
+    acquirer_summary:        initialData.acquirer_summary ?? "",
   });
 
   const isInvestorType     = INVESTOR_TYPES.includes(orgType);
@@ -217,6 +225,9 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       target_ebitda_min:       isAcquirerType ? acquirerData.target_ebitda_min : null,
       target_ebitda_max:       isAcquirerType ? acquirerData.target_ebitda_max : null,
       acquisition_history:     isAcquirerType ? (acquirerData.acquisition_history.trim() || null) : null,
+      operation_types:         isAcquirerType ? acquirerData.operation_types : [],
+      deal_stance:             isAcquirerType ? (acquirerData.deal_stance || null) : null,
+      acquirer_summary:        isAcquirerType ? (acquirerData.acquirer_summary.trim() || null) : null,
     };
 
     try {

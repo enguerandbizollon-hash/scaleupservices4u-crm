@@ -28,6 +28,7 @@ export interface DealInput {
   partial_sale_ok?: boolean;
   management_retention?: boolean;
   deal_timing?: string | null;
+  deal_context?: string | null;
   // M&A Buy-side
   target_sectors?: string[];
   target_geographies?: string[];
@@ -171,6 +172,7 @@ export async function createDeal(data: DealInput): Promise<DealActionResult> {
     partial_sale_ok:      data.partial_sale_ok      ?? true,
     management_retention: data.management_retention ?? true,
     deal_timing:          data.deal_timing          ?? null,
+    deal_context:         data.deal_context         ?? null,
     // M&A Buy-side
     target_sectors:            data.target_sectors            ?? [],
     target_geographies:        data.target_geographies        ?? [],
@@ -416,7 +418,7 @@ const DATE_FIELDS = new Set<string>([
 
 const SELECT_FIELDS = new Set<string>([
   "deal_status", "priority_level", "currency",
-  "deal_timing", "company_stage", "company_geography",
+  "deal_timing", "deal_context", "company_stage", "company_geography",
   "target_stage",
   "success_fee_base",
 ]);

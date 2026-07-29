@@ -20,7 +20,8 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       acquisition_rationale, target_sectors, excluded_sectors,
       target_geographies, target_revenue_min, target_revenue_max,
       acquirer_type, acquisition_motivations,
-      target_ebitda_min, target_ebitda_max, acquisition_history
+      target_ebitda_min, target_ebitda_max, acquisition_history,
+      operation_types, deal_stance, acquirer_summary
     `)
     .eq("id", id)
     .maybeSingle();
@@ -69,6 +70,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
         target_ebitda_min:       (o.target_ebitda_min as number) ?? null,
         target_ebitda_max:       (o.target_ebitda_max as number) ?? null,
         acquisition_history:     (o.acquisition_history as string) ?? null,
+        operation_types:         (o.operation_types as string[]) ?? [],
+        deal_stance:             (o.deal_stance as string) ?? null,
+        acquirer_summary:        (o.acquirer_summary as string) ?? null,
       }}
     />
   );
