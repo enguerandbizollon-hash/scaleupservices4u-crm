@@ -311,7 +311,29 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
 
               <div style={{ marginTop:10 }}><TagInput objectType="deal" objectId={deal.id} /></div>
             </div>
-            <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+            <div style={{ display:"flex", gap:8, flexShrink:0, flexWrap:"wrap" }}>
+              {deal.deal_type === "ma_sell" && (
+                <>
+                  <a
+                    href={`/protected/dossiers/${deal.id}/teaser`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Teaser anonymisé du dossier (généré par l'IA, contrôlé par vous)"
+                    style={{ padding:"8px 16px", borderRadius:9, background:"#0F766E", border:"1px solid #0F766E", fontSize:13, color:"#fff", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}
+                  >
+                    Teaser
+                  </a>
+                  <a
+                    href={`/protected/dossiers/${deal.id}/liste-acquereurs`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Liste d'acquéreurs scorée, imprimable, toujours à jour"
+                    style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}
+                  >
+                    Liste acquéreurs
+                  </a>
+                </>
+              )}
               <a
                 href={`/protected/dossiers/${deal.id}/export?print=1`}
                 target="_blank"
