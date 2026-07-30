@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   X, Loader2, Building2, FolderPlus, ExternalLink, Gauge, ArrowUpRight,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import {
   getUniversFicheDetail, createDossierFromUnivers, promoteUniversToOrganization,
@@ -34,12 +35,18 @@ function fmtDateFr(iso: string | null | undefined) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("fr-FR");
 }
 
-export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLocalStatut }: {
+type FicheNav = { siren: string; nom: string; statut: string };
+
+export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLocalStatut, prevFiche = null, nextFiche = null, onNavigate }: {
   siren: string;
   nomSeed: string;
   statutSeed: string;
   onClose: () => void;
   onLocalStatut: (siren: string, statut: string) => void;
+  /** Voisins dans l'ordre de la liste : revue fiche à fiche sans fermer. */
+  prevFiche?: FicheNav | null;
+  nextFiche?: FicheNav | null;
+  onNavigate?: (fiche: FicheNav) => void;
 }) {
   const [detail, setDetail] = useState<UniversFicheDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -52,6 +59,14 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
 
   useEffect(() => {
     let alive = true;
+    // Navigation fiche à fiche : on repart d'un tiroir propre.
+    setDetail(null);
+    setLoadError(null);
+    setActionError(null);
+    setCreatedNote(null);
+    setEnrichError(null);
+    setEnrichNote(null);
+    setStatut(statutSeed);
     getUniversFicheDetail(siren).then((res) => {
       if (!alive) return;
       if (res.success) {
@@ -62,13 +77,22 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
       }
     });
     return () => { alive = false; };
+    // statutSeed volontairement hors dépendances : seul le SIREN déclenche.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siren]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      // Flèches : revue fiche à fiche, sauf pendant une saisie.
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
+      if (e.key === "ArrowLeft" && prevFiche && onNavigate) onNavigate(prevFiche);
+      if (e.key === "ArrowRight" && nextFiche && onNavigate) onNavigate(nextFiche);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, prevFiche, nextFiche, onNavigate]);
 
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
@@ -196,6 +220,20 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
               <option key={v} value={v} disabled={v === "promu"}>{m.label}</option>
             ))}
           </select>
+          {onNavigate && (prevFiche || nextFiche) && (
+            <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+              <button onClick={() => prevFiche && onNavigate(prevFiche)} disabled={!prevFiche}
+                title="Fiche précédente (flèche gauche)" aria-label="Fiche précédente"
+                style={{ all: "unset", cursor: prevFiche ? "pointer" : "default", color: prevFiche ? "var(--text-3)" : "var(--text-6)", display: "flex", padding: 2, opacity: prevFiche ? 1 : 0.35 }}>
+                <ChevronLeft size={17} />
+              </button>
+              <button onClick={() => nextFiche && onNavigate(nextFiche)} disabled={!nextFiche}
+                title="Fiche suivante (flèche droite)" aria-label="Fiche suivante"
+                style={{ all: "unset", cursor: nextFiche ? "pointer" : "default", color: nextFiche ? "var(--text-3)" : "var(--text-6)", display: "flex", padding: 2, opacity: nextFiche ? 1 : 0.35 }}>
+                <ChevronRight size={17} />
+              </button>
+            </span>
+          )}
           <button onClick={onClose} aria-label="Fermer"
             style={{ all: "unset", cursor: "pointer", color: "var(--text-4)", display: "flex", padding: 2 }}>
             <X size={17} />

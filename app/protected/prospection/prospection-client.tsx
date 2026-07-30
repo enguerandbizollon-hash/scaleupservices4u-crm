@@ -762,15 +762,25 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
           </div>
         )}
 
-        {openedFiche && (
-          <FicheUniversDrawer
-            siren={openedFiche.siren}
-            nomSeed={openedFiche.nom}
-            statutSeed={localStatuts[openedFiche.siren] ?? openedFiche.statut}
-            onClose={() => setOpenedFiche(null)}
-            onLocalStatut={(siren, statut) => setLocalStatuts(prev => ({ ...prev, [siren]: statut }))}
-          />
-        )}
+        {openedFiche && (() => {
+          // Revue fiche à fiche (cran 2) : voisins dans l'ordre de la page.
+          const idx = univers.findIndex(u => u.siren === openedFiche.siren);
+          const toFiche = (u: UniversRow) => ({ siren: u.siren, nom: u.nom, statut: localStatuts[u.siren] ?? u.statut });
+          const prev = idx > 0 ? toFiche(univers[idx - 1]) : null;
+          const next = idx >= 0 && idx < univers.length - 1 ? toFiche(univers[idx + 1]) : null;
+          return (
+            <FicheUniversDrawer
+              siren={openedFiche.siren}
+              nomSeed={openedFiche.nom}
+              statutSeed={localStatuts[openedFiche.siren] ?? openedFiche.statut}
+              onClose={() => setOpenedFiche(null)}
+              onLocalStatut={(siren, statut) => setLocalStatuts(prev2 => ({ ...prev2, [siren]: statut }))}
+              prevFiche={prev}
+              nextFiche={next}
+              onNavigate={f => setOpenedFiche(f)}
+            />
+          );
+        })()}
       </div>
     </div>
   );
