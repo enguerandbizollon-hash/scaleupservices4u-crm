@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {
   getUniversFicheDetail, createDossierFromUnivers, promoteUniversToOrganization,
-  updateUniversStatut, enrichFicheFromPappers,
+  updateUniversStatut, enrichProspect360,
   type UniversFicheDetail, type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -74,18 +74,18 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
 
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [enrichNote, setEnrichNote] = useState<string | null>(null);
 
-  async function handlePappers() {
+  async function handleEnrich360() {
     if (enriching) return;
     setEnriching(true);
     setEnrichError(null);
-    const res = await enrichFicheFromPappers(siren);
+    setEnrichNote(null);
+    const res = await enrichProspect360(siren);
     if (res.success) {
       const fresh = await getUniversFicheDetail(siren);
       if (fresh.success) setDetail(fresh.data);
-      if (res.data.beneficiaires === 0) {
-        setEnrichError("Pappers n'a renvoyé aucun bénéficiaire effectif pour ce SIREN.");
-      }
+      if (res.data.pappers_note) setEnrichNote(`Pappers : ${res.data.pappers_note}`);
     } else {
       setEnrichError(res.error);
     }
@@ -205,6 +205,44 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
 
           {detail && (
             <>
+              {/* Fiche 360 : la synthèse M&A d'abord, c'est elle qu'on lit */}
+              <div style={sectionTitle}>Synthèse M&amp;A</div>
+              {detail.synthese ? (
+                <div style={{ padding: "11px 13px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                  <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                    {detail.synthese}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                    {detail.synthese_updated_at && (
+                      <span style={{ fontSize: 10.5, color: "var(--text-5)" }}>Générée le {fmtDateFr(detail.synthese_updated_at)}</span>
+                    )}
+                    <button onClick={handleEnrich360} disabled={enriching}
+                      style={{ all: "unset", cursor: "pointer", fontSize: 11, color: "var(--text-4)", textDecoration: "underline" }}>
+                      {enriching ? "Régénération…" : "Régénérer"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                  <button onClick={handleEnrich360} disabled={enriching}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: "#0F766E", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: enriching ? 0.6 : 1 }}>
+                    {enriching ? <Loader2 size={12} className="animate-spin" /> : <Gauge size={12} />}
+                    {enriching ? "Enrichissement…" : "Générer la fiche 360"}
+                  </button>
+                  <span style={{ fontSize: 11, color: "var(--text-5)" }}>Recherche web + Pappers + synthèse rédigée, quelques centimes</span>
+                </div>
+              )}
+              {enrichError && (
+                <div style={{ fontSize: 12, color: "#991B1B", background: "#FEF2F2", borderRadius: 8, padding: "6px 10px" }}>
+                  {enrichError}
+                </div>
+              )}
+              {enrichNote && (
+                <div style={{ fontSize: 11.5, color: "#92400E", background: "#FEF3C7", borderRadius: 8, padding: "5px 10px" }}>
+                  {enrichNote}
+                </div>
+              )}
+
               {/* Radar */}
               <div style={sectionTitle}><Gauge size={11} style={{ verticalAlign: "-1px", marginRight: 4 }} />Radar de cédabilité</div>
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
@@ -319,18 +357,8 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
                   )}
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-                  <button onClick={handlePappers} disabled={enriching}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: enriching ? 0.6 : 1 }}>
-                    {enriching ? <Loader2 size={12} className="animate-spin" /> : <Building2 size={12} />}
-                    {enriching ? "Récupération…" : "Récupérer l'actionnariat (Pappers)"}
-                  </button>
-                  <span style={{ fontSize: 11, color: "var(--text-5)" }}>Répartition du capital et âges, 1 jeton Pappers</span>
-                </div>
-              )}
-              {enrichError && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#991B1B", background: "#FEF2F2", borderRadius: 8, padding: "6px 10px" }}>
-                  {enrichError}
+                <div style={{ fontSize: 12, color: "var(--text-5)" }}>
+                  Répartition du capital et âges : s&apos;alimente avec la fiche 360 (Pappers requis).
                 </div>
               )}
 
@@ -377,6 +405,12 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
               {/* Liens sources */}
               <div style={sectionTitle}>Sources externes</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {detail.website && (
+                  <a href={detail.website} target="_blank" rel="noreferrer"
+                    style={{ ...extBtn, border: "1px solid #0F766E", color: "#0F766E", fontWeight: 700 }}>
+                    <ExternalLink size={11} /> Site officiel
+                  </a>
+                )}
                 <a href={`https://annuaire-entreprises.data.gouv.fr/entreprise/${siren}`} target="_blank" rel="noreferrer" style={extBtn}>
                   <ExternalLink size={11} /> Annuaire des entreprises
                 </a>

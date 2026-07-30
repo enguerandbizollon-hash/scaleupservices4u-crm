@@ -25,6 +25,7 @@ import {
   isPappersConfigured,
   type ActionnaireNormalise,
 } from "@/lib/connectors/pappers";
+import { generateProspectBrief } from "@/lib/ai/prospect-brief";
 
 const UPSERT_BATCH = 500;
 
@@ -449,6 +450,9 @@ export interface UniversFicheDetail {
   first_seen_at: string;
   actionnariat: ActionnaireNormalise[] | null;
   actionnariat_updated_at: string | null;
+  website: string | null;
+  synthese: string | null;
+  synthese_updated_at: string | null;
   signaux: UniversSignalItem[];
   deal: { id: string; name: string } | null;
 }
@@ -462,7 +466,7 @@ export async function getUniversFicheDetail(
 
   const { data: fiche, error } = await supabase
     .from("univers_entreprises")
-    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at, actionnariat, actionnariat_updated_at")
+    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at, actionnariat, actionnariat_updated_at, website, synthese, synthese_updated_at")
     .eq("siren", siren)
     .maybeSingle();
   if (error) return { success: false, error: error.message };
@@ -540,6 +544,83 @@ function financialRowsFromFiche(
       return hasData ? row : null;
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
+}
+
+/**
+ * Enrichissement 360 d'une fiche prospect (Deal OS, chantier B2) : en un
+ * geste, Pappers si disponible (actionnariat + finances profondes,
+ * tolérant aux échecs), puis recherche web + synthèse M&A rédigée par
+ * l'IA (site officiel, activité, gouvernance, angle d'approche).
+ * L'IA propose, l'utilisateur contrôle.
+ */
+export async function enrichProspect360(
+  siren: string,
+): Promise<ProspectionActionResult<{ website: string | null; pappers_note: string | null }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  // 1. Pappers d'abord (la synthèse profite de l'actionnariat), sans bloquer.
+  let pappersNote: string | null = null;
+  if (isPappersConfigured()) {
+    const p = await enrichFicheFromPappers(siren);
+    if (!p.success) pappersNote = p.error;
+  } else {
+    pappersNote = "Pappers non configuré";
+  }
+
+  // 2. Relire la fiche fraîche + les signaux du SIREN.
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, naf, secteur, ville, departement, date_creation, effectif_label, finances, dirigeants, actionnariat, cedabilite_raisons, website")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const { data: signaux } = await supabase
+    .from("signaux")
+    .select("signal_type, signal_date, titre")
+    .eq("siren", siren)
+    .order("signal_date", { ascending: false })
+    .limit(5);
+
+  // 3. Synthèse M&A avec recherche web.
+  const brief = await generateProspectBrief({
+    nom: fiche.nom,
+    siren: fiche.siren,
+    naf: fiche.naf,
+    secteur: fiche.secteur,
+    ville: fiche.ville,
+    departement: fiche.departement,
+    date_creation: fiche.date_creation,
+    effectif_label: fiche.effectif_label,
+    finances: fiche.finances ?? {},
+    dirigeants: (fiche.dirigeants ?? []) as UniversDirigeant[],
+    actionnariat: (fiche.actionnariat ?? null) as ActionnaireNormalise[] | null,
+    cedabilite_raisons: fiche.cedabilite_raisons,
+    signaux: (signaux ?? []) as { signal_type: string; signal_date: string; titre: string }[],
+  });
+  if (!brief) {
+    return {
+      success: false,
+      error: `Synthèse impossible (IA indisponible ou réponse invalide)${pappersNote ? ` · Pappers : ${pappersNote}` : ""}`,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: upErr } = await supabase
+    .from("univers_entreprises")
+    .update({
+      website: brief.website ?? fiche.website ?? null,
+      synthese: brief.synthese,
+      synthese_updated_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("siren", siren);
+  if (upErr) return { success: false, error: upErr.message };
+
+  revalidatePath("/protected/prospection");
+  return { success: true, data: { website: brief.website ?? fiche.website ?? null, pappers_note: pappersNote } };
 }
 
 /**
