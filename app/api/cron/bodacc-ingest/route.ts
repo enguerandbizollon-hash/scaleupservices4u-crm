@@ -24,6 +24,7 @@ import {
   normalizeAnnonce,
   type NormalizedSignal,
 } from "@/lib/connectors/bodacc";
+import { recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -40,9 +41,11 @@ type Supabase = ReturnType<typeof createAdminClient>;
 async function loadKnownSirens(supabase: Supabase): Promise<{
   known: Set<string>;
   orgBySiren: Map<string, string>;
+  universSirens: Set<string>;
 }> {
   const known = new Set<string>();
   const orgBySiren = new Map<string, string>();
+  const universSirens = new Set<string>();
 
   const { data: orgs } = await supabase
     .from("organizations")
@@ -61,11 +64,14 @@ async function loadKnownSirens(supabase: Supabase): Promise<{
       .from("univers_entreprises")
       .select("siren")
       .range(from, from + 999);
-    for (const u of page ?? []) known.add(u.siren);
+    for (const u of page ?? []) {
+      known.add(u.siren);
+      universSirens.add(u.siren);
+    }
     if (!page || page.length < 1000) break;
   }
 
-  return { known, orgBySiren };
+  return { known, orgBySiren, universSirens };
 }
 
 async function upsertSignals(
@@ -121,7 +127,11 @@ export async function GET(req: Request) {
   const errors: string[] = [];
   const perFamille: Record<string, { fetched: number; inserted: number; skipped: number }> = {};
 
-  const { known, orgBySiren } = await loadKnownSirens(supabase);
+  const { known, orgBySiren, universSirens } = await loadKnownSirens(supabase);
+  // Fiches univers touchées par un signal de la fenêtre : leur radar est
+  // recalculé en fin de run (une procédure collective ou une cession doit
+  // refroidir la fiche le jour même, pas au prochain recalcul manuel).
+  const touchedUnivers = new Set<string>();
 
   // ── 1. Familles ingérées en entier ────────────────────────────────────────
   for (const famille of FULL_INGEST_FAMILLES) {
@@ -130,6 +140,7 @@ export async function GET(req: Request) {
       const normalized = raw
         .map(normalizeAnnonce)
         .filter((s): s is NormalizedSignal => s !== null);
+      for (const s of normalized) if (universSirens.has(s.siren)) touchedUnivers.add(s.siren);
       const res = await upsertSignals(supabase, normalized, orgBySiren);
       perFamille[famille] = { fetched: raw.length, inserted: res.inserted, skipped: res.skipped };
       errors.push(...res.errors);
@@ -146,6 +157,7 @@ export async function GET(req: Request) {
       .map(normalizeAnnonce)
       .filter((s): s is NormalizedSignal => s !== null)
       .filter((s) => s.sirens.some((x) => known.has(x)));
+    for (const s of normalized) if (universSirens.has(s.siren)) touchedUnivers.add(s.siren);
     const res = await upsertSignals(supabase, normalized, orgBySiren);
     perFamille[CROSS_ONLY_FAMILLE] = {
       fetched: raw.length,
@@ -156,6 +168,14 @@ export async function GET(req: Request) {
   } catch (e) {
     errors.push(`${CROSS_ONLY_FAMILLE}: ${e instanceof Error ? e.message : "erreur"}`);
     perFamille[CROSS_ONLY_FAMILLE] = { fetched: 0, inserted: 0, skipped: 0 };
+  }
+
+  // ── 2 bis. Radar : rescorer les fiches univers touchées ──────────────────
+  let radarRescored = 0;
+  if (touchedUnivers.size > 0) {
+    const rec = await recomputeCedabiliteForSirens(supabase, [...touchedUnivers]);
+    radarRescored = rec.scored;
+    errors.push(...rec.errors.map((m) => `radar: ${m}`));
   }
 
   // ── 3. Purge des signaux non rattachés > 12 mois ──────────────────────────
@@ -171,6 +191,7 @@ export async function GET(req: Request) {
     window: { fromDate, toDate, days },
     known_sirens: known.size,
     perFamille,
+    radar_rescored: radarRescored,
     purged,
     errors,
   });

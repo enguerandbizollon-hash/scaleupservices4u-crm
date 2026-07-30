@@ -19,7 +19,8 @@ import {
   runScreening,
   type ScreeningFilters,
 } from "@/lib/connectors/recherche-entreprises";
-import { sectorFromNaf } from "@/lib/crm/matching-maps";
+import { universRowFromHit } from "@/lib/crm/univers-ingest";
+import { fetchSignalTypesBySiren, scoreUniversRows } from "@/lib/crm/cedabilite-ingest";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -83,27 +84,11 @@ export async function GET(req: Request) {
       const sirens = run.hits.map((h) => h.raw.siren);
       const known = await existingSirens(supabase, sirens);
 
-      // 1. Rafraîchir l'univers (statut et first_seen_at préservés).
-      const rows = run.hits.map((h) => {
-        const naf = h.normalized.activite_principale_code;
-        return {
-          siren: h.raw.siren,
-          nom: h.normalized.name,
-          naf,
-          secteur: naf ? sectorFromNaf(naf) : null,
-          departement: h.raw.siege?.departement ?? h.normalized.postal_code?.slice(0, 2) ?? null,
-          ville: h.normalized.city,
-          date_creation: h.raw.date_creation ?? null,
-          effectif_code: h.raw.tranche_effectif_salarie ?? null,
-          effectif_label: h.normalized.effectif_label,
-          categorie: h.normalized.category,
-          finances: h.raw.finances ?? {},
-          age_dirigeant_principal: h.dirigeant_principal?.age ?? null,
-          source_profile_id: profile.id,
-          last_seen_at: nowIso,
-          updated_at: nowIso,
-        };
-      });
+      // 1. Rafraîchir l'univers (statut et first_seen_at préservés), radar
+      //    calculé à l'ingestion : la veille rescore chaque fiche revue.
+      const bruts = run.hits.map((h) => universRowFromHit(h, profile.id, nowIso));
+      const typesBySiren = await fetchSignalTypesBySiren(supabase, bruts.map((r) => r.siren));
+      const rows = scoreUniversRows(bruts, typesBySiren);
       for (let i = 0; i < rows.length; i += BATCH) {
         const { error } = await supabase
           .from("univers_entreprises")

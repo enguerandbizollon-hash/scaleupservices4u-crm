@@ -14,10 +14,10 @@ import {
   findDirigeantPrincipal,
   runScreening,
   type ScreeningFilters,
-  type ScreeningHit,
 } from "@/lib/connectors/recherche-entreprises";
-import { sectorFromNaf } from "@/lib/crm/matching-maps";
 import { computeCedabilite } from "@/lib/crm/cedabilite";
+import { fetchSignalTypesBySiren, scoreUniversRows } from "@/lib/crm/cedabilite-ingest";
+import { universRowFromHit } from "@/lib/crm/univers-ingest";
 import {
   fetchEntreprisePappers,
   normalizeBeneficiaires,
@@ -133,39 +133,7 @@ export async function countScreeningAction(
 }
 
 // ── Exécution → univers ──────────────────────────────────────────────────────
-
-function universRowFromHit(hit: ScreeningHit, profileId: string | null, nowIso: string) {
-  const { raw, normalized } = hit;
-  const naf = normalized.activite_principale_code;
-  const dirigeants = (raw.dirigeants ?? [])
-    .filter((d) => !d.denomination && d.nom)
-    .map((d) => ({
-      nom: d.nom ?? null,
-      prenoms: d.prenoms ?? null,
-      qualite: d.qualite ?? d.type_dirigeant ?? null,
-      date_de_naissance: d.date_de_naissance ?? null,
-    }));
-
-  return {
-    siren: raw.siren,
-    nom: normalized.name,
-    naf,
-    secteur: naf ? sectorFromNaf(naf) : null,
-    departement: raw.siege?.departement ?? normalized.postal_code?.slice(0, 2) ?? null,
-    ville: normalized.city,
-    date_creation: raw.date_creation ?? null,
-    effectif_code: raw.tranche_effectif_salarie ?? null,
-    effectif_label: normalized.effectif_label,
-    categorie: normalized.category,
-    finances: raw.finances ?? {},
-    dirigeants,
-    age_dirigeant_principal: hit.dirigeant_principal?.age ?? null,
-    source_profile_id: profileId,
-    last_seen_at: nowIso,
-    updated_at: nowIso,
-    // statut et first_seen_at ABSENTS volontairement : préservés à l'upsert.
-  };
-}
+// Mapping hit → ligne : lib/crm/univers-ingest.ts (partagé avec la veille).
 
 export interface ProspectionRunSummary {
   imported: number;
@@ -197,7 +165,12 @@ export async function runScreeningIngest(input: {
 
     const result = await runScreening(input.filters, { maxResults: 10_000 });
     const nowIso = new Date().toISOString();
-    const rows = result.hits.map((h) => universRowFromHit(h, input.profileId ?? null, nowIso));
+    const bruts = result.hits.map((h) => universRowFromHit(h, input.profileId ?? null, nowIso));
+
+    // Radar calculé à l'ingestion (cran 1) : chaque fiche ressort scorée,
+    // signaux BODACC croisés, sans attendre le bouton de recalcul.
+    const typesBySiren = await fetchSignalTypesBySiren(supabase, bruts.map((r) => r.siren));
+    const rows = scoreUniversRows(bruts, typesBySiren);
 
     for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
       const { error } = await supabase
@@ -253,16 +226,7 @@ export async function recomputeCedabilite(): Promise<ProspectionActionResult<{ s
     if (error) return { success: false, error: error.message };
     if (!page || page.length === 0) break;
 
-    const { data: sigs } = await supabase
-      .from("signaux")
-      .select("siren, signal_type")
-      .in("siren", page.map((p) => p.siren));
-    const typesBySiren = new Map<string, string[]>();
-    for (const s of sigs ?? []) {
-      const arr = typesBySiren.get(s.siren) ?? [];
-      arr.push(s.signal_type);
-      typesBySiren.set(s.siren, arr);
-    }
+    const typesBySiren = await fetchSignalTypesBySiren(supabase, page.map((p) => p.siren));
 
     const updates = page.map((f) => {
       const r = computeCedabilite(

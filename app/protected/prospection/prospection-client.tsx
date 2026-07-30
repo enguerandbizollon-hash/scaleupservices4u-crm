@@ -485,6 +485,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
             <Gauge size={12} /> Tri radar
           </Link>
           <button onClick={handleRecompute} disabled={scoring}
+            title="Filet de sécurité : le radar se calcule désormais tout seul à chaque chasse, veille hebdo et signal BODACC. Ce bouton force un recalcul complet de l'univers."
             style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", cursor: "pointer", fontFamily: "inherit", opacity: scoring ? 0.6 : 1 }}>
             {scoring ? <Loader2 size={11} className="animate-spin" /> : <Gauge size={11} />}
             {scoring ? "Calcul…" : "Recalculer le radar"}
@@ -535,7 +536,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
                   const band = cedabiliteBand(u.cedabilite_score);
                   return (
                     <span
-                      title={(u.cedabilite_raisons ?? []).join("\n") || "Lancez « Recalculer le radar »"}
+                      title={(u.cedabilite_raisons ?? []).join("\n") || "Pas encore scorée : le radar se calcule tout seul à la prochaine chasse ou veille."}
                       style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: band.bg, color: band.tx, flexShrink: 0, cursor: "help", minWidth: 46, textAlign: "center" }}>
                       {u.cedabilite_score != null ? u.cedabilite_score : "—"}
                     </span>

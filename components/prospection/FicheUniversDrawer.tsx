@@ -257,7 +257,7 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
                     </ul>
                   ) : (
                     <div style={{ fontSize: 11.5, color: "var(--text-5)", marginTop: 2 }}>
-                      Lancez « Recalculer le radar » pour scorer cette fiche.
+                      Pas encore scorée : le radar se calcule tout seul à la prochaine chasse ou veille.
                     </div>
                   )}
                 </div>
