@@ -5,19 +5,36 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, BarChart2, CalendarDays, CheckSquare, Inbox, Radar, Crosshair } from "lucide-react";
 
-const NAV = [
-  { href:"/protected",               label:"Dashboard",     dot:"#3468B0", bg:"rgba(52,104,176,.18)",  icon:LayoutDashboard },
-  { href:"/protected/dossiers",      label:"Dossiers",      dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
-  { href:"/protected/prospection",   label:"Prospection",   dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:Crosshair },
-  { href:"/protected/signaux",       label:"Signaux",       dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Radar },
-  { href:"/protected/contacts",      label:"Contacts",      dot:"#A8306A", bg:"rgba(168,48,106,.18)",  icon:Users },
-  { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
-  { href:"/protected/taches",        label:"Tâches",        dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },
-  { href:"/protected/inbox",         label:"Boîte de tri",  dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
-  { href:"/protected/agenda",        label:"Agenda",        dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:CalendarDays },
-  { href:"/protected/statistiques",  label:"Statistiques",  dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:BarChart2 },
-  { href:"/protected/import",        label:"Import",        dot:"#1E7A4A", bg:"rgba(30,122,74,.18)",   icon:Upload },
-  { href:"/protected/connecteurs",    label:"Connecteurs",   dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
+// Navigation en moments du métier (Deal OS, chantier D) : le menu suit le
+// flux de travail, pas l'historique des modules. Aucune page supprimée,
+// tout est rangé : Trouver (la machine à mandats), Exécuter (le quotidien),
+// Annuaire (le référentiel), Outillage (l'occasionnel).
+const NAV_GROUPS: Array<{
+  title: string | null;
+  items: Array<{ href: string; label: string; dot: string; bg: string; icon: typeof LayoutDashboard }>;
+}> = [
+  { title: null, items: [
+    { href:"/protected",               label:"Dashboard",     dot:"#3468B0", bg:"rgba(52,104,176,.18)",  icon:LayoutDashboard },
+  ]},
+  { title: "Trouver", items: [
+    { href:"/protected/prospection",   label:"Prospection",   dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:Crosshair },
+    { href:"/protected/signaux",       label:"Signaux",       dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Radar },
+  ]},
+  { title: "Exécuter", items: [
+    { href:"/protected/dossiers",      label:"Dossiers",      dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
+    { href:"/protected/taches",        label:"Tâches",        dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },
+    { href:"/protected/agenda",        label:"Agenda",        dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:CalendarDays },
+    { href:"/protected/inbox",         label:"Boîte de tri",  dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
+  ]},
+  { title: "Annuaire", items: [
+    { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
+    { href:"/protected/contacts",      label:"Contacts",      dot:"#A8306A", bg:"rgba(168,48,106,.18)",  icon:Users },
+  ]},
+  { title: "Outillage", items: [
+    { href:"/protected/statistiques",  label:"Statistiques",  dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:BarChart2 },
+    { href:"/protected/import",        label:"Import",        dot:"#1E7A4A", bg:"rgba(30,122,74,.18)",   icon:Upload },
+    { href:"/protected/connecteurs",   label:"Connecteurs",   dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
+  ]},
 ];
 
 export function SidebarNav({ taskCounts, inboxCount }: { taskCounts?: { overdue: number; today: number }; inboxCount?: number }) {
@@ -34,8 +51,14 @@ export function SidebarNav({ taskCounts, inboxCount }: { taskCounts?: { overdue:
       <NotificationBell/>
 
       <nav style={{ flex:1, overflowY:"auto", padding:"4px 10px" }}>
-        <div style={{ fontSize:9, fontWeight:800, letterSpacing:".14em", color:"rgba(255,255,255,.2)", padding:"0 8px 10px", textTransform:"uppercase" }}>Navigation</div>
-        {NAV.map(item => {
+        {NAV_GROUPS.map((group, gi) => (
+        <div key={group.title ?? "top"}>
+        {group.title && (
+          <div style={{ fontSize:9, fontWeight:800, letterSpacing:".14em", color:"rgba(255,255,255,.25)", padding:`${gi === 0 ? 0 : 12}px 8px 6px`, textTransform:"uppercase" }}>
+            {group.title}
+          </div>
+        )}
+        {group.items.map(item => {
           const Icon = item.icon;
           const active = path === item.href || (item.href !== "/protected" && path.startsWith(item.href));
           const isTaches = item.href === "/protected/taches";
@@ -76,6 +99,8 @@ export function SidebarNav({ taskCounts, inboxCount }: { taskCounts?: { overdue:
             </Link>
           );
         })}
+        </div>
+        ))}
 
         {/* IA special */}
         <Link href="/protected/ia" style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 11px", borderRadius:10, marginTop:8, fontSize:13, fontWeight:600, color:"rgba(255,255,255,.9)", background:"linear-gradient(135deg,rgba(52,104,176,.3),rgba(90,140,208,.2))", border:"1px solid rgba(90,140,208,.3)", textDecoration:"none" }}>
