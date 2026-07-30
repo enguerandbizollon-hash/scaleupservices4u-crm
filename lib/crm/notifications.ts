@@ -11,7 +11,8 @@ export type NotificationKind =
   | "fee_overdue"
   | "task_due"
   | "veille_profil"
-  | "screening_draft";
+  | "screening_draft"
+  | "reveil_cedant";
 
 export type NotificationSourceType =
   | "action"

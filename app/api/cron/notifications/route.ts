@@ -202,12 +202,69 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── Job 4 : réveil des cédants dormants (v72) ─────────────────────────────
+  // Une fiche univers mise en dormance (« pas maintenant, recontactez-moi
+  // plus tard ») revient TOUTE SEULE dans le triage à sa date de réveil :
+  // notification avec deep-link fiche 360, puis statut → a_approcher.
+  // Pas de dédup nécessaire : le changement de statut sort la fiche du scan.
+  let wokenCedants = 0;
+  {
+    const { data: dormantes, error: dormErr } = await supabase
+      .from("univers_entreprises")
+      .select("siren, nom, dormant_until, approche_note, source_profile_id")
+      .eq("statut", "dormant")
+      .not("dormant_until", "is", null)
+      .lte("dormant_until", today)
+      .limit(200);
+
+    if (dormErr) {
+      errors.push(`reveil query: ${dormErr.message}`);
+    } else if (dormantes && dormantes.length > 0) {
+      // L'univers n'a pas de user_id : destinataire = propriétaire du profil
+      // de chasse source, repli sur le premier profil existant (mono-user en
+      // pratique).
+      const { data: profils } = await supabase
+        .from("screening_profiles")
+        .select("id, user_id")
+        .order("created_at", { ascending: true });
+      const userByProfile = new Map<string, string>((profils ?? []).map((p) => [p.id as string, p.user_id as string]));
+      const fallbackUser = (profils ?? [])[0]?.user_id as string | undefined;
+
+      for (const f of dormantes) {
+        const userId = (f.source_profile_id && userByProfile.get(f.source_profile_id)) || fallbackUser;
+        if (!userId) {
+          errors.push(`reveil ${f.siren}: aucun utilisateur destinataire (aucun profil de chasse)`);
+          continue;
+        }
+        const res = await enqueueNotification(supabase, {
+          user_id: userId,
+          kind: "reveil_cedant",
+          title: `Réveil : ${f.nom}`,
+          body: `Vous vouliez recontacter ce cédant aujourd'hui.${f.approche_note ? ` Note : ${f.approche_note}` : ""}`,
+          link_url: `/protected/prospection?fiche=${f.siren}`,
+          trigger_date: today,
+        });
+        if (res.error) {
+          errors.push(`reveil ${f.siren}: ${res.error}`);
+          continue;
+        }
+        const { error: upErr } = await supabase
+          .from("univers_entreprises")
+          .update({ statut: "a_approcher", dormant_until: null, updated_at: new Date().toISOString() })
+          .eq("siren", f.siren);
+        if (upErr) errors.push(`reveil ${f.siren}: ${upErr.message}`);
+        else wokenCedants++;
+      }
+    }
+  }
+
   await finishCronRun(supabase, runId, {
     ok: errors.length === 0,
     summary: {
       actions: { scanned: scannedActions, queued: queuedActions },
       milestones: { scanned: scannedMilestones, queued: queuedMilestones },
       rgpd: { scanned: scannedRgpd, queued: queuedRgpd },
+      reveils_cedants: wokenCedants,
     },
     errors: errors.slice(0, 10),
   });
@@ -218,6 +275,7 @@ export async function GET(req: Request) {
     actions: { scanned: scannedActions, queued: queuedActions },
     milestones: { scanned: scannedMilestones, queued: queuedMilestones },
     rgpd: { scanned: scannedRgpd, queued: queuedRgpd },
+    reveils_cedants: wokenCedants,
     errors: errors.slice(0, 10),
   });
 }
