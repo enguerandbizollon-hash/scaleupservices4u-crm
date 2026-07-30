@@ -22,6 +22,7 @@ import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens
 import { universRowFromHit } from "@/lib/crm/univers-ingest";
 import { autofillScreeningDraft } from "@/lib/crm/screening-autofill";
 import { enqueueNotification } from "@/lib/crm/notifications";
+import { upsertContact, linkContactToOrganisation } from "./contacts";
 import {
   fetchEntreprisePappers,
   normalizeBeneficiaires,
@@ -436,6 +437,81 @@ export async function promoteUniversToOrganization(
   revalidatePath("/protected/prospection");
   revalidatePath("/protected/organisations");
   return { success: true, data: { organization_id: ensured.orgId, created: ensured.created } };
+}
+
+/**
+ * Le dirigeant d'une fiche univers devient un contact CRM lié à
+ * l'organisation (pipeline métier 2026-07-30 : « si l'entreprise
+ * m'intéresse, je dois avoir les contacts du dirigeant »).
+ * - L'organisation est créée si besoin (dédup SIREN) mais le statut de la
+ *   fiche NE change PAS : obtenir un contact n'est pas encore promouvoir.
+ * - Dédup par (prénom, nom) parmi les contacts déjà liés à l'organisation :
+ *   les dirigeants Pappers n'ont pas d'email, la dédup email ne joue pas.
+ * - La recherche de coordonnées (Hunter/Apollo) se fait ensuite depuis la
+ *   fiche contact via le bouton Enrichir existant.
+ */
+export async function promoteDirigeantToContact(
+  siren: string,
+  dirigeantIndex: number,
+): Promise<ProspectionActionResult<{ contact_id: string; organization_id: string; created: boolean }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, naf, secteur, ville, departement, date_creation, dirigeants, organization_id")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const dirigeant = ((fiche.dirigeants ?? []) as UniversDirigeant[])[dirigeantIndex];
+  if (!dirigeant?.nom) return { success: false, error: "Dirigeant introuvable sur la fiche" };
+  const firstName = dirigeant.prenoms?.trim() || "—";
+  const lastName = dirigeant.nom.trim();
+
+  // Organisation garantie, statut de la fiche inchangé.
+  let orgId = fiche.organization_id as string | null;
+  if (!orgId) {
+    const ensured = await ensureOrganizationFromFiche(supabase, user.id, fiche);
+    if ("error" in ensured) return { success: false, error: ensured.error };
+    orgId = ensured.orgId;
+    await supabase
+      .from("univers_entreprises")
+      .update({ organization_id: orgId, updated_at: new Date().toISOString() })
+      .eq("siren", siren);
+  }
+
+  // Dédup (prénom, nom) parmi les contacts déjà liés à cette organisation.
+  const { data: liens } = await supabase
+    .from("organization_contacts")
+    .select("contact_id, contacts(id, first_name, last_name)")
+    .eq("organization_id", orgId);
+  const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+  for (const lien of liens ?? []) {
+    const c = Array.isArray(lien.contacts) ? lien.contacts[0] : lien.contacts;
+    if (c && norm(c.first_name) === norm(firstName) && norm(c.last_name) === norm(lastName)) {
+      return { success: true, data: { contact_id: c.id, organization_id: orgId, created: false } };
+    }
+  }
+
+  const created = await upsertContact({
+    first_name: firstName,
+    last_name: lastName,
+    title: dirigeant.qualite ?? null,
+    sector: fiche.secteur ?? null,
+  });
+  if (!created.success) return { success: false, error: created.error };
+
+  const linked = await linkContactToOrganisation(created.id, orgId, dirigeant.qualite ?? undefined);
+  if (!linked.success) {
+    const linkError = "error" in linked && typeof linked.error === "string" ? linked.error : "Liaison contact-organisation en échec";
+    return { success: false, error: linkError };
+  }
+
+  revalidatePath("/protected/prospection");
+  revalidatePath("/protected/contacts");
+  return { success: true, data: { contact_id: created.id, organization_id: orgId, created: true } };
 }
 
 // ── Fiche détail + création de dossier (retour d'usage 2026-07-29) ───────────

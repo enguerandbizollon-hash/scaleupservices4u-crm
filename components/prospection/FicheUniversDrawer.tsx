@@ -12,6 +12,7 @@ import {
 import {
   getUniversFicheDetail, createDossierFromUnivers, promoteUniversToOrganization,
   updateUniversStatut, updateUniversApprocheNote, enrichProspect360,
+  promoteDirigeantToContact,
   type UniversFicheDetail, type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -121,6 +122,25 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     updateUniversStatut(siren, "dormant", { dormantUntil: dateStr }).then((res) => {
       if (res.success) setDetail((d) => (d ? { ...d, dormant_until: res.data.dormant_until } : d));
       else setActionError(res.error);
+    });
+  }
+
+  // Dirigeant → contact CRM (pipeline métier : « je dois avoir les contacts »).
+  const [contactByDirigeant, setContactByDirigeant] = useState<Record<number, string>>({});
+  const [contactBusy, setContactBusy] = useState<number | null>(null);
+
+  function handleDirigeantContact(index: number) {
+    if (contactBusy != null) return;
+    setContactBusy(index);
+    setActionError(null);
+    promoteDirigeantToContact(siren, index).then((res) => {
+      setContactBusy(null);
+      if (res.success) {
+        setContactByDirigeant((prev) => ({ ...prev, [index]: res.data.contact_id }));
+        setDetail((d) => (d ? { ...d, organization_id: res.data.organization_id } : d));
+      } else {
+        setActionError(res.error);
+      }
     });
   }
 
@@ -480,13 +500,29 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {detail.dirigeants.map((d, i) => {
                     const age = computeAgeFromBirth(d.date_de_naissance);
+                    const contactId = contactByDirigeant[i];
                     return (
-                      <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
                         <span style={{ fontWeight: 700, color: "var(--text-2)" }}>
                           {[d.prenoms, d.nom].filter(Boolean).join(" ") || "—"}
                         </span>
                         {d.qualite && <span style={{ color: "var(--text-4)", fontSize: 11.5 }}>{d.qualite}</span>}
-                        {age != null && <span style={{ color: "var(--text-5)", fontSize: 11.5, marginLeft: "auto" }}>{age} ans</span>}
+                        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                          {age != null && <span style={{ color: "var(--text-5)", fontSize: 11.5 }}>{age} ans</span>}
+                          {contactId ? (
+                            <Link href={`/protected/contacts/${contactId}`}
+                              title="Fiche contact créée : la recherche de coordonnées (Enrichir) se fait là-bas"
+                              style={{ fontSize: 11, fontWeight: 700, color: "#065F46", textDecoration: "none" }}>
+                              Contact créé →
+                            </Link>
+                          ) : d.nom ? (
+                            <button onClick={() => handleDirigeantContact(i)} disabled={contactBusy != null}
+                              title="Créer le contact CRM lié à l'organisation (créée si besoin), puis chercher ses coordonnées via Enrichir sur sa fiche"
+                              style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#0F766E", opacity: contactBusy != null && contactBusy !== i ? 0.4 : 1 }}>
+                              {contactBusy === i ? "Création…" : "→ Contact"}
+                            </button>
+                          ) : null}
+                        </span>
                       </div>
                     );
                   })}
