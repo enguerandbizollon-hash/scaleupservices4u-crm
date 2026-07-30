@@ -68,6 +68,16 @@ export type ProfileRow = {
   watch_enabled: boolean;
 };
 
+/** Bandeau de flux : l'écran dit ce qui entre, ce qui chauffe, ce qui attend. */
+export type FluxKpis = {
+  total: number;
+  chaudes: number;
+  entrees7j: number;
+  aTrier: number;
+  signaux7j: number;
+  couvertureRadar: number; // % de fiches scorées
+};
+
 // ── Constantes UI ────────────────────────────────────────────────────────────
 
 const EFFECTIF_OPTIONS = [
@@ -137,11 +147,12 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, univers, universTotal, statCounts, activeStatut, sortRadar, searchQ, page, pageSize }: {
+export function ProspectionClient({ profiles, univers, universTotal, statCounts, flux, activeStatut, sortRadar, searchQ, page, pageSize }: {
   profiles: ProfileRow[];
   univers: UniversRow[];
   universTotal: number;
   statCounts: Record<string, number>;
+  flux: FluxKpis;
   activeStatut: string | null;
   sortRadar: boolean;
   searchQ: string | null;
@@ -323,9 +334,38 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
         <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: "var(--text-1)", display: "flex", alignItems: "center", gap: 9 }}>
           <Crosshair size={20} color="#0F766E" /> Prospection
         </h1>
-        <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--text-4)" }}>
+        <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--text-4)" }}>
           Composez vos chasses, l&apos;univers se remplit, dédupliqué par SIREN. Source : API Recherche d&apos;Entreprises (gratuite).
         </p>
+
+        {/* ── Bandeau de flux ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 14 }}>
+          {([
+            { n: flux.total, label: "Univers", sub: "fiches suivies", href: buildHref({ statut: null, q: null }), color: "var(--text-1)" },
+            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70", href: buildHref({ statut: null, q: null, radar: true }), color: "#991B1B" },
+            { n: flux.entrees7j, label: "Entrées 7 j", sub: "flux de la semaine", href: buildHref({ statut: null, q: null, radar: false }), color: "#0F766E" },
+            { n: flux.aTrier, label: "À trier", sub: "en attente de décision", href: buildHref({ statut: "nouveau", q: null }), color: "#B45309" },
+            { n: flux.signaux7j, label: "Signaux 7 j", sub: "BODACC + veille", href: "/protected/signaux", color: "#B45309" },
+            { n: `${flux.couvertureRadar}%`, label: "Radar", sub: "fiches scorées", href: null, color: flux.couvertureRadar >= 95 ? "#065F46" : "#B45309" },
+          ] as Array<{ n: number | string; label: string; sub: string; href: string | null; color: string }>).map(k => {
+            const inner = (
+              <>
+                <div style={{ fontSize: 19, fontWeight: 800, color: k.color, lineHeight: 1.1 }}>
+                  {typeof k.n === "number" ? k.n.toLocaleString("fr-FR") : k.n}
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 3 }}>{k.label}</div>
+                <div style={{ fontSize: 10.5, color: "var(--text-5)" }}>{k.sub}</div>
+              </>
+            );
+            const boxStyle: React.CSSProperties = {
+              padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--border)",
+              borderRadius: 12, textDecoration: "none", display: "block",
+            };
+            return k.href
+              ? <Link key={k.label} href={k.href} style={boxStyle}>{inner}</Link>
+              : <div key={k.label} style={boxStyle}>{inner}</div>;
+          })}
+        </div>
 
         {banner && (
           <div style={{

@@ -41,7 +41,12 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
   const countByStatut = (s: string) =>
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", s);
 
-  const [universRes, profilesRes, nouveau, aApprocher, approche, ecarte, promu] = await Promise.all([
+  // Bandeau de flux (audit 2026-07-30 : « il me faut des KPI, du flux ») :
+  // l'écran dit ce qui entre, ce qui chauffe, ce qui attend une décision.
+  const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const sevenDaysAgoDate = sevenDaysAgoIso.slice(0, 10);
+
+  const [universRes, profilesRes, nouveau, aApprocher, approche, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
     universQuery,
     supabase
       .from("screening_profiles")
@@ -52,6 +57,11 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     countByStatut("approche"),
     countByStatut("ecarte"),
     countByStatut("promu"),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("cedabilite_score", 70),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("first_seen_at", sevenDaysAgoIso),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).not("cedabilite_score", "is", null),
+    supabase.from("signaux").select("id", { count: "exact", head: true }).gte("signal_date", sevenDaysAgoDate),
   ]);
 
   if (universRes.error) {
@@ -72,12 +82,22 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     promu: promu.count ?? 0,
   };
 
+  const flux = {
+    total: totalAll.count ?? 0,
+    chaudes: chaudes.count ?? 0,
+    entrees7j: entrees7j.count ?? 0,
+    aTrier: statCounts.nouveau,
+    signaux7j: signaux7j.count ?? 0,
+    couvertureRadar: (totalAll.count ?? 0) > 0 ? Math.round(((scorees.count ?? 0) / (totalAll.count ?? 1)) * 100) : 0,
+  };
+
   return (
     <ProspectionClient
       profiles={(profilesRes.data ?? []) as ProfileRow[]}
       univers={(universRes.data ?? []) as UniversRow[]}
       universTotal={universRes.count ?? 0}
       statCounts={statCounts}
+      flux={flux}
       activeStatut={activeStatut}
       sortRadar={sortRadar}
       searchQ={q}
