@@ -29,7 +29,28 @@ export interface DealScreeningSnapshot {
   key_differentiators: string[] | null;
   key_risks: string[] | null;
   description: string | null;
-  hasFinancialData: boolean;
+  /** Profondeur des données financières, 0 à 5 (computeFinancialDepth). */
+  financialDepth: number;
+}
+
+/**
+ * Profondeur financière 0-5 (recette 2026-07-30 : « 5/5 juste avec un CA »
+ * était flatteur). Barème M&A : le CA ouvre, la pluri-annualité et le
+ * résultat consolident, l'EBITDA (la métrique du métier) donne le dernier
+ * point : +2 CA présent, +1 au moins 2 exercices, +1 résultat net sur le
+ * dernier exercice, +1 EBITDA sur le dernier exercice.
+ */
+export function computeFinancialDepth(
+  rows: Array<{ fiscal_year: number; revenue: number | null; ebitda: number | null; net_income: number | null }>,
+): number {
+  const withCa = rows.filter((r) => r.revenue != null);
+  if (withCa.length === 0) return 0;
+  let depth = 2;
+  if (withCa.length >= 2) depth += 1;
+  const latest = [...rows].sort((a, b) => b.fiscal_year - a.fiscal_year)[0];
+  if (latest?.net_income != null) depth += 1;
+  if (latest?.ebitda != null) depth += 1;
+  return depth;
 }
 
 export interface ScreeningScoreBreakdown {
@@ -102,11 +123,15 @@ export function computeScreeningScore(snapshot: DealScreeningSnapshot): Screenin
       key: "financial_data",
       label: "Données financières",
       max: 5,
-      filled: snapshot.hasFinancialData,
+      filled: snapshot.financialDepth >= 5,
+      earnedOverride: snapshot.financialDepth,
     },
-  ];
+  ] as Array<{ key: string; label: string; max: number; filled: boolean; earnedOverride?: number }>;
 
-  const enriched = items.map((i) => ({ ...i, earned: i.filled ? i.max : 0 }));
+  const enriched = items.map(({ earnedOverride, ...i }) => ({
+    ...i,
+    earned: earnedOverride ?? (i.filled ? i.max : 0),
+  }));
   const total = enriched.reduce((sum, i) => sum + i.earned, 0);
   return { total, items: enriched };
 }
@@ -134,11 +159,12 @@ export async function getDealScreening(dealId: string): Promise<DealScreeningSna
 
   if (error || !deal) return null;
 
-  const { count } = await supabase
+  const { data: finRows } = await supabase
     .from("financial_data")
-    .select("id", { count: "exact", head: true })
+    .select("fiscal_year, revenue, ebitda, net_income")
     .eq("deal_id", dealId)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("is_forecast", false);
 
   return {
     id: deal.id,
@@ -155,7 +181,9 @@ export async function getDealScreening(dealId: string): Promise<DealScreeningSna
     key_differentiators: deal.key_differentiators,
     key_risks: deal.key_risks,
     description: deal.description,
-    hasFinancialData: (count ?? 0) > 0,
+    financialDepth: computeFinancialDepth(
+      (finRows ?? []) as Array<{ fiscal_year: number; revenue: number | null; ebitda: number | null; net_income: number | null }>,
+    ),
   };
 }
 

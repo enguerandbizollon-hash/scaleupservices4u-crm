@@ -603,7 +603,7 @@ export async function enrichProspect360(
   if (!brief) {
     return {
       success: false,
-      error: `Synthèse impossible (IA indisponible ou réponse invalide)${pappersNote ? ` · Pappers : ${pappersNote}` : ""}`,
+      error: `Synthèse impossible : clé API absente, crédits Anthropic épuisés, ou réponse invalide${pappersNote ? ` · Pappers : ${pappersNote}` : ""}`,
     };
   }
 

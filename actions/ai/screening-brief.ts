@@ -85,7 +85,7 @@ export async function suggestScreeningBrief(dealId: string): Promise<ScreeningBr
 
   const suggestion = await generateScreeningBrief(input);
   if (!suggestion) {
-    return { success: false, error: "L'IA n'a pas pu générer de brouillon (clé API manquante ou réponse invalide)." };
+    return { success: false, error: "L'IA n'a pas pu générer de brouillon : clé API absente, crédits Anthropic épuisés, ou réponse invalide (détail dans les logs serveur)." };
   }
 
   return { success: true, suggestion };

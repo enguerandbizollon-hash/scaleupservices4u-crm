@@ -121,6 +121,9 @@ export async function callClaudeRaw(opts: ClaudeRawOptions): Promise<ClaudeRawRe
           await sleep(1_000 * attempt);
           continue;
         }
+        // La cause réelle (crédits épuisés, clé invalide...) doit être
+        // visible dans les logs serveur : les appelants dégradent en null.
+        console.error("[anthropic]", lastError);
         return { ok: false, error: lastError };
       }
 

@@ -64,7 +64,7 @@ export async function generateTeaser(
     finances: (finRows ?? []) as { fiscal_year: number; revenue: number | null; ebitda: number | null; net_income: number | null; headcount: number | null }[],
     synthese_fiche: fiche?.synthese ?? null,
   });
-  if (!teaser) return { success: false, error: "Génération impossible (clé IA absente ou réponse invalide)" };
+  if (!teaser) return { success: false, error: "Génération impossible : clé API absente, crédits Anthropic épuisés, ou réponse invalide (détail dans les logs serveur)" };
 
   const { error } = await supabase
     .from("deals")

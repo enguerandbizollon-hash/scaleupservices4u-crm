@@ -521,7 +521,7 @@ export async function scoreSuggestionAI(
     role_suggested: suggestion.role_suggested,
   });
 
-  if (!brain) return { success: false, error: "L'IA n'a pas pu scorer (clé API ou réponse invalide)" };
+  if (!brain) return { success: false, error: "L'IA n'a pas pu scorer : clé API absente, crédits Anthropic épuisés, ou réponse invalide" };
 
   const scoreAlgo = suggestion.score_algo ?? 0;
   const scoreCombined = Math.round(scoreAlgo * 0.6 + brain.score_ai * 0.4);
