@@ -286,6 +286,39 @@ export async function updateUniversStatut(
   return { success: true, data: undefined };
 }
 
+/**
+ * Triage par lot (cran 2, audit 2026-07-30 : ~100 clics pour 20 fiches).
+ * Passe un ensemble de fiches au même statut en une décision. Les fiches
+ * promues sont intouchables (leur statut est le reflet d'un fait CRM).
+ */
+export async function updateUniversStatutBatch(
+  sirens: string[],
+  statut: UniversStatut,
+): Promise<ProspectionActionResult<{ updated: number }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+  if (!VALID_STATUTS.includes(statut) || statut === "promu") {
+    return { success: false, error: "Statut invalide" };
+  }
+  const cleaned = [...new Set(sirens)].filter((s) => /^\d{9}$/.test(s));
+  if (cleaned.length === 0) return { success: false, error: "Aucune fiche sélectionnée" };
+
+  let updated = 0;
+  for (let i = 0; i < cleaned.length; i += UPSERT_BATCH) {
+    const { data, error } = await supabase
+      .from("univers_entreprises")
+      .update({ statut, updated_at: new Date().toISOString() })
+      .in("siren", cleaned.slice(i, i + UPSERT_BATCH))
+      .neq("statut", "promu")
+      .select("siren");
+    if (error) return { success: false, error: error.message };
+    updated += data?.length ?? 0;
+  }
+  revalidatePath("/protected/prospection");
+  return { success: true, data: { updated } };
+}
+
 interface FichePourPromotion {
   siren: string;
   nom: string;

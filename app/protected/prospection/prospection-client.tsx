@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import {
   countScreeningAction, saveScreeningProfile, deleteScreeningProfile,
-  runScreeningIngest, updateUniversStatut, promoteUniversToOrganization,
-  recomputeCedabilite, toggleProfileWatch,
+  runScreeningIngest, updateUniversStatut, updateUniversStatutBatch,
+  promoteUniversToOrganization, recomputeCedabilite, toggleProfileWatch,
   type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -173,6 +173,10 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   // Statuts optimistes de l'univers (le serveur revalide derrière).
   const [localStatuts, setLocalStatuts] = useState<Record<string, string>>({});
 
+  // Triage par lot (cran 2) : sélection multi-fiches, décision en une fois.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batching, setBatching] = useState(false);
+
   // Fiche ouverte dans le tiroir de détail.
   const [openedFiche, setOpenedFiche] = useState<{ siren: string; nom: string; statut: string } | null>(null);
 
@@ -269,6 +273,45 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
     setLocalStatuts(prev => ({ ...prev, [siren]: statut }));
     const res = await updateUniversStatut(siren, statut);
     if (!res.success) setBanner({ kind: "err", text: res.error });
+  }
+
+  function toggleSelect(siren: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(siren)) next.delete(siren);
+      else next.add(siren);
+      return next;
+    });
+  }
+
+  const selectablePage = univers.filter(u => (localStatuts[u.siren] ?? u.statut) !== "promu").map(u => u.siren);
+  const allPageSelected = selectablePage.length > 0 && selectablePage.every(s => selected.has(s));
+
+  function toggleSelectPage() {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (allPageSelected) selectablePage.forEach(s => next.delete(s));
+      else selectablePage.forEach(s => next.add(s));
+      return next;
+    });
+  }
+
+  async function handleBatch(statut: UniversStatut) {
+    const sirens = [...selected];
+    setBatching(true);
+    const res = await updateUniversStatutBatch(sirens, statut);
+    setBatching(false);
+    if (res.success) {
+      setLocalStatuts(prev => {
+        const next = { ...prev };
+        sirens.forEach(s => { next[s] = statut; });
+        return next;
+      });
+      setSelected(new Set());
+      setBanner({ kind: "ok", text: `${res.data.updated} fiche${res.data.updated > 1 ? "s" : ""} → « ${STATUT_META[statut]?.label ?? statut} ».` });
+    } else {
+      setBanner({ kind: "err", text: res.error });
+    }
   }
 
   async function handlePromote(siren: string, nom: string) {
@@ -550,6 +593,10 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
             title="Ordre d'arrivée dans l'univers">
             Dernières vues
           </Link>
+          <button onClick={toggleSelectPage} style={toggleChip(allPageSelected)}
+            title="Cocher toutes les fiches de la page (hors promues) pour un triage par lot">
+            Cocher la page
+          </button>
           <span style={{ flex: 1 }} />
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <Search size={12} style={{ position: "absolute", left: 9, color: "var(--text-5)", pointerEvents: "none" }} />
@@ -576,6 +623,25 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
           </button>
         </div>
 
+        {/* Barre de triage par lot */}
+        {selected.size > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "var(--text-1)", color: "var(--bg)", marginBottom: 8, fontSize: 12.5, fontWeight: 600, flexWrap: "wrap" }}>
+            <span>{selected.size} fiche{selected.size > 1 ? "s" : ""} cochée{selected.size > 1 ? "s" : ""}</span>
+            {batching && <Loader2 size={12} className="animate-spin" />}
+            {([["a_approcher", "À approcher"], ["ecarte", "Écarter"], ["nouveau", "Remettre à trier"]] as Array<[UniversStatut, string]>).map(([st, label]) => (
+              <button key={st} onClick={() => handleBatch(st)} disabled={batching}
+                style={{ padding: "4px 12px", borderRadius: 16, border: "1px solid rgba(255,255,255,.3)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: batching ? 0.5 : 1 }}>
+                {label}
+              </button>
+            ))}
+            <span style={{ flex: 1 }} />
+            <button onClick={() => setSelected(new Set())}
+              style={{ all: "unset", cursor: "pointer", fontSize: 12, opacity: 0.7 }}>
+              Annuler
+            </button>
+          </div>
+        )}
+
         <div style={{ ...card, overflow: "hidden", marginBottom: 8 }}>
           {univers.length === 0 ? (
             <div style={{ padding: "44px 24px", textAlign: "center", color: "var(--text-5)", fontSize: 13 }}>
@@ -598,7 +664,16 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
                 style={{
                   display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", cursor: "pointer",
                   borderBottom: i < univers.length - 1 ? "1px solid var(--border)" : "none",
+                  background: selected.has(u.siren) ? "var(--surface-2)" : "transparent",
                 }}>
+                <input type="checkbox"
+                  checked={selected.has(u.siren)}
+                  disabled={statut === "promu"}
+                  onClick={e => e.stopPropagation()}
+                  onChange={() => toggleSelect(u.siren)}
+                  title="Cocher pour le triage par lot"
+                  style={{ flexShrink: 0, width: 14, height: 14, accentColor: "#0F766E", cursor: "pointer" }}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0F766E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
