@@ -630,7 +630,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "var(--text-1)", color: "var(--bg)", marginBottom: 8, fontSize: 12.5, fontWeight: 600, flexWrap: "wrap" }}>
             <span>{selected.size} fiche{selected.size > 1 ? "s" : ""} cochée{selected.size > 1 ? "s" : ""}</span>
             {batching && <Loader2 size={12} className="animate-spin" />}
-            {([["a_approcher", "À approcher"], ["ecarte", "Écarter"], ["nouveau", "Remettre à trier"]] as Array<[UniversStatut, string]>).map(([st, label]) => (
+            {([["a_approcher", "À approcher"], ["ecarte", "Écarter"], ["dormant", "Dormance 6 mois"], ["nouveau", "Remettre à trier"]] as Array<[UniversStatut, string]>).map(([st, label]) => (
               <button key={st} onClick={() => handleBatch(st)} disabled={batching}
                 style={{ padding: "4px 12px", borderRadius: 16, border: "1px solid rgba(255,255,255,.3)", background: "transparent", color: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: batching ? 0.5 : 1 }}>
                 {label}

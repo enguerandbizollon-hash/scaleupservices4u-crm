@@ -110,11 +110,13 @@ export async function GET(req: Request) {
       }
 
       // 1 bis. Passages à chaud : fiches qui franchissent le seuil radar cette
-      // semaine (hors écartées/promues : la décision est déjà prise).
+      // semaine. Exclusions : écartées/promues (décision prise) et échanges en
+      // cours (on parle déjà au dirigeant). Les DORMANTES restent incluses :
+      // une dormante qui chauffe mérite un réveil anticipé.
       const passeesChaudes = rows.filter((r) => {
         if (r.cedabilite_score < SEUIL_CHAUDE) return false;
         const prev = avant.get(r.siren);
-        if (prev && ["ecarte", "promu"].includes(prev.statut)) return false;
+        if (prev && ["ecarte", "promu", "echange"].includes(prev.statut)) return false;
         return prev == null || prev.score == null || prev.score < SEUIL_CHAUDE;
       });
 

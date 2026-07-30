@@ -33,8 +33,13 @@ import { generateProspectBrief } from "@/lib/ai/prospect-brief";
 
 const UPSERT_BATCH = 500;
 
-export type UniversStatut = "nouveau" | "a_approcher" | "approche" | "ecarte" | "promu";
-const VALID_STATUTS: readonly UniversStatut[] = ["nouveau", "a_approcher", "approche", "ecarte", "promu"];
+// Cycle de vie commercial d'une fiche (v72) : echange = discussion en cours,
+// dormant = « pas maintenant », réveillé automatiquement à dormant_until.
+export type UniversStatut = "nouveau" | "a_approcher" | "approche" | "echange" | "dormant" | "ecarte" | "promu";
+const VALID_STATUTS: readonly UniversStatut[] = ["nouveau", "a_approcher", "approche", "echange", "dormant", "ecarte", "promu"];
+
+/** Réveil par défaut d'une fiche mise en dormance sans date : 6 mois. */
+const DORMANT_DEFAULT_DAYS = 180;
 
 export type ProspectionActionResult<T = undefined> =
   | { success: true; data: T }
@@ -271,15 +276,44 @@ export async function recomputeCedabilite(): Promise<ProspectionActionResult<{ s
 export async function updateUniversStatut(
   siren: string,
   statut: UniversStatut,
-): Promise<ProspectionActionResult> {
+  options?: { dormantUntil?: string | null },
+): Promise<ProspectionActionResult<{ dormant_until: string | null }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
   if (!VALID_STATUTS.includes(statut)) return { success: false, error: "Statut invalide" };
 
+  // Dormant : une date de réveil TOUJOURS posée (défaut 6 mois), sinon la
+  // fiche dormirait pour toujours. Tout autre statut efface la date.
+  let dormantUntil: string | null = null;
+  if (statut === "dormant") {
+    const asked = options?.dormantUntil?.slice(0, 10) ?? null;
+    dormantUntil = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked)
+      ? asked
+      : new Date(Date.now() + DORMANT_DEFAULT_DAYS * 86_400_000).toISOString().slice(0, 10);
+  }
+
   const { error } = await supabase
     .from("univers_entreprises")
-    .update({ statut, updated_at: new Date().toISOString() })
+    .update({ statut, dormant_until: dormantUntil, updated_at: new Date().toISOString() })
+    .eq("siren", siren);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/protected/prospection");
+  return { success: true, data: { dormant_until: dormantUntil } };
+}
+
+/** Mémoire commerciale de l'approche (v72) : contexte, échéances évoquées. */
+export async function updateUniversApprocheNote(
+  siren: string,
+  note: string,
+): Promise<ProspectionActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase
+    .from("univers_entreprises")
+    .update({ approche_note: note.trim() || null, updated_at: new Date().toISOString() })
     .eq("siren", siren);
   if (error) return { success: false, error: error.message };
   revalidatePath("/protected/prospection");
@@ -304,11 +338,17 @@ export async function updateUniversStatutBatch(
   const cleaned = [...new Set(sirens)].filter((s) => /^\d{9}$/.test(s));
   if (cleaned.length === 0) return { success: false, error: "Aucune fiche sélectionnée" };
 
+  // Dormant en lot : même règle qu'à l'unité, réveil par défaut à 6 mois
+  // (jamais de dormante sans date). Tout autre statut efface la date.
+  const dormantUntil = statut === "dormant"
+    ? new Date(Date.now() + DORMANT_DEFAULT_DAYS * 86_400_000).toISOString().slice(0, 10)
+    : null;
+
   let updated = 0;
   for (let i = 0; i < cleaned.length; i += UPSERT_BATCH) {
     const { data, error } = await supabase
       .from("univers_entreprises")
-      .update({ statut, updated_at: new Date().toISOString() })
+      .update({ statut, dormant_until: dormantUntil, updated_at: new Date().toISOString() })
       .in("siren", cleaned.slice(i, i + UPSERT_BATCH))
       .neq("statut", "promu")
       .select("siren");
@@ -456,6 +496,8 @@ export interface UniversFicheDetail {
   synthese_updated_at: string | null;
   signaux: UniversSignalItem[];
   deal: { id: string; name: string } | null;
+  dormant_until: string | null;
+  approche_note: string | null;
 }
 
 export async function getUniversFicheDetail(
@@ -467,7 +509,7 @@ export async function getUniversFicheDetail(
 
   const { data: fiche, error } = await supabase
     .from("univers_entreprises")
-    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at, actionnariat, actionnariat_updated_at, website, synthese, synthese_updated_at")
+    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at, actionnariat, actionnariat_updated_at, website, synthese, synthese_updated_at, dormant_until, approche_note")
     .eq("siren", siren)
     .maybeSingle();
   if (error) return { success: false, error: error.message };

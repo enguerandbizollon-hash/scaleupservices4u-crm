@@ -8,7 +8,7 @@ export const revalidate = 0;
 export const maxDuration = 300;
 
 const PAGE_SIZE = 50;
-const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "ecarte", "promu"]);
+const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "echange", "dormant", "ecarte", "promu"]);
 
 type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string; fiche?: string }>;
 
@@ -46,7 +46,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const sevenDaysAgoDate = sevenDaysAgoIso.slice(0, 10);
 
-  const [universRes, profilesRes, nouveau, aApprocher, approche, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
+  const [universRes, profilesRes, nouveau, aApprocher, approche, echange, dormant, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
     universQuery,
     supabase
       .from("screening_profiles")
@@ -55,6 +55,8 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     countByStatut("nouveau"),
     countByStatut("a_approcher"),
     countByStatut("approche"),
+    countByStatut("echange"),
+    countByStatut("dormant"),
     countByStatut("ecarte"),
     countByStatut("promu"),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }),
@@ -78,6 +80,8 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     nouveau: nouveau.count ?? 0,
     a_approcher: aApprocher.count ?? 0,
     approche: approche.count ?? 0,
+    echange: echange.count ?? 0,
+    dormant: dormant.count ?? 0,
     ecarte: ecarte.count ?? 0,
     promu: promu.count ?? 0,
   };

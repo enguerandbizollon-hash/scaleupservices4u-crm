@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {
   getUniversFicheDetail, createDossierFromUnivers, promoteUniversToOrganization,
-  updateUniversStatut, enrichProspect360,
+  updateUniversStatut, updateUniversApprocheNote, enrichProspect360,
   type UniversFicheDetail, type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -72,6 +72,7 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
       if (res.success) {
         setDetail(res.data);
         setStatut(res.data.statut);
+        setNoteDraft(res.data.approche_note ?? "");
       } else {
         setLoadError(res.error);
       }
@@ -98,6 +99,31 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   const [enrichError, setEnrichError] = useState<string | null>(null);
   const [enrichNote, setEnrichNote] = useState<string | null>(null);
 
+  // Mémoire commerciale de l'approche (v72) : sauvegarde au blur.
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaved, setNoteSaved] = useState(false);
+
+  function handleNoteBlur() {
+    if ((detail?.approche_note ?? "") === noteDraft.trim()) return;
+    updateUniversApprocheNote(siren, noteDraft).then((res) => {
+      if (res.success) {
+        setDetail((d) => (d ? { ...d, approche_note: noteDraft.trim() || null } : d));
+        setNoteSaved(true);
+        setTimeout(() => setNoteSaved(false), 2000);
+      } else {
+        setActionError(res.error);
+      }
+    });
+  }
+
+  function handleDormantDate(dateStr: string) {
+    if (!dateStr) return;
+    updateUniversStatut(siren, "dormant", { dormantUntil: dateStr }).then((res) => {
+      if (res.success) setDetail((d) => (d ? { ...d, dormant_until: res.data.dormant_until } : d));
+      else setActionError(res.error);
+    });
+  }
+
   async function handleEnrich360() {
     if (enriching) return;
     setEnriching(true);
@@ -118,6 +144,10 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     setStatut(next);
     onLocalStatut(siren, next);
     updateUniversStatut(siren, next).then((res) => {
+      if (res.success) {
+        // Le serveur pose la date de réveil (défaut 6 mois) ou l'efface.
+        setDetail((d) => (d ? { ...d, statut: next, dormant_until: res.data.dormant_until } : d));
+      }
       if (!res.success) setActionError(res.error);
     });
   }
@@ -310,6 +340,36 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
                       Pas encore scorée : le radar se calcule tout seul à la prochaine chasse ou veille.
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Approche commerciale (v72) : réveil + mémoire */}
+              <div style={sectionTitle}>Approche</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {statut === "dormant" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                    <span style={{ color: "var(--text-4)" }}>Réveil le</span>
+                    <input
+                      type="date"
+                      value={detail.dormant_until ?? ""}
+                      onChange={(e) => handleDormantDate(e.target.value)}
+                      style={{ padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, fontFamily: "inherit", background: "var(--surface-2)", color: "var(--text-1)" }}
+                    />
+                    <span style={{ fontSize: 11, color: "var(--text-5)" }}>
+                      La fiche reviendra en « À approcher » ce jour-là, avec notification.
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <textarea
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    onBlur={handleNoteBlur}
+                    placeholder="Mémoire commerciale : contexte du contact, échéance évoquée, personnes citées…"
+                    rows={2}
+                    style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12.5, fontFamily: "inherit", background: "var(--surface-2)", color: "var(--text-1)", resize: "vertical", outline: "none", lineHeight: 1.5 }}
+                  />
+                  {noteSaved && <div style={{ fontSize: 10.5, color: "#065F46", marginTop: 2 }}>Note enregistrée.</div>}
                 </div>
               </div>
 
