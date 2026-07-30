@@ -6,9 +6,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Crosshair, Play, Save, Trash2, ArrowUpRight, Building2,
-  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge, Bell, BellOff,
+  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge, Bell, BellOff, Search, X,
 } from "lucide-react";
 import {
   countScreeningAction, saveScreeningProfile, deleteScreeningProfile,
@@ -136,16 +137,19 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, univers, universTotal, statCounts, activeStatut, sortRadar, page, pageSize }: {
+export function ProspectionClient({ profiles, univers, universTotal, statCounts, activeStatut, sortRadar, searchQ, page, pageSize }: {
   profiles: ProfileRow[];
   univers: UniversRow[];
   universTotal: number;
   statCounts: Record<string, number>;
   activeStatut: string | null;
   sortRadar: boolean;
+  searchQ: string | null;
   page: number;
   pageSize: number;
 }) {
+  const router = useRouter();
+  const [search, setSearch] = useState(searchQ ?? "");
   const [ui, setUi] = useState<UiState>(EMPTY_UI);
   const [profileName, setProfileName] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -286,13 +290,20 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   });
 
   // Tri radar par défaut : l'URL ne porte un paramètre que pour y déroger.
-  const statutHref = (s: string | null, radar: boolean = sortRadar) => {
+  // Un seul constructeur d'URL : statut, tri et recherche se préservent.
+  const buildHref = (over: { statut?: string | null; radar?: boolean; q?: string | null; page?: number } = {}) => {
     const p = new URLSearchParams();
+    const s = over.statut !== undefined ? over.statut : activeStatut;
+    const radar = over.radar !== undefined ? over.radar : sortRadar;
+    const qv = over.q !== undefined ? over.q : searchQ;
     if (s) p.set("statut", s);
     if (!radar) p.set("tri", "recent");
+    if (qv) p.set("q", qv);
+    if (over.page && over.page > 1) p.set("page", String(over.page));
     const qs = p.toString();
     return `/protected/prospection${qs ? `?${qs}` : ""}`;
   };
+  const applySearch = () => router.push(buildHref({ q: search.trim() || null }));
   const totalPages = Math.max(1, Math.ceil(universTotal / pageSize));
 
   const [scoring, setScoring] = useState(false);
@@ -482,23 +493,41 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
 
         {/* ── Univers ── */}
         <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <Link href={statutHref(null)} style={toggleChip(activeStatut === null)}>
+          <Link href={buildHref({ statut: null })} style={toggleChip(activeStatut === null)}>
             Tout l&apos;univers ({universTotal.toLocaleString("fr-FR")})
           </Link>
           {Object.entries(STATUT_META).map(([key, meta]) => (
-            <Link key={key} href={statutHref(key)} style={toggleChip(activeStatut === key)}>
+            <Link key={key} href={buildHref({ statut: key })} style={toggleChip(activeStatut === key)}>
               {meta.label} ({(statCounts[key] ?? 0).toLocaleString("fr-FR")})
             </Link>
           ))}
           <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 2px" }} />
-          <Link href={statutHref(activeStatut, true)} style={{ ...toggleChip(sortRadar), display: "inline-flex", alignItems: "center", gap: 5 }}
+          <Link href={buildHref({ radar: true })} style={{ ...toggleChip(sortRadar), display: "inline-flex", alignItems: "center", gap: 5 }}
             title="Les fiches les plus cédables en tête (tri par défaut)">
             <Gauge size={12} /> Tri radar
           </Link>
-          <Link href={statutHref(activeStatut, false)} style={toggleChip(!sortRadar)}
+          <Link href={buildHref({ radar: false })} style={toggleChip(!sortRadar)}
             title="Ordre d'arrivée dans l'univers">
             Dernières vues
           </Link>
+          <span style={{ flex: 1 }} />
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={12} style={{ position: "absolute", left: 9, color: "var(--text-5)", pointerEvents: "none" }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") applySearch(); }}
+              placeholder="Nom ou SIREN…"
+              style={{ ...inp, width: 190, paddingLeft: 27, paddingRight: searchQ ? 27 : 10, borderRadius: 20 }}
+            />
+            {searchQ && (
+              <button onClick={() => { setSearch(""); router.push(buildHref({ q: null })); }}
+                title="Effacer la recherche"
+                style={{ all: "unset", cursor: "pointer", position: "absolute", right: 8, display: "flex", color: "var(--text-4)" }}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
           <button onClick={handleRecompute} disabled={scoring}
             title="Filet de sécurité : le radar se calcule désormais tout seul à chaque chasse, veille hebdo et signal BODACC. Ce bouton force un recalcul complet de l'univers."
             style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", cursor: "pointer", fontFamily: "inherit", opacity: scoring ? 0.6 : 1 }}>
@@ -510,8 +539,12 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
         <div style={{ ...card, overflow: "hidden", marginBottom: 8 }}>
           {univers.length === 0 ? (
             <div style={{ padding: "44px 24px", textAlign: "center", color: "var(--text-5)", fontSize: 13 }}>
-              L&apos;univers est vide{activeStatut ? " pour ce statut" : ""}.
-              <div style={{ marginTop: 6, fontSize: 12 }}>Composez une chasse ci-dessus et lancez-la.</div>
+              {searchQ
+                ? <>Aucune fiche ne correspond à « {searchQ} »{activeStatut ? " pour ce statut" : ""}.</>
+                : <>L&apos;univers est vide{activeStatut ? " pour ce statut" : ""}.</>}
+              <div style={{ marginTop: 6, fontSize: 12 }}>
+                {searchQ ? "Essayez un autre nom ou un SIREN complet (9 chiffres)." : "Composez une chasse ci-dessus et lancez-la."}
+              </div>
             </div>
           ) : univers.map((u, i) => {
             const statut = localStatuts[u.siren] ?? u.statut;
@@ -597,14 +630,14 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
         {totalPages > 1 && (
           <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", fontSize: 12.5, color: "var(--text-4)" }}>
             {page > 1 && (
-              <Link href={`/protected/prospection?${new URLSearchParams({ ...(activeStatut ? { statut: activeStatut } : {}), ...(sortRadar ? {} : { tri: "recent" }), page: String(page - 1) })}`}
+              <Link href={buildHref({ page: page - 1 })}
                 style={{ display: "flex", alignItems: "center", color: "var(--text-3)" }}>
                 <ChevronLeft size={14} />
               </Link>
             )}
             <span>page {page} / {totalPages}</span>
             {page < totalPages && (
-              <Link href={`/protected/prospection?${new URLSearchParams({ ...(activeStatut ? { statut: activeStatut } : {}), ...(sortRadar ? {} : { tri: "recent" }), page: String(page + 1) })}`}
+              <Link href={buildHref({ page: page + 1 })}
                 style={{ display: "flex", alignItems: "center", color: "var(--text-3)" }}>
                 <ChevronRight size={14} />
               </Link>

@@ -10,14 +10,17 @@ export const maxDuration = 300;
 const PAGE_SIZE = 50;
 const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "ecarte", "promu"]);
 
-async function Content({ searchParams }: { searchParams: Promise<{ statut?: string; page?: string; tri?: string }> }) {
-  const { statut, page: pageParam, tri } = await searchParams;
+type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string }>;
+
+async function Content({ searchParams }: { searchParams: ProspectionSearchParams }) {
+  const { statut, page: pageParam, tri, q: qParam } = await searchParams;
   const supabase = await createClient();
 
   const activeStatut = statut && VALID_STATUTS.has(statut) ? statut : null;
   // Tri radar par DÉFAUT (audit 2026-07-30) : les fiches chaudes en tête,
   // c'est la raison d'être de l'univers. tri=recent pour l'ordre d'arrivée.
   const sortRadar = tri !== "recent";
+  const q = (qParam ?? "").trim() || null;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
@@ -29,6 +32,11 @@ async function Content({ searchParams }: { searchParams: Promise<{ statut?: stri
     : universQuery.order("last_seen_at", { ascending: false });
   universQuery = universQuery.order("siren", { ascending: true }).range(from, from + PAGE_SIZE - 1);
   if (activeStatut) universQuery = universQuery.eq("statut", activeStatut);
+  if (q) {
+    universQuery = /^\d{9}$/.test(q)
+      ? universQuery.eq("siren", q)
+      : universQuery.ilike("nom", `%${q.replace(/[%_]/g, "\\$&")}%`);
+  }
 
   const countByStatut = (s: string) =>
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", s);
@@ -72,13 +80,14 @@ async function Content({ searchParams }: { searchParams: Promise<{ statut?: stri
       statCounts={statCounts}
       activeStatut={activeStatut}
       sortRadar={sortRadar}
+      searchQ={q}
       page={page}
       pageSize={PAGE_SIZE}
     />
   );
 }
 
-export default function ProspectionPage({ searchParams }: { searchParams: Promise<{ statut?: string; page?: string; tri?: string }> }) {
+export default function ProspectionPage({ searchParams }: { searchParams: ProspectionSearchParams }) {
   return (
     <Suspense fallback={<div style={{ padding: 32 }}><div style={{ height: 400, borderRadius: 14, background: "var(--surface-2)" }} /></div>}>
       <Content searchParams={searchParams} />
