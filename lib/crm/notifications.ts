@@ -10,13 +10,15 @@ export type NotificationKind =
   | "rgpd_expiry"
   | "fee_overdue"
   | "task_due"
-  | "veille_profil";
+  | "veille_profil"
+  | "screening_draft";
 
 export type NotificationSourceType =
   | "action"
   | "fee_milestone"
   | "contact"
-  | "screening_profile";
+  | "screening_profile"
+  | "deal";
 
 export interface NotificationInput {
   user_id: string;

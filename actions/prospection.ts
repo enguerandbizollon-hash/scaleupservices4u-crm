@@ -8,7 +8,9 @@
 // dossier, V53) — ici on parle du screening MARCHÉ (trouver des cédants).
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import {
   countScreening,
   findDirigeantPrincipal,
@@ -18,6 +20,8 @@ import {
 import { computeCedabilite } from "@/lib/crm/cedabilite";
 import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { universRowFromHit } from "@/lib/crm/univers-ingest";
+import { autofillScreeningDraft } from "@/lib/crm/screening-autofill";
+import { enqueueNotification } from "@/lib/crm/notifications";
 import {
   fetchEntreprisePappers,
   normalizeBeneficiaires,
@@ -796,6 +800,36 @@ export async function createDossierFromUnivers(
 
   const { error: linkErr } = await linkUnivers();
   if (linkErr) return { success: false, error: linkErr.message };
+
+  // Le dossier naît avec son brouillon de screening (cran 1, audit 2026-07-30 :
+  // « le geste n'a pas de suite »). Tâche de fond after() : la création répond
+  // tout de suite, l'IA remplit les champs vides derrière, la cloche prévient.
+  const dealId = deal.id;
+  const userId = user.id;
+  after(async () => {
+    try {
+      const admin = createAdminClient();
+      const r = await autofillScreeningDraft(admin, userId, dealId);
+      if (r.error) {
+        console.error(`screening autofill ${dealId}: ${r.error}`);
+        return;
+      }
+      if (r.filled) {
+        await enqueueNotification(admin, {
+          user_id: userId,
+          kind: "screening_draft",
+          title: `Brouillon de screening prêt : ${dealName}`,
+          body: "Généré automatiquement à la création du dossier. Contrôlez, ajustez, validez.",
+          link_url: `/protected/dossiers/${dealId}`,
+          source_type: "deal",
+          source_id: dealId,
+          trigger_date: new Date().toISOString().slice(0, 10),
+        });
+      }
+    } catch (e) {
+      console.error(`screening autofill ${dealId}:`, e instanceof Error ? e.message : e);
+    }
+  });
 
   revalidatePath("/protected/prospection");
   revalidatePath("/protected/dossiers");
