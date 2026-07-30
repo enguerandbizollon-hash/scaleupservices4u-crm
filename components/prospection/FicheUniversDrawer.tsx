@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {
   getUniversFicheDetail, createDossierFromUnivers, promoteUniversToOrganization,
-  updateUniversStatut,
+  updateUniversStatut, enrichFicheFromPappers,
   type UniversFicheDetail, type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -71,6 +71,26 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
+
+  async function handlePappers() {
+    if (enriching) return;
+    setEnriching(true);
+    setEnrichError(null);
+    const res = await enrichFicheFromPappers(siren);
+    if (res.success) {
+      const fresh = await getUniversFicheDetail(siren);
+      if (fresh.success) setDetail(fresh.data);
+      if (res.data.beneficiaires === 0) {
+        setEnrichError("Pappers n'a renvoyé aucun bénéficiaire effectif pour ce SIREN.");
+      }
+    } else {
+      setEnrichError(res.error);
+    }
+    setEnriching(false);
+  }
 
   function handleStatut(next: UniversStatut) {
     setStatut(next);
@@ -225,37 +245,93 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
               <div style={sectionTitle}>Finances publiées</div>
               {years.length === 0 ? (
                 <div style={{ fontSize: 12, color: "var(--text-5)" }}>Aucun compte publié dans la source.</div>
+              ) : (() => {
+                const hasEbitda = years.some((y) => detail.finances[y]?.ebitda != null);
+                return (
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ color: "var(--text-5)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                        <th style={{ textAlign: "left", fontWeight: 700, padding: "2px 0" }}>Année</th>
+                        <th style={{ textAlign: "right", fontWeight: 700 }}>CA</th>
+                        {hasEbitda && <th style={{ textAlign: "right", fontWeight: 700 }}>EBITDA</th>}
+                        <th style={{ textAlign: "right", fontWeight: 700 }}>Résultat net</th>
+                        <th style={{ textAlign: "right", fontWeight: 700 }}>Marge</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {years.map((y) => {
+                        const f = detail.finances[y] ?? {};
+                        const ca = f.ca ?? null;
+                        const rn = f.resultat_net ?? null;
+                        const marge = ca != null && ca > 0 && rn != null ? (rn / ca) * 100 : null;
+                        return (
+                          <tr key={y} style={{ borderTop: "1px solid var(--border)" }}>
+                            <td style={{ padding: "5px 0", fontWeight: 700, color: "var(--text-2)" }}>{y}</td>
+                            <td style={{ textAlign: "right", color: "var(--text-2)" }}>{ca != null ? `${fmtAmt(ca)} EUR` : "—"}</td>
+                            {hasEbitda && (
+                              <td style={{ textAlign: "right", fontWeight: 600, color: f.ebitda == null ? "var(--text-5)" : "var(--text-1)" }}>
+                                {f.ebitda != null ? fmtAmt(f.ebitda) : "—"}
+                              </td>
+                            )}
+                            <td style={{ textAlign: "right", color: rn == null ? "var(--text-5)" : rn >= 0 ? "#065F46" : "#991B1B" }}>
+                              {rn != null ? fmtAmt(rn) : "—"}
+                            </td>
+                            <td style={{ textAlign: "right", color: "var(--text-4)" }}>
+                              {marge != null ? `${marge.toFixed(1)}%` : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+
+              {/* Actionnariat (Pappers, bénéficiaires effectifs) */}
+              <div style={sectionTitle}>Actionnariat</div>
+              {detail.actionnariat && detail.actionnariat.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {detail.actionnariat.map((a, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
+                      <span style={{ fontWeight: 700, color: "var(--text-2)" }}>
+                        {[a.prenom, a.nom].filter(Boolean).join(" ")}
+                      </span>
+                      {a.representant_legal && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 20, background: "#DBEAFE", color: "#1D4ED8" }}>
+                          représentant légal
+                        </span>
+                      )}
+                      {a.age != null && <span style={{ color: "var(--text-5)", fontSize: 11.5 }}>{a.age} ans</span>}
+                      <span style={{ marginLeft: "auto", fontWeight: 700, color: "var(--text-1)" }}>
+                        {a.pourcentage_parts != null ? `${a.pourcentage_parts}%` : "—"}
+                      </span>
+                      {a.pourcentage_parts_indirectes != null && a.pourcentage_parts_indirectes > 0 && (
+                        <span style={{ fontSize: 10.5, color: "var(--text-5)" }}>
+                          dont {a.pourcentage_parts_indirectes}% indirect
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {detail.actionnariat_updated_at && (
+                    <div style={{ fontSize: 10.5, color: "var(--text-5)" }}>
+                      Source Pappers, {fmtDateFr(detail.actionnariat_updated_at)}
+                    </div>
+                  )}
+                </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-                  <thead>
-                    <tr style={{ color: "var(--text-5)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".04em" }}>
-                      <th style={{ textAlign: "left", fontWeight: 700, padding: "2px 0" }}>Année</th>
-                      <th style={{ textAlign: "right", fontWeight: 700 }}>CA</th>
-                      <th style={{ textAlign: "right", fontWeight: 700 }}>Résultat net</th>
-                      <th style={{ textAlign: "right", fontWeight: 700 }}>Marge</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {years.map((y) => {
-                      const f = detail.finances[y] ?? {};
-                      const ca = f.ca ?? null;
-                      const rn = f.resultat_net ?? null;
-                      const marge = ca != null && ca > 0 && rn != null ? (rn / ca) * 100 : null;
-                      return (
-                        <tr key={y} style={{ borderTop: "1px solid var(--border)" }}>
-                          <td style={{ padding: "5px 0", fontWeight: 700, color: "var(--text-2)" }}>{y}</td>
-                          <td style={{ textAlign: "right", color: "var(--text-2)" }}>{ca != null ? `${fmtAmt(ca)} EUR` : "—"}</td>
-                          <td style={{ textAlign: "right", color: rn == null ? "var(--text-5)" : rn >= 0 ? "#065F46" : "#991B1B" }}>
-                            {rn != null ? fmtAmt(rn) : "—"}
-                          </td>
-                          <td style={{ textAlign: "right", color: "var(--text-4)" }}>
-                            {marge != null ? `${marge.toFixed(1)}%` : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                  <button onClick={handlePappers} disabled={enriching}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: enriching ? 0.6 : 1 }}>
+                    {enriching ? <Loader2 size={12} className="animate-spin" /> : <Building2 size={12} />}
+                    {enriching ? "Récupération…" : "Récupérer l'actionnariat (Pappers)"}
+                  </button>
+                  <span style={{ fontSize: 11, color: "var(--text-5)" }}>Répartition du capital et âges, 1 jeton Pappers</span>
+                </div>
+              )}
+              {enrichError && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "#991B1B", background: "#FEF2F2", borderRadius: 8, padding: "6px 10px" }}>
+                  {enrichError}
+                </div>
               )}
 
               {/* Dirigeants */}

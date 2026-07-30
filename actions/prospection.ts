@@ -18,6 +18,13 @@ import {
 } from "@/lib/connectors/recherche-entreprises";
 import { sectorFromNaf } from "@/lib/crm/matching-maps";
 import { computeCedabilite } from "@/lib/crm/cedabilite";
+import {
+  fetchEntreprisePappers,
+  normalizeBeneficiaires,
+  mergeFinancesPappers,
+  isPappersConfigured,
+  type ActionnaireNormalise,
+} from "@/lib/connectors/pappers";
 
 const UPSERT_BATCH = 500;
 
@@ -409,6 +416,19 @@ export interface UniversSignalItem {
   severity: string;
 }
 
+export interface UniversFinanceYear {
+  ca?: number | null;
+  resultat_net?: number | null;
+  ebitda?: number | null;
+  ebit?: number | null;
+  marge_nette?: number | null;
+  dettes_financieres?: number | null;
+  tresorerie?: number | null;
+  caf?: number | null;
+  effectif?: number | null;
+  croissance_ca?: number | null;
+}
+
 export interface UniversFicheDetail {
   siren: string;
   nom: string;
@@ -419,7 +439,7 @@ export interface UniversFicheDetail {
   date_creation: string | null;
   effectif_label: string | null;
   categorie: string | null;
-  finances: Record<string, { ca?: number | null; resultat_net?: number | null }>;
+  finances: Record<string, UniversFinanceYear>;
   dirigeants: UniversDirigeant[];
   age_dirigeant_principal: number | null;
   cedabilite_score: number | null;
@@ -427,6 +447,8 @@ export interface UniversFicheDetail {
   statut: string;
   organization_id: string | null;
   first_seen_at: string;
+  actionnariat: ActionnaireNormalise[] | null;
+  actionnariat_updated_at: string | null;
   signaux: UniversSignalItem[];
   deal: { id: string; name: string } | null;
 }
@@ -440,7 +462,7 @@ export async function getUniversFicheDetail(
 
   const { data: fiche, error } = await supabase
     .from("univers_entreprises")
-    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at")
+    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, dirigeants, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, first_seen_at, actionnariat, actionnariat_updated_at")
     .eq("siren", siren)
     .maybeSingle();
   if (error) return { success: false, error: error.message };
@@ -474,6 +496,112 @@ export async function getUniversFicheDetail(
 }
 
 /**
+ * Traduit le JSONB finances d'une fiche univers en lignes financial_data
+ * du dossier (3 derniers exercices). CA/RN viennent de l'API gratuite,
+ * EBITDA/dettes/trésorerie de Pappers quand la fiche a été enrichie.
+ */
+function financialRowsFromFiche(
+  finances: Record<string, UniversFinanceYear> | null | undefined,
+  dealId: string,
+  orgId: string,
+  userId: string,
+) {
+  const years = Object.keys(finances ?? {})
+    .filter((y) => /^\d{4}$/.test(y))
+    .sort()
+    .reverse()
+    .slice(0, 3);
+  return years
+    .map((y) => {
+      const f = finances![y] ?? {};
+      const netDebt = f.dettes_financieres != null && f.tresorerie != null
+        ? f.dettes_financieres - f.tresorerie
+        : null;
+      const row = {
+        user_id: userId,
+        deal_id: dealId,
+        organization_id: orgId,
+        fiscal_year: parseInt(y, 10),
+        period_type: "annual",
+        currency: "EUR",
+        revenue: f.ca ?? null,
+        net_income: f.resultat_net ?? null,
+        ebitda: f.ebitda ?? null,
+        ebit: f.ebit ?? null,
+        net_debt: netDebt,
+        cash: f.tresorerie ?? null,
+        headcount: f.effectif ?? null,
+        revenue_growth: f.croissance_ca ?? null,
+        is_forecast: false,
+        source: "api",
+      };
+      // Une ligne sans aucune donnée n'apporte rien.
+      const hasData = row.revenue != null || row.net_income != null || row.ebitda != null;
+      return hasData ? row : null;
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+}
+
+/**
+ * Enrichissement Pappers d'une fiche univers (Deal OS, chantier B) :
+ * actionnariat (bénéficiaires effectifs, répartition + âges) et finances
+ * profondes (EBE/EBITDA, dettes, trésorerie) fusionnées dans le JSONB
+ * finances. Si la fiche est promue, l'organisation reçoit l'actionnariat.
+ * Coût : 1 appel /entreprise (jetons Pappers).
+ */
+export async function enrichFicheFromPappers(
+  siren: string,
+): Promise<ProspectionActionResult<{ beneficiaires: number; annees_finances: number }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+  if (!isPappersConfigured()) {
+    return { success: false, error: "PAPPERS_API_KEY manquante dans .env.local" };
+  }
+
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, finances, organization_id")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const res = await fetchEntreprisePappers(siren);
+  if (!res.ok) return { success: false, error: res.error };
+
+  const actionnariat = normalizeBeneficiaires(res.fiche.beneficiaires_effectifs);
+  const finances = mergeFinancesPappers(fiche.finances ?? {}, res.fiche.finances);
+  const nowIso = new Date().toISOString();
+
+  const { error: upErr } = await supabase
+    .from("univers_entreprises")
+    .update({
+      actionnariat: actionnariat.length > 0 ? actionnariat : null,
+      actionnariat_updated_at: nowIso,
+      finances,
+      updated_at: nowIso,
+    })
+    .eq("siren", siren);
+  if (upErr) return { success: false, error: upErr.message };
+
+  if (fiche.organization_id && actionnariat.length > 0) {
+    await supabase
+      .from("organizations")
+      .update({ actionnariat, actionnariat_updated_at: nowIso })
+      .eq("id", fiche.organization_id);
+  }
+
+  revalidatePath("/protected/prospection");
+  return {
+    success: true,
+    data: {
+      beneficiaires: actionnariat.length,
+      annees_finances: (res.fiche.finances ?? []).filter((f) => f.annee).length,
+    },
+  };
+}
+
+/**
  * La cible chaude devient un dossier M&A sell-side en un clic :
  * organisation garantie (dédup SIREN), dossier ouvert au stade kickoff avec
  * dirigeant principal prérempli, liaison pivot en rôle client. Si un dossier
@@ -488,7 +616,7 @@ export async function createDossierFromUnivers(
 
   const { data: fiche } = await supabase
     .from("univers_entreprises")
-    .select("siren, nom, naf, secteur, ville, departement, date_creation, dirigeants")
+    .select("siren, nom, naf, secteur, ville, departement, date_creation, dirigeants, finances")
     .eq("siren", siren)
     .maybeSingle();
   if (!fiche) return { success: false, error: "Fiche univers introuvable" };
@@ -556,6 +684,13 @@ export async function createDossierFromUnivers(
     { deal_id: deal.id, organization_id: orgId, user_id: user.id, role_in_dossier: "client" },
     { onConflict: "deal_id,organization_id" },
   );
+
+  // Zéro ressaisie (Deal OS, chantier B) : les exercices connus de la fiche
+  // s'écrivent dans le financier du dossier le jour de sa naissance.
+  const financialRows = financialRowsFromFiche(fiche.finances, deal.id, orgId, user.id);
+  if (financialRows.length > 0) {
+    await supabase.from("financial_data").insert(financialRows);
+  }
 
   const { error: linkErr } = await linkUnivers();
   if (linkErr) return { success: false, error: linkErr.message };
