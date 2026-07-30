@@ -239,7 +239,7 @@ export async function recomputeCedabilite(): Promise<ProspectionActionResult<{ s
   for (let from = 0; ; from += 500) {
     const { data: page, error } = await supabase
       .from("univers_entreprises")
-      .select("siren, nom, age_dirigeant_principal, date_creation, finances")
+      .select("siren, nom, age_dirigeant_principal, date_creation, finances, dirigeants")
       .order("siren", { ascending: true })
       .range(from, from + 499);
     if (error) return { success: false, error: error.message };
@@ -262,6 +262,7 @@ export async function recomputeCedabilite(): Promise<ProspectionActionResult<{ s
           age_dirigeant_principal: f.age_dirigeant_principal,
           date_creation: f.date_creation,
           finances: f.finances,
+          dirigeants: f.dirigeants,
         },
         { types: typesBySiren.get(f.siren) ?? [] },
       );

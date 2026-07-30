@@ -10,11 +10,78 @@
 //   - Fraîcheur des données        (0-10) — comptes récents disponibles
 //   - Ajustements signaux          (± )   — procédure collective, cession déjà
 //     actée, radiation : ces événements écrasent ou pénalisent le score.
+//
+// Piège détecté en recette (2026-07-30, cas SCIERIE FOREST) : quand un
+// membre de la famille a déjà repris les commandes (même nom, une
+// génération d'écart), le dirigeant le plus âgé reste listé et gonflait
+// l'axe âge. Détection « relève familiale » : l'axe âge se calcule alors
+// sur le repreneur, et la raison l'affiche noir sur blanc.
+
+import { computeAgeFromBirth } from "@/lib/connectors/recherche-entreprises";
+
+export interface DirigeantForCedabilite {
+  nom: string | null;
+  prenoms: string | null;
+  qualite: string | null;
+  date_de_naissance: string | null;
+}
 
 export interface FicheForCedabilite {
   age_dirigeant_principal: number | null;
   date_creation: string | null; // ISO
   finances: Record<string, { ca?: number | null; resultat_net?: number | null }> | null;
+  dirigeants?: DirigeantForCedabilite[] | null;
+}
+
+export interface ReleveFamiliale {
+  jeune: { label: string; age: number };
+  senior: { label: string; age: number };
+}
+
+const QUALITE_DIRECTION_RE = /g[ée]rant|pr[ée]sident|directeur g[ée]n[ée]ral/i;
+const QUALITE_EXCLUE_RE = /commissaire/i;
+
+/**
+ * Relève familiale probable : deux dirigeants personnes physiques du même
+ * nom, une génération d'écart (>= 20 ans), le senior en âge de transmettre
+ * (>= 60 ans) et le plus jeune occupant un poste de direction. Dans ce cas
+ * la transmission est vraisemblablement déjà réglée en interne.
+ */
+export function detectReleveFamiliale(
+  dirigeants: DirigeantForCedabilite[] | null | undefined,
+  now: Date = new Date(),
+): ReleveFamiliale | null {
+  const candidats = (dirigeants ?? [])
+    .filter((d) => d.nom && !(d.qualite && QUALITE_EXCLUE_RE.test(d.qualite)))
+    .map((d) => ({
+      nom: (d.nom as string).trim(),
+      label: [d.prenoms?.split(" ")[0], d.nom].filter(Boolean).join(" "),
+      qualite: d.qualite,
+      age: computeAgeFromBirth(d.date_de_naissance, now),
+    }))
+    .filter((d): d is typeof d & { age: number } => d.age != null);
+
+  const byNom = new Map<string, typeof candidats>();
+  for (const c of candidats) {
+    const key = c.nom.toLowerCase();
+    byNom.set(key, [...(byNom.get(key) ?? []), c]);
+  }
+
+  for (const group of byNom.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => a.age - b.age);
+    const jeune = sorted[0];
+    const senior = sorted[sorted.length - 1];
+    if (senior.age < 60) continue;
+    if (senior.age - jeune.age < 20) continue;
+    // Le repreneur doit tenir un poste de direction (tolérance si qualité absente).
+    if (jeune.qualite && !QUALITE_DIRECTION_RE.test(jeune.qualite)) continue;
+    return {
+      jeune: { label: jeune.label, age: jeune.age },
+      senior: { label: senior.label, age: senior.age },
+    };
+  }
+  return null;
 }
 
 export interface SignauxForCedabilite {
@@ -44,7 +111,15 @@ export function computeCedabilite(
   }
 
   // ── Âge du dirigeant principal (0-40) ───────────────────────────────────
-  const age = fiche.age_dirigeant_principal;
+  // Relève familiale détectée : le signal de transmission est éteint, l'axe
+  // âge se calcule sur le repreneur (naturellement bas), raison affichée.
+  const releve = detectReleveFamiliale(fiche.dirigeants, now);
+  if (releve) {
+    raisons.push(
+      `Relève familiale probable : ${releve.jeune.label} (${releve.jeune.age} ans) aux commandes, même nom que ${releve.senior.label} (${releve.senior.age} ans)`,
+    );
+  }
+  const age = releve ? releve.jeune.age : fiche.age_dirigeant_principal;
   if (age == null) {
     raisons.push("Âge dirigeant inconnu (0/40)");
   } else if (age >= 65 && age <= 70) {
