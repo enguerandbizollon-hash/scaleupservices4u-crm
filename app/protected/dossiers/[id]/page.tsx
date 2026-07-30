@@ -25,7 +25,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   const clientOrg = deal.organization_id
     ? (await supabase
         .from("organizations")
-        .select("id,name,company_stage,organization_type,is_client")
+        .select("id,name,company_stage,organization_type,is_client,actionnariat")
         .eq("id", deal.organization_id)
         .maybeSingle()).data
     : null;

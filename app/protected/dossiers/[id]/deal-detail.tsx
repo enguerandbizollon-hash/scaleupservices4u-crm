@@ -7,6 +7,8 @@ import ActionModal from "@/components/actions/ActionModal";
 // MatchingTab (investisseurs) : supprimé, logique intégrée au SourcingWizard (S4).
 // MaMatchingTab : remonté en onglet Acquéreurs (phase 3, scoring V2).
 import { MaMatchingTab } from "./ma-matching-tab";
+import { CockpitSynthese } from "./cockpit-synthese";
+import type { ActionnaireNormalise } from "@/lib/connectors/pappers";
 import { FinancialTab, type FinancialRow } from "./financial-tab";
 import {
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
@@ -150,7 +152,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
   initialContacts: Contact[];
   initialFinancialData: FinancialRow[];
   initialFees: FeeRow[];
-  initialClientOrganization: { id: string; name: string; company_stage: string | null; organization_type: string | null; is_client: boolean } | null;
+  initialClientOrganization: { id: string; name: string; company_stage: string | null; organization_type: string | null; is_client: boolean; actionnariat?: ActionnaireNormalise[] | null } | null;
   initialSuggestions: SuggestionWithRelations[];
 }) {
   // State sections
@@ -339,37 +341,79 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           </div>
         </div>
 
-        {/* Tabs — tous les dossiers ont au moins Dossier + Financier */}
-        <div style={{ display:"flex", gap:2, marginBottom:14, borderBottom:"1px solid var(--border)", paddingBottom:0 }}>
-          {(isMa
-            ? (deal.deal_type === "ma_sell"
-              ? (["dossier","screening","acquereurs","sourcing","honoraires","financier","documents"] as const)
-              : (["dossier","screening","sourcing","honoraires","financier","documents"] as const))
-            : (["dossier","screening","honoraires","financier","documents"] as const)
-          ).map(tab => {
-            const labels: Record<string, string> = {
-              dossier:"Dossier", screening:"Screening", acquereurs:"Acquéreurs", sourcing:"Sourcing",
-              honoraires:"Honoraires",
-              financier:"Financier",
-              documents:"Documents",
-            };
-            const accentColor = "var(--sell-tx)";
-            const isActive = activeTab === tab;
-            return (
-              <button key={tab} onClick={()=>{
-                setActiveTab(tab as typeof activeTab);
-              }} style={{
-                padding:"8px 16px", border:"none", background:"none", cursor:"pointer",
-                fontSize:13, fontWeight: isActive ? 700 : 500,
-                color: isActive ? "var(--text-1)" : "var(--text-4)",
-                borderBottom: isActive ? `2px solid ${accentColor}` : "2px solid transparent",
-                marginBottom:-1, fontFamily:"inherit",
-              }}>
-                {labels[tab]}
-              </button>
-            );
-          })}
-        </div>
+        {/* Cockpit de synthèse (Deal OS) : où en est ce deal, en 5 secondes */}
+        <CockpitSynthese
+          deal={deal}
+          financialData={initialFinancialData}
+          suggestions={initialSuggestions}
+          clientOrg={initialClientOrganization}
+          onOpenMarket={() => setActiveTab(deal.deal_type === "ma_sell" ? "acquereurs" : "sourcing")}
+        />
+
+        {/* Espaces de travail — Deal OS : 3 moments au lieu de 7 onglets à plat */}
+        {(() => {
+          type PaneKey = typeof activeTab;
+          const espaces: { key: string; label: string; panes: { key: PaneKey; label: string }[] }[] = [
+            {
+              key: "cible", label: "Cible", panes: [
+                { key: "financier", label: "Financier" },
+                { key: "screening", label: "Screening" },
+                { key: "documents", label: "Documents" },
+              ],
+            },
+            ...(isMa ? [{
+              key: "marche", label: "Marché", panes: [
+                ...(deal.deal_type === "ma_sell" ? [{ key: "acquereurs" as PaneKey, label: "Acquéreurs" }] : []),
+                { key: "sourcing" as PaneKey, label: "Sourcing" },
+              ],
+            }] : []),
+            {
+              key: "execution", label: "Exécution", panes: [
+                { key: "dossier", label: "Dossier" },
+                { key: "honoraires", label: "Honoraires" },
+              ],
+            },
+          ];
+          const activeEspace = espaces.find(e => e.panes.some(p => p.key === activeTab)) ?? espaces[espaces.length - 1];
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--border)" }}>
+                {espaces.map(e => {
+                  const isActive = e.key === activeEspace.key;
+                  return (
+                    <button key={e.key} onClick={() => setActiveTab(e.panes[0].key)} style={{
+                      padding: "8px 18px", border: "none", background: "none", cursor: "pointer",
+                      fontSize: 13.5, fontWeight: isActive ? 800 : 500,
+                      color: isActive ? "var(--text-1)" : "var(--text-4)",
+                      borderBottom: isActive ? "2px solid var(--sell-tx)" : "2px solid transparent",
+                      marginBottom: -1, fontFamily: "inherit",
+                    }}>
+                      {e.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {activeEspace.panes.length > 1 && (
+                <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+                  {activeEspace.panes.map(p => {
+                    const isActive = activeTab === p.key;
+                    return (
+                      <button key={p.key} onClick={() => setActiveTab(p.key)} style={{
+                        padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                        cursor: "pointer", fontFamily: "inherit",
+                        border: "1px solid var(--border)",
+                        background: isActive ? "var(--text-1)" : "var(--surface-2)",
+                        color: isActive ? "var(--bg)" : "var(--text-3)",
+                      }}>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Onglet Financier */}
         {activeTab === "financier" && (
