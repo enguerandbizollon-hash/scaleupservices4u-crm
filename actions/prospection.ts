@@ -543,6 +543,60 @@ function financialRowsFromFiche(
 }
 
 /**
+ * Import des exercices de la fiche prospection dans le financier d'un
+ * dossier EXISTANT (né avant le zéro-ressaisie, ou vidé). N'écrit que si
+ * le financier est vide : jamais de doublon, jamais d'écrasement.
+ */
+export async function importFinancesFromFiche(
+  dealId: string,
+): Promise<ProspectionActionResult<{ inserted: number; rows: Record<string, unknown>[] }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("id, organization_id")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!deal) return { success: false, error: "Dossier introuvable" };
+  if (!deal.organization_id) return { success: false, error: "Dossier sans organisation cliente : rattachez-la d'abord" };
+
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("id, siren")
+    .eq("id", deal.organization_id)
+    .maybeSingle();
+  if (!org?.siren) return { success: false, error: "L'organisation n'a pas de SIREN : pas de fiche prospection à importer" };
+
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, finances")
+    .eq("siren", org.siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Aucune fiche prospection pour ce SIREN" };
+
+  const { count } = await supabase
+    .from("financial_data")
+    .select("id", { count: "exact", head: true })
+    .eq("deal_id", dealId);
+  if ((count ?? 0) > 0) return { success: false, error: "Le financier contient déjà des exercices : import refusé pour ne rien écraser" };
+
+  const rows = financialRowsFromFiche(fiche.finances, dealId, org.id, user.id);
+  if (rows.length === 0) return { success: false, error: "La fiche prospection n'a aucun exercice publié" };
+
+  const { data: inserted, error } = await supabase
+    .from("financial_data")
+    .insert(rows)
+    .select("*");
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true, data: { inserted: inserted?.length ?? rows.length, rows: inserted ?? [] } };
+}
+
+/**
  * Enrichissement Pappers d'une fiche univers (Deal OS, chantier B) :
  * actionnariat (bénéficiaires effectifs, répartition + âges) et finances
  * profondes (EBE/EBITDA, dettes, trésorerie) fusionnées dans le JSONB

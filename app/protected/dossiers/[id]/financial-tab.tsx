@@ -4,6 +4,7 @@ import { Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2, Sparkles, Trend
 import { computeFinancials, type FinancialInputs } from "@/lib/crm/financial-calcs";
 import { getBenchmark, getRatingColor } from "@/lib/crm/financial-benchmarks";
 import { upsertFinancialData, getFinancialDataByDeal, deleteFinancialData } from "@/actions/financial-data";
+import { importFinancesFromFiche } from "@/actions/prospection";
 import { FinancialImport } from "@/components/financials/FinancialImport";
 import { FinancialKpiBanner } from "@/components/financials/FinancialKpiBanner";
 import { analyzeFinancialDataAction } from "@/actions/ai/financial";
@@ -530,6 +531,8 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dcfOpen, setDcfOpen] = useState(false);
+  const [ficheImporting, setFicheImporting] = useState(false);
+  const [ficheImportError, setFicheImportError] = useState<string | null>(null);
 
   // Analyse IA financière (V50)
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -783,14 +786,37 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           Aucune donnée financière
         </div>
         <div style={{ fontSize: 13, color: "var(--text-5)", marginBottom: 16 }}>
-          Ajoutez un exercice pour commencer la saisie
+          Importez les exercices publiés de la fiche prospection, ou saisissez un exercice
         </div>
-        <button
-          onClick={() => { setNewYear(CURRENT_YEAR); setModalOpen(true); }}
-          style={{ padding: "8px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-        >
-          + Ajouter un exercice
-        </button>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={async () => {
+              if (ficheImporting) return;
+              setFicheImporting(true);
+              setFicheImportError(null);
+              const res = await importFinancesFromFiche(dealId);
+              setFicheImporting(false);
+              if (res.success) {
+                setRows([...(res.data.rows as unknown as FinancialRow[])].sort((a, b) => b.fiscal_year - a.fiscal_year));
+              } else {
+                setFicheImportError(res.error);
+              }
+            }}
+            disabled={ficheImporting}
+            style={{ padding: "8px 18px", borderRadius: 9, background: "#0F766E", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: ficheImporting ? 0.6 : 1 }}
+          >
+            {ficheImporting ? "Import…" : "Importer depuis la fiche prospection"}
+          </button>
+          <button
+            onClick={() => { setNewYear(CURRENT_YEAR); setModalOpen(true); }}
+            style={{ padding: "8px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            + Ajouter un exercice
+          </button>
+        </div>
+        {ficheImportError && (
+          <div style={{ marginTop: 12, fontSize: 12.5, color: "#991B1B" }}>{ficheImportError}</div>
+        )}
         {modalOpen && <AddYearModal newYear={newYear} setNewYear={setNewYear} newIsForecast={newIsForecast} setNewIsForecast={setNewIsForecast} saving={saving} onAdd={addYear} onClose={() => setModalOpen(false)} />}
       </div>
     );
