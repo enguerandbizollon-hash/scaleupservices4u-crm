@@ -789,6 +789,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           Importez les exercices publiés de la fiche prospection, ou saisissez un exercice
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          {dealId && (
           <button
             onClick={async () => {
               if (ficheImporting) return;
@@ -807,6 +808,7 @@ export function FinancialTab({ dealId, organizationId, dealType = "", currency =
           >
             {ficheImporting ? "Import…" : "Importer depuis la fiche prospection"}
           </button>
+          )}
           <button
             onClick={() => { setNewYear(CURRENT_YEAR); setModalOpen(true); }}
             style={{ padding: "8px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
