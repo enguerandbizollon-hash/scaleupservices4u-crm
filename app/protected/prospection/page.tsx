@@ -15,7 +15,9 @@ async function Content({ searchParams }: { searchParams: Promise<{ statut?: stri
   const supabase = await createClient();
 
   const activeStatut = statut && VALID_STATUTS.has(statut) ? statut : null;
-  const sortRadar = tri === "radar";
+  // Tri radar par DÉFAUT (audit 2026-07-30) : les fiches chaudes en tête,
+  // c'est la raison d'être de l'univers. tri=recent pour l'ordre d'arrivée.
+  const sortRadar = tri !== "recent";
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
