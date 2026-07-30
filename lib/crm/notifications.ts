@@ -9,12 +9,14 @@ export type NotificationKind =
   | "action_reminder"
   | "rgpd_expiry"
   | "fee_overdue"
-  | "task_due";
+  | "task_due"
+  | "veille_profil";
 
 export type NotificationSourceType =
   | "action"
   | "fee_milestone"
-  | "contact";
+  | "contact"
+  | "screening_profile";
 
 export interface NotificationInput {
   user_id: string;

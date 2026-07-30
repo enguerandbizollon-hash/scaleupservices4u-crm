@@ -15,6 +15,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueueNotification } from "@/lib/crm/notifications";
+import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -75,6 +76,7 @@ export async function GET(req: Request) {
   }
 
   const supabase = createAdminClient();
+  const runId = await startCronRun(supabase, "notifications");
   const today = todayISO();
 
   // ── Job 1 : rappels d'actions ─────────────────────────────────────────────
@@ -86,6 +88,7 @@ export async function GET(req: Request) {
     .not("reminder_days", "is", null);
 
   if (error) {
+    await finishCronRun(supabase, runId, { ok: false, errors: [error.message] });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -198,6 +201,16 @@ export async function GET(req: Request) {
       else queuedRgpd++;
     }
   }
+
+  await finishCronRun(supabase, runId, {
+    ok: errors.length === 0,
+    summary: {
+      actions: { scanned: scannedActions, queued: queuedActions },
+      milestones: { scanned: scannedMilestones, queued: queuedMilestones },
+      rgpd: { scanned: scannedRgpd, queued: queuedRgpd },
+    },
+    errors: errors.slice(0, 10),
+  });
 
   return NextResponse.json({
     ok: true,

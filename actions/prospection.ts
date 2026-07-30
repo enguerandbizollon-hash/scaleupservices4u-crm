@@ -16,7 +16,7 @@ import {
   type ScreeningFilters,
 } from "@/lib/connectors/recherche-entreprises";
 import { computeCedabilite } from "@/lib/crm/cedabilite";
-import { fetchSignalTypesBySiren, scoreUniversRows } from "@/lib/crm/cedabilite-ingest";
+import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { universRowFromHit } from "@/lib/crm/univers-ingest";
 import {
   fetchEntreprisePappers,
@@ -689,6 +689,9 @@ export async function enrichFicheFromPappers(
       .update({ actionnariat, actionnariat_updated_at: nowIso })
       .eq("id", fiche.organization_id);
   }
+
+  // Les finances ont bougé : le radar suit immédiatement (cran 1).
+  await recomputeCedabiliteForSirens(supabase, [siren]);
 
   revalidatePath("/protected/prospection");
   return {

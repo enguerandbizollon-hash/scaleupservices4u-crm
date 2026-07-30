@@ -25,6 +25,7 @@ import {
   type NormalizedSignal,
 } from "@/lib/connectors/bodacc";
 import { recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
+import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -124,6 +125,7 @@ export async function GET(req: Request) {
   const toDate = isoDaysAgo(0);
 
   const supabase = createAdminClient();
+  const runId = await startCronRun(supabase, "bodacc-ingest");
   const errors: string[] = [];
   const perFamille: Record<string, { fetched: number; inserted: number; skipped: number }> = {};
 
@@ -185,6 +187,12 @@ export async function GET(req: Request) {
     if (error) errors.push(`purge: ${error.message}`);
     else purged = (data as number) ?? 0;
   }
+
+  await finishCronRun(supabase, runId, {
+    ok: errors.length === 0,
+    summary: { window: { fromDate, toDate, days }, known_sirens: known.size, perFamille, radar_rescored: radarRescored, purged },
+    errors,
+  });
 
   return NextResponse.json({
     ok: errors.length === 0,

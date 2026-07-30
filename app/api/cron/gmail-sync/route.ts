@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncGmailForUser } from "@/lib/connectors/gmail-ingest";
+import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,6 +35,7 @@ export async function GET(req: Request) {
   }
 
   const admin = createAdminClient();
+  const runId = await startCronRun(admin, "gmail-sync");
 
   // Récupère tous les users qui ont un token Gmail valide (via user_settings)
   // ET dont la sync n'est pas désactivée. Un join logique côté code car la
@@ -44,6 +46,7 @@ export async function GET(req: Request) {
     .not("gcal_access_token", "is", null);
 
   if (settingsErr) {
+    await finishCronRun(admin, runId, { ok: false, errors: [settingsErr.message] });
     return NextResponse.json({ error: settingsErr.message }, { status: 500 });
   }
 
@@ -78,6 +81,12 @@ export async function GET(req: Request) {
       globalErrors.push(`user ${c.user_id}: ${err instanceof Error ? err.message : "erreur"}`);
     }
   }
+
+  await finishCronRun(admin, runId, {
+    ok: globalErrors.length === 0,
+    summary: { users_processed: eligible.length, results },
+    errors: globalErrors.slice(0, 10),
+  });
 
   return NextResponse.json({
     ok: true,
