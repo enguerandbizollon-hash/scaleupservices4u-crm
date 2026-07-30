@@ -10,10 +10,10 @@ export const maxDuration = 300;
 const PAGE_SIZE = 50;
 const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "ecarte", "promu"]);
 
-type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string }>;
+type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string; fiche?: string }>;
 
 async function Content({ searchParams }: { searchParams: ProspectionSearchParams }) {
-  const { statut, page: pageParam, tri, q: qParam } = await searchParams;
+  const { statut, page: pageParam, tri, q: qParam, fiche: ficheParam } = await searchParams;
   const supabase = await createClient();
 
   const activeStatut = statut && VALID_STATUTS.has(statut) ? statut : null;
@@ -82,6 +82,18 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     promu: promu.count ?? 0,
   };
 
+  // Deep-link ?fiche=SIREN (cran 2) : un signal, une notification ou un lien
+  // externe ouvre directement le tiroir 360 de la fiche visée.
+  let initialFiche: { siren: string; nom: string; statut: string } | null = null;
+  if (ficheParam && /^\d{9}$/.test(ficheParam)) {
+    const { data: f } = await supabase
+      .from("univers_entreprises")
+      .select("siren, nom, statut")
+      .eq("siren", ficheParam)
+      .maybeSingle();
+    if (f) initialFiche = { siren: f.siren, nom: f.nom, statut: f.statut };
+  }
+
   const flux = {
     total: totalAll.count ?? 0,
     chaudes: chaudes.count ?? 0,
@@ -101,6 +113,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
       activeStatut={activeStatut}
       sortRadar={sortRadar}
       searchQ={q}
+      initialFiche={initialFiche}
       page={page}
       pageSize={PAGE_SIZE}
     />

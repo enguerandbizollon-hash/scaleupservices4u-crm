@@ -147,7 +147,7 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, univers, universTotal, statCounts, flux, activeStatut, sortRadar, searchQ, page, pageSize }: {
+export function ProspectionClient({ profiles, univers, universTotal, statCounts, flux, activeStatut, sortRadar, searchQ, initialFiche, page, pageSize }: {
   profiles: ProfileRow[];
   univers: UniversRow[];
   universTotal: number;
@@ -156,6 +156,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   activeStatut: string | null;
   sortRadar: boolean;
   searchQ: string | null;
+  initialFiche: { siren: string; nom: string; statut: string } | null;
   page: number;
   pageSize: number;
 }) {
@@ -177,8 +178,9 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batching, setBatching] = useState(false);
 
-  // Fiche ouverte dans le tiroir de détail.
-  const [openedFiche, setOpenedFiche] = useState<{ siren: string; nom: string; statut: string } | null>(null);
+  // Fiche ouverte dans le tiroir de détail. Un deep-link ?fiche=SIREN
+  // (signal, notification) ouvre le tiroir dès l'arrivée sur la page.
+  const [openedFiche, setOpenedFiche] = useState<{ siren: string; nom: string; statut: string } | null>(initialFiche);
 
   const secteursDisponibles = useMemo(
     () => [...new Set(Object.values(NAF_DIVISION_TO_SECTOR))].sort((a, b) => a.localeCompare(b, "fr")),

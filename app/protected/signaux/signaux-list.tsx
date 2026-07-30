@@ -17,6 +17,8 @@ export type SignalRow = {
   read_at: string | null;
   organization_id: string | null;
   organization_name: string | null;
+  /** Le SIREN a une fiche univers : le signal mène au tiroir 360. */
+  in_univers: boolean;
   ville: string | null;
   departement: string | null;
   url: string | null;
@@ -143,13 +145,27 @@ export function SignauxList({ signaux, unreadCount, activeType, unreadOnly }: {
                   {meta.label}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: isRead ? 500 : 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s.titre}
-                  </div>
+                  {s.in_univers ? (
+                    <Link href={`/protected/prospection?fiche=${s.siren}`}
+                      title="Ouvrir la fiche 360 dans la prospection"
+                      style={{ display: "block", fontSize: 13.5, fontWeight: isRead ? 500 : 700, color: "#0F766E", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.titre}
+                    </Link>
+                  ) : (
+                    <div style={{ fontSize: 13.5, fontWeight: isRead ? 500 : 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.titre}
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 11.5, color: "var(--text-5)", flexWrap: "wrap" }}>
                     <span>{fmtDate(s.signal_date)}</span>
                     <span>SIREN {s.siren}</span>
                     {s.departement && <span>Dépt {s.departement}</span>}
+                    {s.in_univers && (
+                      <Link href={`/protected/prospection?fiche=${s.siren}`}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0F766E", textDecoration: "none", fontWeight: 700 }}>
+                        360°
+                      </Link>
+                    )}
                     {s.organization_id && s.organization_name && (
                       <Link href={`/protected/organisations/${s.organization_id}`}
                         style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#065F46", textDecoration: "none", fontWeight: 600 }}>

@@ -44,6 +44,18 @@ async function Content({ searchParams }: { searchParams: Promise<{ type?: string
     );
   }
 
+  // Signal actionnable (cran 2) : si le SIREN a une fiche univers, le signal
+  // mène directement au tiroir 360 au lieu d'être un mur de lecture.
+  const sirens = [...new Set((rows ?? []).map((r) => r.siren))];
+  const inUnivers = new Set<string>();
+  for (let i = 0; i < sirens.length; i += 500) {
+    const { data: uRows } = await supabase
+      .from("univers_entreprises")
+      .select("siren")
+      .in("siren", sirens.slice(i, i + 500));
+    for (const u of uRows ?? []) inUnivers.add(u.siren);
+  }
+
   const signaux: SignalRow[] = (rows ?? []).map((r) => {
     const org = Array.isArray(r.organizations) ? r.organizations[0] : r.organizations;
     const payload = (r.payload ?? {}) as Record<string, unknown>;
@@ -57,6 +69,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ type?: string
       read_at: r.read_at,
       organization_id: r.organization_id,
       organization_name: (org as { name?: string } | null)?.name ?? null,
+      in_univers: inUnivers.has(r.siren),
       ville: typeof payload.ville === "string" ? payload.ville : null,
       departement: typeof payload.departement === "string" ? payload.departement : null,
       url: typeof payload.url === "string" ? payload.url : null,

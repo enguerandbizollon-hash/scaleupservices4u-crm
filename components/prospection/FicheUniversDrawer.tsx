@@ -4,7 +4,6 @@
 // liens sources) et la suite du geste métier : promouvoir, créer le dossier.
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   X, Loader2, Building2, FolderPlus, ExternalLink, Gauge, ArrowUpRight,
@@ -42,7 +41,6 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   onClose: () => void;
   onLocalStatut: (siren: string, statut: string) => void;
 }) {
-  const router = useRouter();
   const [detail, setDetail] = useState<UniversFicheDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statut, setStatut] = useState(statutSeed);
@@ -119,6 +117,11 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     });
   }
 
+  // Fin de l'éjection du flux (cran 2, audit 2026-07-30) : la création du
+  // dossier réussit EN PLACE. On reste dans le triage, le lien vers le
+  // dossier est là si on le veut, et le brouillon de screening se génère
+  // en tâche de fond (la cloche préviendra).
+  const [createdNote, setCreatedNote] = useState<string | null>(null);
   function handleCreateDossier() {
     if (busyRef.current) return;
     const nom = detail?.nom ?? nomSeed;
@@ -127,11 +130,20 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     setActionError(null);
     startTransition(async () => {
       const res = await createDossierFromUnivers(siren);
+      busyRef.current = false;
       if (res.success) {
+        setStatut("promu");
         onLocalStatut(siren, "promu");
-        router.push(`/protected/dossiers/${res.data.deal_id}`);
+        setDetail((d) => (d ? {
+          ...d,
+          statut: "promu",
+          organization_id: res.data.organization_id,
+          deal: { id: res.data.deal_id, name: res.data.deal_name },
+        } : d));
+        setCreatedNote(res.data.created_deal
+          ? "Dossier créé. Le brouillon de screening se génère en arrière-plan, la cloche vous préviendra."
+          : "Un dossier ouvert existait déjà pour cette organisation : fiche rattachée.");
       } else {
-        busyRef.current = false;
         setActionError(res.error);
       }
     });
@@ -429,6 +441,11 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
           {actionError && (
             <div style={{ width: "100%", fontSize: 12, color: "#991B1B" }}>{actionError}</div>
+          )}
+          {createdNote && (
+            <div style={{ width: "100%", fontSize: 12, color: "#065F46", background: "#ECFDF5", borderRadius: 8, padding: "6px 10px" }}>
+              {createdNote}
+            </div>
           )}
           {detail?.deal ? (
             <Link href={`/protected/dossiers/${detail.deal.id}`}
