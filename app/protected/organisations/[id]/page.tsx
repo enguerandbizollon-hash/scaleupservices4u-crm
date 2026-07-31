@@ -11,6 +11,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     .from("organizations")
     .select(`
       id,name,organization_type,base_status,sector,location,website,description,notes,
+      siren,street,postal_code,city,region,country,latitude,longitude,address_formatted,geocoded_at,
       investment_ticket,investment_stage,deal_name_hint,
       investor_ticket_min,investor_ticket_max,investor_sectors,investor_stages,investor_geographies,investor_thesis,investor_stage_min,investor_stage_max,linkedin_url,
       founded_year,employee_count,company_stage,revenue_range,
@@ -21,6 +22,17 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     .eq("id", id).maybeSingle();
 
   if (!org) notFound();
+
+  // Pont vers la prospection : une organisation née d'une fiche univers
+  // (promotion) garde son SIREN, donc son radar et sa fiche 360 restent
+  // accessibles depuis l'écran CRM au lieu d'être enfermés côté univers.
+  const { data: universFiche } = org.siren
+    ? await supabase
+        .from("univers_entreprises")
+        .select("siren, statut, cedabilite_score, cedabilite_raisons")
+        .eq("siren", org.siren)
+        .maybeSingle()
+    : { data: null };
 
   // Les activités/tâches de l'organisation sont chargées côté client par
   // <ActionTimeline filters={{ organization_id: id }} /> dans OrgDetail.
@@ -56,7 +68,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
     return d;
   }).filter(Boolean);
 
-  return <OrgDetail org={org} contacts={contacts} deals={deals} clientDeals={clientDeals ?? []} financialData={financialData ?? []} actionsCount={actionsCount ?? 0} />;
+  return <OrgDetail org={org} contacts={contacts} deals={deals} clientDeals={clientDeals ?? []} financialData={financialData ?? []} actionsCount={actionsCount ?? 0} universFiche={universFiche ?? null} />;
 }
 
 export default function OrgPage({ params }: { params: Promise<{ id: string }> }) {

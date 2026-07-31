@@ -10,6 +10,7 @@ import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
 import { OrganisationAddressBlock } from "@/components/organisations/OrganisationAddressBlock";
+import { cedabiliteBand } from "@/lib/crm/cedabilite";
 
 const INVESTOR_TYPES = ["investor", "business_angel", "family_office", "corporate"];
 const COMPANY_PROFILE_TYPES = ["client","prospect_client","target","buyer","bank","advisor","law_firm","accounting_firm","consulting_firm","other"];
@@ -72,8 +73,9 @@ const CLIENT_DEAL_STATUS: Record<string, { bg: string; tx: string; label: string
   lost:   { bg: "#FEE2E2",          tx: "#991B1B", label: "Perdu"    },
   paused: { bg: "#FEF3C7",          tx: "#92400E", label: "En pause" },
 };
-export function OrgDetail({ org, contacts, deals, clientDeals, financialData, actionsCount }: {
+export function OrgDetail({ org, contacts, deals, clientDeals, financialData, actionsCount, universFiche }: {
   org: any; contacts: any[]; deals: any[]; clientDeals: any[]; financialData: FinancialRow[]; actionsCount: number;
+  universFiche: { siren: string; statut: string; cedabilite_score: number | null; cedabilite_raisons: string[] | null } | null;
 }) {
   const [tab, setTab] = useState<Tab>("contacts");
   const sc = STATUS_COLORS[org.base_status] ?? STATUS_COLORS.to_qualify;
@@ -132,6 +134,15 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
                   </span>
                 ) : null;
               })()}
+              {universFiche?.cedabilite_score != null && (() => {
+                const b = cedabiliteBand(universFiche.cedabilite_score);
+                return (
+                  <span title={(universFiche.cedabilite_raisons ?? []).join("\n")}
+                    style={{ fontSize:11.5, fontWeight:700, padding:"3px 10px", borderRadius:20, background:b.bg, color:b.tx }}>
+                    Radar {universFiche.cedabilite_score} · {b.label}
+                  </span>
+                );
+              })()}
             </div>
 
             {/* Nom */}
@@ -146,6 +157,16 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
                   style={{ display:"flex", alignItems:"center", gap:4, color:"var(--text-3)", textDecoration:"none" }}>
                   <Globe size={11}/>{org.website.replace(/^https?:\/\//, "")}
                 </a>
+              )}
+              {org.siren && (
+                <span style={{ fontFamily:"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}>SIREN {org.siren}</span>
+              )}
+              {universFiche && (
+                <Link href={`/protected/prospection?fiche=${universFiche.siren}`}
+                  title="Rouvrir la fiche 360 côté prospection : dirigeants, signaux, synthèse, radar"
+                  style={{ display:"flex", alignItems:"center", gap:3, color:"#0F766E", textDecoration:"none", fontWeight:700 }}>
+                  Fiche 360 prospection <ChevronRight size={11}/>
+                </Link>
               )}
             </div>
 
