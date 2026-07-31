@@ -115,15 +115,18 @@ export async function GET(req: Request) {
         if (error) errors.push(`${profile.name} univers: ${error.message}`);
       }
 
-      // 1 bis. Passages à chaud : fiches qui franchissent le seuil radar cette
-      // semaine. Exclusions : écartées/promues (décision prise) et échanges en
-      // cours (on parle déjà au dirigeant). Les DORMANTES restent incluses :
-      // une dormante qui chauffe mérite un réveil anticipé.
+      // 1 bis. Passages à chaud : fiches EXISTANTES qui franchissent le seuil
+      // radar cette semaine (une fiche nouvelle et chaude est déjà comptée
+      // dans « nouvelles cibles », revue 2026-07-30 : pas de double compte).
+      // Exclusions : écartées/promues (décision prise) et échanges en cours
+      // (on parle déjà au dirigeant). Les DORMANTES restent incluses : une
+      // dormante qui chauffe mérite un réveil anticipé.
       const passeesChaudes = rows.filter((r) => {
         if (r.cedabilite_score < SEUIL_CHAUDE) return false;
         const prev = avant.get(r.siren);
-        if (prev && ["ecarte", "promu", "echange"].includes(prev.statut)) return false;
-        return prev == null || prev.score == null || prev.score < SEUIL_CHAUDE;
+        if (prev == null) return false;
+        if (["ecarte", "promu", "echange"].includes(prev.statut)) return false;
+        return prev.score == null || prev.score < SEUIL_CHAUDE;
       });
 
       // 2. Signaler les entrées (nouveaux SIREN uniquement).

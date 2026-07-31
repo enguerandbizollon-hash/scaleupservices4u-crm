@@ -236,6 +236,22 @@ export async function GET(req: Request) {
           errors.push(`reveil ${f.siren}: aucun utilisateur destinataire (aucun profil de chasse)`);
           continue;
         }
+        // Réveiller D'ABORD, garde statut='dormant' (revue 2026-07-30) : une
+        // décision prise entre le scan et maintenant n'est jamais écrasée, et
+        // l'ordre inverse (notifier puis échouer l'update) re-notifierait
+        // toutes les heures sans dédup possible (source_id UUID, PK = siren).
+        const { data: woken, error: upErr } = await supabase
+          .from("univers_entreprises")
+          .update({ statut: "a_approcher", dormant_until: null, updated_at: new Date().toISOString() })
+          .eq("siren", f.siren)
+          .eq("statut", "dormant")
+          .select("siren");
+        if (upErr) {
+          errors.push(`reveil ${f.siren}: ${upErr.message}`);
+          continue;
+        }
+        if (!woken || woken.length === 0) continue; // décision concurrente, rien à réveiller
+        wokenCedants++;
         const res = await enqueueNotification(supabase, {
           user_id: userId,
           kind: "reveil_cedant",
@@ -244,16 +260,9 @@ export async function GET(req: Request) {
           link_url: `/protected/prospection?fiche=${f.siren}`,
           trigger_date: today,
         });
-        if (res.error) {
-          errors.push(`reveil ${f.siren}: ${res.error}`);
-          continue;
-        }
-        const { error: upErr } = await supabase
-          .from("univers_entreprises")
-          .update({ statut: "a_approcher", dormant_until: null, updated_at: new Date().toISOString() })
-          .eq("siren", f.siren);
-        if (upErr) errors.push(`reveil ${f.siren}: ${upErr.message}`);
-        else wokenCedants++;
+        // La fiche est déjà revenue dans le triage : un échec de notification
+        // se journalise mais ne bloque pas le réveil.
+        if (res.error) errors.push(`reveil ${f.siren}: notification: ${res.error}`);
       }
     }
   }
