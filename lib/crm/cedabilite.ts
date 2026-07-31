@@ -31,6 +31,8 @@ export interface FicheForCedabilite {
   date_creation: string | null; // ISO
   finances: Record<string, { ca?: number | null; resultat_net?: number | null }> | null;
   dirigeants?: DirigeantForCedabilite[] | null;
+  /** Bénéficiaires effectifs (Pappers, v68) : nourrit l'axe concentration. */
+  actionnariat?: Array<{ type?: string | null; pourcentage_parts?: number | null }> | null;
 }
 
 export interface ReleveFamiliale {
@@ -189,6 +191,23 @@ export function computeCedabilite(
     }
   }
 
+  // ── Concentration du capital (0-5) — barème routine Vectis 2026-07-31 ───
+  // Un ou deux bénéficiaires effectifs personnes physiques qui tiennent
+  // l'essentiel du capital : décision de cession simple, pas de minoritaires
+  // à convaincre. Ne s'évalue qu'après enrichissement Pappers.
+  const partsPhysiques = (fiche.actionnariat ?? [])
+    .filter((a) => a.type !== "morale")
+    .map((a) => a.pourcentage_parts ?? 0)
+    .filter((p) => p > 0)
+    .sort((a, b) => b - a);
+  if (partsPhysiques.length > 0) {
+    const top2 = partsPhysiques.slice(0, 2).reduce((s, p) => s + p, 0);
+    if (top2 >= 80) {
+      score += 5;
+      raisons.push(`+5 capital concentré (${partsPhysiques.length === 1 ? "un actionnaire" : "deux actionnaires"} ≈ ${Math.round(Math.min(100, top2))} %)`);
+    }
+  }
+
   // ── Ajustements signaux ─────────────────────────────────────────────────
   if (signaux.types.includes("procedure_collective")) {
     score -= 30;
@@ -197,6 +216,15 @@ export function computeCedabilite(
   if (signaux.types.includes("depot_comptes")) {
     score += 5;
     raisons.push("+5 dépôt de comptes récent (données fraîches à jour)");
+  }
+  // Barème routine Vectis (2026-07-31) : signaux d'événement BODACC.
+  if (signaux.types.includes("location_gerance")) {
+    score += 8;
+    raisons.push("+8 fonds donné en location-gérance (transmission amorcée)");
+  }
+  if (signaux.types.includes("changement_dirigeant")) {
+    score += 4;
+    raisons.push("+4 changement récent dans la direction (BODACC)");
   }
 
   return { score: Math.max(0, Math.min(100, score)), raisons };

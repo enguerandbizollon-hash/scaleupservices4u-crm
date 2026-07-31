@@ -31,11 +31,27 @@ export const FULL_INGEST_FAMILLES = [
 // Famille croisée avec les SIREN connus uniquement (~12 000/jour brut).
 export const CROSS_ONLY_FAMILLE = "Dépôts des comptes";
 
+// Famille « Modifications diverses » (absorption routine Vectis, 2026-07-31) :
+// ~8,5 M d'annonces au total, mais seuls quatre motifs nous intéressent.
+// Le préfiltre serveur (LIKE sur modificationsgenerales) ramène le volume à
+// ~1 000/jour, croisé ensuite avec les SIREN connus. Signaux produits :
+//   - fusion_absorption : « opération de fusion », « transmission universelle
+//     du patrimoine » → LE signal consolidateur (flux 2 de la routine)
+//   - location_gerance : « donné en location-gérance » → signal de
+//     transmission fort (barème routine)
+//   - changement_dirigeant : « Modification survenue sur l'administration »
+export const MODIFICATIONS_FAMILLE = "Modifications diverses";
+export const MODIFICATIONS_PREFILTER_WHERE =
+  '(modificationsgenerales LIKE "*fusion*" OR modificationsgenerales LIKE "*transmission universelle*" OR modificationsgenerales LIKE "*location-g*" OR modificationsgenerales LIKE "*administration*")';
+
 export type BodaccSignalType =
   | "vente_cession"
   | "procedure_collective"
   | "radiation"
-  | "depot_comptes";
+  | "depot_comptes"
+  | "fusion_absorption"
+  | "location_gerance"
+  | "changement_dirigeant";
 
 // ── Formes brutes de l'API (subset utilisé) ──────────────────────────────────
 
@@ -55,6 +71,7 @@ export interface RawAnnonce {
   jugement?: string | null;  // JSON sérialisé
   acte?: string | null;      // JSON sérialisé
   depot?: string | null;     // JSON sérialisé (dépôts de comptes)
+  modificationsgenerales?: string | null; // JSON sérialisé ({"descriptif": ...})
   listeprecedentproprietaire?: string | null;
   listeprecedentexploitant?: string | null;
   url_complete?: string | null;
@@ -101,8 +118,27 @@ export function mapFamilleToType(famille: string | null | undefined): BodaccSign
 
 export function severityFor(type: BodaccSignalType): NormalizedSignal["severity"] {
   // Une procédure collective est une alerte marché (et une opportunité de
-  // reprise à la barre côté buy-side) ; le reste est informatif.
-  return type === "procedure_collective" ? "alerte" : "info";
+  // reprise à la barre côté buy-side). Une fusion/TUP signe un consolidateur
+  // actif (flux 2) et une location-gérance une transmission amorcée (flux 1) :
+  // deux opportunités. Le reste est informatif.
+  if (type === "procedure_collective") return "alerte";
+  if (type === "fusion_absorption" || type === "location_gerance") return "opportunite";
+  return "info";
+}
+
+/**
+ * Classe une annonce « Modifications diverses » d'après son descriptif.
+ * Retourne null pour les modifications sans intérêt métier (capital,
+ * activité, adresse...) : elles ne deviennent pas des signaux.
+ * \bfusion\b ne matche pas « diffusion » (frontière de mot).
+ */
+export function classifyModification(descriptif: string | null | undefined): BodaccSignalType | null {
+  if (!descriptif) return null;
+  const d = descriptif.toLowerCase();
+  if (/transmission universelle|\bfusion\b/.test(d)) return "fusion_absorption";
+  if (/location[- ]g[ée]rance/.test(d)) return "location_gerance";
+  if (/administration/.test(d)) return "changement_dirigeant";
+  return null;
 }
 
 /** Parse tolérant d'un champ JSON sérialisé par Opendatasoft. */
@@ -136,6 +172,12 @@ export function buildTitre(type: BodaccSignalType, annonce: RawAnnonce): string 
       return `Radiation : ${nom}${lieu}`;
     case "depot_comptes":
       return `Dépôt des comptes : ${nom}${lieu}`;
+    case "fusion_absorption":
+      return `Fusion / absorption : ${nom}${lieu}`;
+    case "location_gerance":
+      return `Location-gérance : ${nom}${lieu}`;
+    case "changement_dirigeant":
+      return `Changement de direction : ${nom}${lieu}`;
   }
 }
 
@@ -144,7 +186,14 @@ export function buildTitre(type: BodaccSignalType, annonce: RawAnnonce): string 
  * Retourne null si la famille est inconnue ou si aucun SIREN n'est présent.
  */
 export function normalizeAnnonce(raw: RawAnnonce): NormalizedSignal | null {
-  const type = mapFamilleToType(raw.familleavis_lib);
+  // Modifications diverses : le type dépend du descriptif (fusion, location-
+  // gérance, administration) ; les modifications banales ne signalent rien.
+  const modif = raw.familleavis_lib === MODIFICATIONS_FAMILLE
+    ? parseJsonField(raw.modificationsgenerales)
+    : null;
+  const type = raw.familleavis_lib === MODIFICATIONS_FAMILLE
+    ? classifyModification(typeof modif?.descriptif === "string" ? (modif.descriptif as string) : null)
+    : mapFamilleToType(raw.familleavis_lib);
   if (!type) return null;
   const sirens = extractSirens(raw.registre);
   if (sirens.length === 0) return null;
@@ -170,6 +219,7 @@ export function normalizeAnnonce(raw: RawAnnonce): NormalizedSignal | null {
       jugement: parseJsonField(raw.jugement),
       acte: parseJsonField(raw.acte),
       depot: parseJsonField(raw.depot),
+      modifications: modif,
       precedent_proprietaire: parseJsonField(raw.listeprecedentproprietaire),
       precedent_exploitant: parseJsonField(raw.listeprecedentexploitant),
       url: raw.url_complete ?? null,
@@ -185,7 +235,7 @@ const MAX_OFFSET = 9_900;   // fenêtre Opendatosoft (offset + limit ≤ 10 000)
 const SELECT_FIELDS = [
   "id", "dateparution", "familleavis_lib", "typeavis_lib", "commercant",
   "registre", "ville", "cp", "numerodepartement", "region_nom_officiel",
-  "tribunal", "jugement", "acte", "depot",
+  "tribunal", "jugement", "acte", "depot", "modificationsgenerales",
   "listeprecedentproprietaire", "listeprecedentexploitant", "url_complete",
 ].join(", ");
 
@@ -202,11 +252,12 @@ export async function fetchAnnoncesFamille(
   famille: string,
   fromDate: string,
   toDate: string,
+  extraWhere?: string,
 ): Promise<RawAnnonce[]> {
   assertIsoDate(fromDate);
   assertIsoDate(toDate);
   // famille provient de constantes internes ; l'échappement reste une garde.
-  const where = `familleavis_lib = "${famille.replace(/"/g, "")}" AND dateparution >= date'${fromDate}' AND dateparution <= date'${toDate}'`;
+  const where = `familleavis_lib = "${famille.replace(/"/g, "")}" AND dateparution >= date'${fromDate}' AND dateparution <= date'${toDate}'${extraWhere ? ` AND ${extraWhere}` : ""}`;
 
   const out: RawAnnonce[] = [];
   for (let offset = 0; offset <= MAX_OFFSET; offset += PAGE_SIZE) {

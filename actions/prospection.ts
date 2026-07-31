@@ -178,19 +178,24 @@ export async function runScreeningIngest(input: {
     const bruts = result.hits.map((h) => universRowFromHit(h, input.profileId ?? null, nowIso));
 
     // Les finances Pappers déjà acquises survivent à la re-chasse (fusion,
-    // revue 2026-07-30) : l'API gratuite rafraîchit CA/RN sans rien effacer.
-    const financesBySiren = new Map<string, Record<string, Record<string, number | null | undefined>>>();
+    // revue 2026-07-30), et l'actionnariat stocké participe au scoring pour
+    // que le radar soit identique quel que soit le chemin de calcul.
+    const existingBySiren = new Map<string, { finances: Record<string, Record<string, number | null | undefined>>; actionnariat: unknown }>();
     for (let i = 0; i < bruts.length; i += UPSERT_BATCH) {
       const { data: exist } = await supabase
         .from("univers_entreprises")
-        .select("siren, finances")
+        .select("siren, finances, actionnariat")
         .in("siren", bruts.slice(i, i + UPSERT_BATCH).map((r) => r.siren));
-      for (const e of exist ?? []) financesBySiren.set(e.siren, e.finances ?? {});
+      for (const e of exist ?? []) existingBySiren.set(e.siren, { finances: e.finances ?? {}, actionnariat: e.actionnariat ?? null });
     }
-    const fusionnes = bruts.map((r) => ({
-      ...r,
-      finances: mergeFinancesReingest(financesBySiren.get(r.siren), r.finances),
-    }));
+    const fusionnes = bruts.map((r) => {
+      const ex = existingBySiren.get(r.siren);
+      return {
+        ...r,
+        finances: mergeFinancesReingest(ex?.finances, r.finances),
+        ...(ex?.actionnariat ? { actionnariat: ex.actionnariat as Array<{ type?: string | null; pourcentage_parts?: number | null }> } : {}),
+      };
+    });
 
     // Radar calculé à l'ingestion (cran 1) : chaque fiche ressort scorée,
     // signaux BODACC croisés, sans attendre le bouton de recalcul.

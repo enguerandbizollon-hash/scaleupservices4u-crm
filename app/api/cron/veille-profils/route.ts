@@ -32,19 +32,28 @@ const BATCH = 500;
 
 type Supabase = ReturnType<typeof createAdminClient>;
 
-/** État existant des fiches (score, statut, finances) : détecte les passages
- * à chaud et permet la fusion des finances (Pappers survit à la re-veille). */
+/** État existant des fiches (score, statut, finances, actionnariat) : détecte
+ * les passages à chaud, fusionne les finances (Pappers survit à la re-veille)
+ * et fait participer l'actionnariat au rescoring. */
+type ExistingFiche = {
+  score: number | null;
+  statut: string;
+  finances: Record<string, Record<string, number | null | undefined>>;
+  actionnariat: Array<{ type?: string | null; pourcentage_parts?: number | null }> | null;
+};
 async function existingFiches(
   supabase: Supabase,
   sirens: string[],
-): Promise<Map<string, { score: number | null; statut: string; finances: Record<string, Record<string, number | null | undefined>> }>> {
-  const map = new Map<string, { score: number | null; statut: string; finances: Record<string, Record<string, number | null | undefined>> }>();
+): Promise<Map<string, ExistingFiche>> {
+  const map = new Map<string, ExistingFiche>();
   for (let i = 0; i < sirens.length; i += BATCH) {
     const { data } = await supabase
       .from("univers_entreprises")
-      .select("siren, cedabilite_score, statut, finances")
+      .select("siren, cedabilite_score, statut, finances, actionnariat")
       .in("siren", sirens.slice(i, i + BATCH));
-    for (const r of data ?? []) map.set(r.siren, { score: r.cedabilite_score, statut: r.statut, finances: r.finances ?? {} });
+    for (const r of data ?? []) {
+      map.set(r.siren, { score: r.cedabilite_score, statut: r.statut, finances: r.finances ?? {}, actionnariat: r.actionnariat ?? null });
+    }
   }
   return map;
 }
@@ -102,10 +111,14 @@ export async function GET(req: Request) {
       //    calculé à l'ingestion : la veille rescore chaque fiche revue.
       //    Fusion des finances : Pappers survit à la re-veille (revue 2026-07-30).
       const bruts = run.hits.map((h) => universRowFromHit(h, profile.id, nowIso));
-      const fusionnes = bruts.map((r) => ({
-        ...r,
-        finances: mergeFinancesReingest(avant.get(r.siren)?.finances, r.finances),
-      }));
+      const fusionnes = bruts.map((r) => {
+        const prev = avant.get(r.siren);
+        return {
+          ...r,
+          finances: mergeFinancesReingest(prev?.finances, r.finances),
+          ...(prev?.actionnariat ? { actionnariat: prev.actionnariat } : {}),
+        };
+      });
       const typesBySiren = await fetchSignalTypesBySiren(supabase, fusionnes.map((r) => r.siren));
       const rows = scoreUniversRows(fusionnes, typesBySiren);
       for (let i = 0; i < rows.length; i += BATCH) {

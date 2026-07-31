@@ -20,6 +20,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   FULL_INGEST_FAMILLES,
   CROSS_ONLY_FAMILLE,
+  MODIFICATIONS_FAMILLE,
+  MODIFICATIONS_PREFILTER_WHERE,
   fetchAnnoncesFamille,
   normalizeAnnonce,
   type NormalizedSignal,
@@ -170,6 +172,28 @@ export async function GET(req: Request) {
   } catch (e) {
     errors.push(`${CROSS_ONLY_FAMILLE}: ${e instanceof Error ? e.message : "erreur"}`);
     perFamille[CROSS_ONLY_FAMILLE] = { fetched: 0, inserted: 0, skipped: 0 };
+  }
+
+  // ── 2 ter. Modifications diverses : SIREN connus uniquement ───────────────
+  // Préfiltre serveur sur les motifs utiles (fusion/TUP, location-gérance,
+  // administration), classification par descriptif, le reste est ignoré.
+  try {
+    const raw = await fetchAnnoncesFamille(MODIFICATIONS_FAMILLE, fromDate, toDate, MODIFICATIONS_PREFILTER_WHERE);
+    const normalized = raw
+      .map(normalizeAnnonce)
+      .filter((s): s is NormalizedSignal => s !== null)
+      .filter((s) => s.sirens.some((x) => known.has(x)));
+    for (const s of normalized) if (universSirens.has(s.siren)) touchedUnivers.add(s.siren);
+    const res = await upsertSignals(supabase, normalized, orgBySiren);
+    perFamille[MODIFICATIONS_FAMILLE] = {
+      fetched: raw.length,
+      inserted: res.inserted,
+      skipped: res.skipped,
+    };
+    errors.push(...res.errors);
+  } catch (e) {
+    errors.push(`${MODIFICATIONS_FAMILLE}: ${e instanceof Error ? e.message : "erreur"}`);
+    perFamille[MODIFICATIONS_FAMILLE] = { fetched: 0, inserted: 0, skipped: 0 };
   }
 
   // ── 2 bis. Radar : rescorer les fiches univers touchées ──────────────────

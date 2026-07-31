@@ -30,6 +30,9 @@ const TYPE_META: Record<string, { label: string; bg: string; tx: string }> = {
   radiation:            { label: "Radiation",            bg: "var(--surface-3)", tx: "var(--text-4)" },
   depot_comptes:        { label: "Dépôt de comptes",     bg: "#DBEAFE", tx: "#1D4ED8" },
   entree_screening:     { label: "Nouvelle cible",       bg: "#D1FAE5", tx: "#065F46" },
+  fusion_absorption:    { label: "Fusion / TUP",         bg: "#FFF7ED", tx: "#C2410C" },
+  location_gerance:     { label: "Location-gérance",     bg: "#FEF3C7", tx: "#92400E" },
+  changement_dirigeant: { label: "Chgt direction",       bg: "#EDE9FE", tx: "#5B21B6" },
 };
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -42,6 +45,9 @@ const FILTERS: { value: string | null; label: string }[] = [
   { value: null,                    label: "Tous" },
   { value: "entree_screening",      label: "Nouvelles cibles" },
   { value: "vente_cession",         label: "Cessions" },
+  { value: "location_gerance",      label: "Locations-gérances" },
+  { value: "fusion_absorption",     label: "Fusions / TUP" },
+  { value: "changement_dirigeant",  label: "Chgts direction" },
   { value: "procedure_collective",  label: "Procédures collectives" },
   { value: "radiation",             label: "Radiations" },
   { value: "depot_comptes",         label: "Dépôts de comptes" },

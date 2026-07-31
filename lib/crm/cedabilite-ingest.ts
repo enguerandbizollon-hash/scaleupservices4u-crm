@@ -66,7 +66,7 @@ export async function recomputeCedabiliteForSirens(
     const slice = sirens.slice(i, i + BATCH);
     const { data: fiches, error } = await supabase
       .from("univers_entreprises")
-      .select("siren, nom, age_dirigeant_principal, date_creation, finances, dirigeants")
+      .select("siren, nom, age_dirigeant_principal, date_creation, finances, dirigeants, actionnariat")
       .in("siren", slice);
     if (error) {
       errors.push(error.message);
@@ -91,6 +91,7 @@ export async function recomputeCedabiliteForSirens(
           date_creation: f.date_creation,
           finances: f.finances,
           dirigeants: f.dirigeants,
+          actionnariat: f.actionnariat,
         },
         { types: typesBySiren.get(f.siren) ?? [] },
       );

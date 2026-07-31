@@ -29,6 +29,8 @@ export const SIGNAL_TYPE_LABELS: Record<string, string> = {
   depot_comptes: "Dépôt de comptes",
   entree_screening: "Entrée screening",
   changement_dirigeant: "Changement dirigeant",
+  fusion_absorption: "Fusion / TUP",
+  location_gerance: "Location-gérance",
 };
 
 export const SEVERITY_COLORS: Record<string, string> = {

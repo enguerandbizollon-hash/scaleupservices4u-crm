@@ -15,7 +15,7 @@
     },
     {
       "path": "/api/cron/veille-profils",
-      "schedule": "30 4 * * 1"
+      "schedule": "30 4 * * 1-5"
     }
   ]
 }
