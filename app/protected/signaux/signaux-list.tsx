@@ -33,6 +33,7 @@ const TYPE_META: Record<string, { label: string; bg: string; tx: string }> = {
   fusion_absorption:    { label: "Fusion / TUP",         bg: "#FFF7ED", tx: "#C2410C" },
   location_gerance:     { label: "Location-gérance",     bg: "#FEF3C7", tx: "#92400E" },
   changement_dirigeant: { label: "Chgt direction",       bg: "#EDE9FE", tx: "#5B21B6" },
+  rge_expire:           { label: "RGE non renouvelé",    bg: "#FEF3C7", tx: "#92400E" },
 };
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -47,6 +48,7 @@ const FILTERS: { value: string | null; label: string }[] = [
   { value: "vente_cession",         label: "Cessions" },
   { value: "location_gerance",      label: "Locations-gérances" },
   { value: "fusion_absorption",     label: "Fusions / TUP" },
+  { value: "rge_expire",            label: "RGE non renouvelés" },
   { value: "changement_dirigeant",  label: "Chgts direction" },
   { value: "procedure_collective",  label: "Procédures collectives" },
   { value: "radiation",             label: "Radiations" },

@@ -28,6 +28,10 @@ import {
 } from "@/lib/connectors/bodacc";
 import { recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
+import { fetchRgeExpirations, groupRgeBySiren } from "@/lib/connectors/rge";
+import { fetchFusacqBuzz } from "@/lib/connectors/fusacq";
+import { searchEntreprisesByName } from "@/lib/connectors/recherche-entreprises";
+import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -194,6 +198,105 @@ export async function GET(req: Request) {
   } catch (e) {
     errors.push(`${MODIFICATIONS_FAMILLE}: ${e instanceof Error ? e.message : "erreur"}`);
     perFamille[MODIFICATIONS_FAMILLE] = { fetched: 0, inserted: 0, skipped: 0 };
+  }
+
+  // ── 2 quater. RGE ADEME : qualifications non renouvelées (SIREN connus) ──
+  // Fenêtre J-45 → J-7 : délai de grâce pour les renouvellements tardifs.
+  // Idempotent par UNIQUE(source, external_id) = siren:date_fin.
+  try {
+    const rows = await fetchRgeExpirations(isoDaysAgo(45), isoDaysAgo(7));
+    const grouped = groupRgeBySiren(rows).filter((g) => known.has(g.siren));
+    const rgeSignals = grouped.map((g) => ({
+      siren: g.siren,
+      source: "ademe_rge",
+      signal_type: "rge_expire",
+      signal_date: g.derniere_fin,
+      titre: `Qualification RGE non renouvelée : ${g.nom_entreprise}${g.commune ? ` (${g.commune})` : ""}`,
+      severity: "opportunite",
+      payload: { domaines: g.domaines, commune: g.commune },
+      external_id: `${g.siren}:${g.derniere_fin}`,
+      organization_id: orgBySiren.get(g.siren) ?? null,
+    }));
+    let inserted = 0;
+    for (let i = 0; i < rgeSignals.length; i += UPSERT_BATCH) {
+      const { data, error } = await supabase
+        .from("signaux")
+        .upsert(rgeSignals.slice(i, i + UPSERT_BATCH), { onConflict: "source,external_id", ignoreDuplicates: true })
+        .select("id");
+      if (error) errors.push(`rge upsert: ${error.message}`);
+      else inserted += data?.length ?? 0;
+    }
+    for (const g of grouped) if (universSirens.has(g.siren)) touchedUnivers.add(g.siren);
+    perFamille["RGE (ADEME)"] = { fetched: rows.length, inserted, skipped: rgeSignals.length - inserted };
+  } catch (e) {
+    errors.push(`rge: ${e instanceof Error ? e.message : "erreur"}`);
+    perFamille["RGE (ADEME)"] = { fetched: 0, inserted: 0, skipped: 0 };
+  }
+
+  // ── 2 quinquies. Fusacq Buzz : consolidateurs actifs (flux RSS) ──────────
+  // Extraction IA (tier fast) des noms acquéreur/cible depuis le titre, puis
+  // résolution du SIREN de l'ACQUÉREUR. Non restreint aux SIREN connus : un
+  // consolidateur actif est une intelligence marché en soi (client buy-side
+  // potentiel, acquéreur pour les mandats). Borné à 15 extractions par run.
+  try {
+    const items = await fetchFusacqBuzz();
+    const links = items.map((i) => i.link);
+    const { data: dejaVus } = await supabase
+      .from("signaux")
+      .select("external_id")
+      .eq("source", "fusacq_buzz")
+      .in("external_id", links);
+    const seen = new Set((dejaVus ?? []).map((e) => e.external_id));
+    const nouveaux = items.filter((i) => !seen.has(i.link)).slice(0, 15);
+
+    let inserted = 0;
+    let analysed = 0;
+    for (const item of nouveaux) {
+      if (!isClaudeConfigured()) break;
+      const res = await callClaude({
+        tier: "fast",
+        maxTokens: 300,
+        system: "Tu extrais les parties d'une annonce de fusion-acquisition française. Réponds UNIQUEMENT par un objet JSON, sans texte autour : {\"acquereur\": \"nom exact ou null\", \"cible\": \"nom exact ou null\", \"operation\": \"acquisition\" | \"prise_participation\" | \"levee\" | \"autre\"}. acquereur = l'entreprise qui achète ou prend une participation. Une levée de fonds, une nomination ou un classement : operation = levee ou autre.",
+        prompt: `Titre : ${item.title}\nDescription : ${item.description.slice(0, 400)}`,
+      });
+      analysed++;
+      if (!res) continue;
+      let parsed: { acquereur?: string | null; cible?: string | null; operation?: string } | null = null;
+      try {
+        parsed = JSON.parse(res.text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim());
+      } catch { /* réponse non JSON : item ignoré */ }
+      if (!parsed?.acquereur || !["acquisition", "prise_participation"].includes(parsed.operation ?? "")) continue;
+
+      const candidats = await searchEntreprisesByName(parsed.acquereur, 3);
+      const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+      const acquereurNorm = norm(parsed.acquereur);
+      const resolu = candidats.find((c) => {
+        const n = norm(c.name);
+        return acquereurNorm.length >= 4 && (n.includes(acquereurNorm) || acquereurNorm.includes(n));
+      });
+      if (!resolu) continue;
+
+      const { data, error } = await supabase
+        .from("signaux")
+        .upsert({
+          siren: resolu.siren,
+          source: "fusacq_buzz",
+          signal_type: "fusion_absorption",
+          signal_date: item.pub_date ?? toDate,
+          titre: `Consolidateur : ${resolu.name} reprend ${parsed.cible ?? "une cible"} (Fusacq Buzz)`,
+          severity: "opportunite",
+          payload: { cible: parsed.cible ?? null, url: item.link, titre_source: item.title },
+          external_id: item.link,
+          organization_id: orgBySiren.get(resolu.siren) ?? null,
+        }, { onConflict: "source,external_id", ignoreDuplicates: true })
+        .select("id");
+      if (error) errors.push(`fusacq upsert: ${error.message}`);
+      else inserted += data?.length ?? 0;
+    }
+    perFamille["Fusacq Buzz"] = { fetched: items.length, inserted, skipped: analysed - inserted };
+  } catch (e) {
+    errors.push(`fusacq: ${e instanceof Error ? e.message : "erreur"}`);
+    perFamille["Fusacq Buzz"] = { fetched: 0, inserted: 0, skipped: 0 };
   }
 
   // ── 2 bis. Radar : rescorer les fiches univers touchées ──────────────────

@@ -226,6 +226,10 @@ export function computeCedabilite(
     score += 4;
     raisons.push("+4 changement récent dans la direction (BODACC)");
   }
+  if (signaux.types.includes("rge_expire")) {
+    score += 6;
+    raisons.push("+6 qualification RGE non renouvelée (désengagement du carnet de commandes)");
+  }
 
   return { score: Math.max(0, Math.min(100, score)), raisons };
 }
