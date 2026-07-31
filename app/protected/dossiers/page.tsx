@@ -98,10 +98,15 @@ async function Content() {
       priority_level: t.priority ?? "medium",
     });
   }
+  // Une action future (réunion planifiée) n'est pas une dernière activité :
+  // sans ce filtre, la carte affichait « il y a -2j » pour un RDV à venir.
+  const nowMs = Date.now();
   for (const a of recentActsRes.data ?? []) {
     if (!a.deal_id) continue;
+    const when = a.start_datetime ?? a.due_date;
+    if (!when || new Date(when).getTime() > nowMs) continue;
     if (!actsByDeal[a.deal_id]) actsByDeal[a.deal_id] = [];
-    actsByDeal[a.deal_id]!.push({ activity_date: a.start_datetime ?? a.due_date });
+    actsByDeal[a.deal_id]!.push({ activity_date: when });
   }
   for (const e of upcomingEventsRes.data ?? []) {
     if (!e.deal_id || !e.due_date) continue;
@@ -360,7 +365,7 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount, health }
             {daysSinceActivity !== null && (
               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color: daysSinceActivity > 14 ? "#B45309" : "var(--text-4)" }}>
                 <Activity size={11}/>
-                <span>{daysSinceActivity === 0 ? "aujourd'hui" : `il y a ${daysSinceActivity}j`}</span>
+                <span>{daysSinceActivity <= 0 ? "aujourd'hui" : `il y a ${daysSinceActivity}j`}</span>
               </div>
             )}
 
@@ -401,11 +406,13 @@ async function KanbanContent() {
       .in("deal_id", dealIds)
       .neq("type", "task")
       .order("start_datetime", { ascending: false, nullsFirst: false });
+    // Même règle que la vue liste : une action future n'est pas une activité.
+    const nowMs = Date.now();
     for (const a of acts ?? []) {
       if (!a.deal_id) continue;
-      if (!lastActivityByDeal[a.deal_id]) {
-        lastActivityByDeal[a.deal_id] = a.start_datetime ?? a.due_date ?? null;
-      }
+      const when = a.start_datetime ?? a.due_date;
+      if (!when || new Date(when).getTime() > nowMs) continue;
+      if (!lastActivityByDeal[a.deal_id]) lastActivityByDeal[a.deal_id] = when;
     }
   }
 
