@@ -28,7 +28,7 @@ async function loadOptions(): Promise<{ deals: DealOption[]; contacts: ContactOp
       .from("deals")
       .select("id, name, deal_type")
       .eq("user_id", user.id)
-      .eq("status", "open")
+      .eq("deal_status", "open")
       .order("created_at", { ascending: false })
       .limit(200),
     supabase
