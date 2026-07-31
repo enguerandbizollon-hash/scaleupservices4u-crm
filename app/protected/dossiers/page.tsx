@@ -33,7 +33,7 @@ async function Content() {
   // Deals avec stats agrégées
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score,created_at")
+    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score,created_at,organization_id,dirigeant_id,dirigeant_nom,next_action_date,estimated_fee_amount,success_fee_percent")
     .order("priority_level");
 
   if (!deals?.length) {
@@ -57,7 +57,7 @@ async function Content() {
 
   // Table unifiée actions : tâches, activités passées et événements à venir
   // sont tous dérivés de la même requête avec un filtre type + status.
-  const [openTasksRes, recentActsRes, upcomingEventsRes, orgsRes] = await Promise.all([
+  const [openTasksRes, recentActsRes, upcomingEventsRes, orgsRes, finDataRes] = await Promise.all([
     supabase.from("actions")
       .select("id,deal_id,status,due_date,priority")
       .in("deal_id", dealIds)
@@ -78,7 +78,14 @@ async function Content() {
     supabase.from("deal_organizations")
       .select("deal_id")
       .in("deal_id", dealIds),
+    supabase.from("financial_data")
+      .select("deal_id")
+      .in("deal_id", dealIds),
   ]);
+
+  // Présence de données financières par deal : sans ce signal, un dossier
+  // promu avec ses exercices importés restait noté comme un dossier vide.
+  const dealsWithFinancials = new Set((finDataRes.data ?? []).map(f => f.deal_id));
 
   // Indexer par deal_id — on conserve les shapes historiques TaskType/EventType
   // consommées par la carte ci-dessous.
@@ -220,6 +227,8 @@ async function Content() {
                     open_tasks_count: tasks.length,
                     overdue_tasks_count: overdue,
                     linked_orgs_count: orgCountByDeal[d.id] ?? 0,
+                    has_financial_data: dealsWithFinancials.has(d.id),
+                    has_fees_estimated: !!((d.estimated_fee_amount && d.estimated_fee_amount > 0) || (d.success_fee_percent && d.success_fee_percent > 0)),
                   });
                   return (
                     <DealCard key={d.id} deal={d} dt={g.dt}
