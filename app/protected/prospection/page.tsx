@@ -60,7 +60,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     countByStatut("ecarte"),
     countByStatut("promu"),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }),
-    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("cedabilite_score", 70),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("cedabilite_score", 70).not("statut", "in", '("ecarte","promu")'),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("first_seen_at", sevenDaysAgoIso),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).not("cedabilite_score", "is", null),
     supabase.from("signaux").select("id", { count: "exact", head: true }).gte("signal_date", sevenDaysAgoDate),

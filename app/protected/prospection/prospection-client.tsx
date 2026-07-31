@@ -397,7 +397,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 14 }}>
           {([
             { n: flux.total, label: "Univers", sub: "fiches suivies", href: buildHref({ statut: null, q: null }), color: "var(--text-1)" },
-            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70", href: buildHref({ statut: null, q: null, radar: true }), color: "#991B1B" },
+            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70, à traiter", href: buildHref({ statut: null, q: null, radar: true }), color: "#991B1B" },
             { n: flux.entrees7j, label: "Entrées 7 j", sub: "flux de la semaine", href: buildHref({ statut: null, q: null, radar: false }), color: "#0F766E" },
             { n: flux.aTrier, label: "À trier", sub: "en attente de décision", href: buildHref({ statut: "nouveau", q: null }), color: "#B45309" },
             { n: flux.signaux7j, label: "Signaux 7 j", sub: "BODACC + veille", href: "/protected/signaux", color: "#B45309" },

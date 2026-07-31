@@ -136,31 +136,49 @@ export async function autofillScreeningDraft(
     return { filled: false, error: "Génération IA en échec (clé absente, crédits épuisés ou réponse invalide)" };
   }
 
-  // Remplissage des champs VIDES uniquement.
+  // Revue 2026-07-30 : l'appel IA dure 20 à 60 s. On RELIT le dossier avant
+  // d'écrire : un champ saisi entre-temps n'est plus vide et ne doit jamais
+  // être écrasé par le brouillon (l'IA propose, la main de l'utilisateur prime).
+  const { data: fresh, error: freshErr } = await supabase
+    .from("deals")
+    .select(`
+      screening_status, screening_score, screening_validated_by,
+      screening_validated_at, screening_updated_at,
+      executive_summary, motivation_narrative, competitive_landscape,
+      market_context, key_differentiators, key_risks, description
+    `)
+    .eq("id", dealId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (freshErr || !fresh) {
+    return { filled: false, error: freshErr?.message ?? "Dossier introuvable au moment d'écrire" };
+  }
+
+  // Remplissage des champs ENCORE vides uniquement.
   const patch: Record<string, unknown> = {};
-  if (isEmpty(deal.executive_summary) && !isEmpty(suggestion.executive_summary)) patch.executive_summary = suggestion.executive_summary;
-  if (isEmpty(deal.motivation_narrative) && !isEmpty(suggestion.motivation_narrative)) patch.motivation_narrative = suggestion.motivation_narrative;
-  if (isEmpty(deal.competitive_landscape) && !isEmpty(suggestion.competitive_landscape)) patch.competitive_landscape = suggestion.competitive_landscape;
-  if (isEmpty(deal.market_context) && !isEmpty(suggestion.market_context)) patch.market_context = suggestion.market_context;
-  if ((deal.key_differentiators ?? []).length === 0 && suggestion.key_differentiators.length > 0) patch.key_differentiators = suggestion.key_differentiators;
-  if ((deal.key_risks ?? []).length === 0 && suggestion.key_risks.length > 0) patch.key_risks = suggestion.key_risks;
+  if (isEmpty(fresh.executive_summary) && !isEmpty(suggestion.executive_summary)) patch.executive_summary = suggestion.executive_summary;
+  if (isEmpty(fresh.motivation_narrative) && !isEmpty(suggestion.motivation_narrative)) patch.motivation_narrative = suggestion.motivation_narrative;
+  if (isEmpty(fresh.competitive_landscape) && !isEmpty(suggestion.competitive_landscape)) patch.competitive_landscape = suggestion.competitive_landscape;
+  if (isEmpty(fresh.market_context) && !isEmpty(suggestion.market_context)) patch.market_context = suggestion.market_context;
+  if ((fresh.key_differentiators ?? []).length === 0 && suggestion.key_differentiators.length > 0) patch.key_differentiators = suggestion.key_differentiators;
+  if ((fresh.key_risks ?? []).length === 0 && suggestion.key_risks.length > 0) patch.key_risks = suggestion.key_risks;
   if (Object.keys(patch).length === 0) return { filled: false, error: null };
 
   const snapshot: DealScreeningSnapshot = {
     id: deal.id,
     user_id: userId,
-    screening_status: (deal.screening_status ?? "not_started") as ScreeningStatus,
-    screening_score: deal.screening_score,
-    screening_validated_by: deal.screening_validated_by,
-    screening_validated_at: deal.screening_validated_at,
-    screening_updated_at: deal.screening_updated_at,
-    executive_summary: (patch.executive_summary as string | undefined) ?? deal.executive_summary,
-    motivation_narrative: (patch.motivation_narrative as string | undefined) ?? deal.motivation_narrative,
-    competitive_landscape: (patch.competitive_landscape as string | undefined) ?? deal.competitive_landscape,
-    market_context: (patch.market_context as string | undefined) ?? deal.market_context,
-    key_differentiators: (patch.key_differentiators as string[] | undefined) ?? deal.key_differentiators,
-    key_risks: (patch.key_risks as string[] | undefined) ?? deal.key_risks,
-    description: deal.description,
+    screening_status: (fresh.screening_status ?? "not_started") as ScreeningStatus,
+    screening_score: fresh.screening_score,
+    screening_validated_by: fresh.screening_validated_by,
+    screening_validated_at: fresh.screening_validated_at,
+    screening_updated_at: fresh.screening_updated_at,
+    executive_summary: (patch.executive_summary as string | undefined) ?? fresh.executive_summary,
+    motivation_narrative: (patch.motivation_narrative as string | undefined) ?? fresh.motivation_narrative,
+    competitive_landscape: (patch.competitive_landscape as string | undefined) ?? fresh.competitive_landscape,
+    market_context: (patch.market_context as string | undefined) ?? fresh.market_context,
+    key_differentiators: (patch.key_differentiators as string[] | undefined) ?? fresh.key_differentiators,
+    key_risks: (patch.key_risks as string[] | undefined) ?? fresh.key_risks,
+    description: fresh.description,
     financialDepth: computeFinancialDepth(
       (finRowsRes.data ?? []) as Array<{ fiscal_year: number; revenue: number | null; ebitda: number | null; net_income: number | null }>,
     ),

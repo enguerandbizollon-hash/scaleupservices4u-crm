@@ -487,8 +487,13 @@ export async function promoteDirigeantToContact(
 
   const dirigeant = ((fiche.dirigeants ?? []) as UniversDirigeant[])[dirigeantIndex];
   if (!dirigeant?.nom) return { success: false, error: "Dirigeant introuvable sur la fiche" };
-  const firstName = dirigeant.prenoms?.trim() || "—";
+  const firstName = dirigeant.prenoms?.trim() ?? "";
   const lastName = dirigeant.nom.trim();
+  // Revue 2026-07-30 : sans prénom, un placeholder partagé fusionnerait les
+  // homonymes à la dédup. On refuse honnêtement plutôt que de polluer le CRM.
+  if (!firstName) {
+    return { success: false, error: "Prénom absent de la source : créez ce contact à la main depuis la fiche organisation." };
+  }
 
   // Organisation garantie, statut de la fiche inchangé.
   let orgId = fiche.organization_id as string | null;
@@ -515,15 +520,36 @@ export async function promoteDirigeantToContact(
     }
   }
 
-  const created = await upsertContact({
-    first_name: firstName,
-    last_name: lastName,
-    title: dirigeant.qualite ?? null,
-    sector: fiche.secteur ?? null,
-  });
-  if (!created.success) return { success: false, error: created.error };
+  // Contact créé lors d'un essai précédent mais liaison ratée (revue
+  // 2026-07-30) : on le retrouve par (prénom, nom) et on le relie au lieu
+  // d'empiler des doublons à chaque retry.
+  const { data: candidats } = await supabase
+    .from("contacts")
+    .select("id, first_name, last_name")
+    .eq("user_id", user.id)
+    .ilike("last_name", lastName)
+    .ilike("first_name", firstName);
+  const orphelin = (candidats ?? []).find(
+    (c) => norm(c.first_name) === norm(firstName) && norm(c.last_name) === norm(lastName),
+  );
 
-  const linked = await linkContactToOrganisation(created.id, orgId, dirigeant.qualite ?? undefined);
+  let contactId: string;
+  let createdNew = false;
+  if (orphelin) {
+    contactId = orphelin.id;
+  } else {
+    const created = await upsertContact({
+      first_name: firstName,
+      last_name: lastName,
+      title: dirigeant.qualite ?? null,
+      sector: fiche.secteur ?? null,
+    });
+    if (!created.success) return { success: false, error: created.error };
+    contactId = created.id;
+    createdNew = true;
+  }
+
+  const linked = await linkContactToOrganisation(contactId, orgId, dirigeant.qualite ?? undefined);
   if (!linked.success) {
     const linkError = "error" in linked && typeof linked.error === "string" ? linked.error : "Liaison contact-organisation en échec";
     return { success: false, error: linkError };
@@ -531,7 +557,7 @@ export async function promoteDirigeantToContact(
 
   revalidatePath("/protected/prospection");
   revalidatePath("/protected/contacts");
-  return { success: true, data: { contact_id: created.id, organization_id: orgId, created: true } };
+  return { success: true, data: { contact_id: contactId, organization_id: orgId, created: createdNew } };
 }
 
 // ── Fiche détail + création de dossier (retour d'usage 2026-07-29) ───────────
