@@ -143,11 +143,22 @@ export const HEALTH_META: Record<HealthBand, { label: string; bg: string; tx: st
   critical: { label: "Critique",   bg: "#FEE2E2",          tx: "#991B1B", dot: "#EF4444" },
 };
 
-// Seuil dormant : pas d'activité depuis ce nombre de jours
+// Seuil « sans activité » : rien d'enregistré depuis ce nombre de jours.
 export const DORMANT_THRESHOLD_DAYS = 21;
 
-export function isDormant(lastActivityDate: string | null | undefined, status: string): boolean {
+/**
+ * Dossier ouvert laissé sans activité. Retour terrain 2026-07-31 : un dossier
+ * SANS activité enregistrée était marqué dès sa création (« tous mes dossiers
+ * sont dormants »). La référence est la dernière activité, à défaut la date
+ * de création : un dossier né il y a 3 jours n'est pas endormi, il est neuf.
+ */
+export function isDormant(
+  lastActivityDate: string | null | undefined,
+  status: string,
+  createdAt?: string | null,
+): boolean {
   if (status !== "open") return false;
-  if (!lastActivityDate) return true;
-  return daysSince(lastActivityDate) >= DORMANT_THRESHOLD_DAYS;
+  const reference = lastActivityDate ?? createdAt ?? null;
+  if (!reference) return false;
+  return daysSince(reference) >= DORMANT_THRESHOLD_DAYS;
 }

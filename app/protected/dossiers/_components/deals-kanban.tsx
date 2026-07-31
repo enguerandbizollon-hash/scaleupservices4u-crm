@@ -22,6 +22,7 @@ export interface KanbanDeal {
   deal_type: string;
   deal_status: string;
   deal_stage: string;
+  created_at?: string | null;
   priority_level: string;
   sector: string | null;
   target_amount: number | null;
@@ -105,7 +106,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
       if (priorityFilter === "high" && d.priority_level !== "high") return false;
       if (priorityFilter === "high_medium" && d.priority_level !== "high" && d.priority_level !== "medium") return false;
       if (dormantFilter !== "all") {
-        const dormant = isDormant(lastActivityByDeal[d.id] ?? null, d.deal_status);
+        const dormant = isDormant(lastActivityByDeal[d.id] ?? null, d.deal_status, d.created_at);
         if (dormantFilter === "dormant" && !dormant) return false;
         if (dormantFilter === "active" && dormant) return false;
       }
@@ -114,7 +115,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
   }, [deals, typeFilter, showClosed, priorityFilter, dormantFilter, lastActivityByDeal]);
 
   const dormantCount = useMemo(() => {
-    return deals.filter(d => d.deal_type === typeFilter && isDormant(lastActivityByDeal[d.id] ?? null, d.deal_status)).length;
+    return deals.filter(d => d.deal_type === typeFilter && isDormant(lastActivityByDeal[d.id] ?? null, d.deal_status, d.created_at)).length;
   }, [deals, typeFilter, lastActivityByDeal]);
 
   // Regroupement par stage
@@ -253,7 +254,7 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
             const label =
               d === "all" ? "Tous" :
               d === "active" ? "Actifs" :
-              `Dormants${dormantCount > 0 ? ` (${dormantCount})` : ""}`;
+              `Sans activité${dormantCount > 0 ? ` (${dormantCount})` : ""}`;
             const active = dormantFilter === d;
             const isWarn = d === "dormant";
             return (
@@ -452,9 +453,9 @@ function KanbanCard({ deal, lastActivityDate, onMove, onDragStart }: {
             {SCREENING_PILL[deal.screening_status]!.label}
           </span>
         )}
-        {isDormant(lastActivityDate, deal.deal_status) && (
+        {isDormant(lastActivityDate, deal.deal_status, deal.created_at) && (
           <span
-            title={`Aucune activité depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus`}
+            title={`Aucune activité enregistrée depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus. Enregistrez une action pour le réveiller.`}
             style={{
               fontSize: 10, fontWeight: 700,
               padding: "1px 6px",
@@ -462,7 +463,7 @@ function KanbanCard({ deal, lastActivityDate, onMove, onDragStart }: {
               borderRadius: 3,
             }}
           >
-            DORMANT
+            SANS ACTIVITÉ
           </span>
         )}
       </div>

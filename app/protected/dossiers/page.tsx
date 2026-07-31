@@ -33,7 +33,7 @@ async function Content() {
   // Deals avec stats agrégées
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score")
+    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score,created_at")
     .order("priority_level");
 
   if (!deals?.length) {
@@ -123,7 +123,7 @@ async function Content() {
   const paused  = deals.filter(d => d.deal_status === "paused");
   const won     = deals.filter(d => d.deal_status === "won");
   const lost    = deals.filter(d => d.deal_status === "lost");
-  const dormantCount = open.filter(d => isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status)).length;
+  const dormantCount = open.filter(d => isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status, d.created_at)).length;
   const closed  = [...won, ...lost]; // affichés ensemble en grisé
   const types   = ["ma_sell","ma_buy"];
   const groups  = types.map(t => ({
@@ -143,7 +143,7 @@ async function Content() {
           <div style={{ display:"flex", gap:8, marginTop:6 }}>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{deals.length} total</span>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>{open.length} en cours</span>
-            {dormantCount > 0 && <span title={`Dossiers sans activité depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus`} style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#FEE2E2", color:"#991B1B", fontWeight:700 }}>⚠ {dormantCount} dormant{dormantCount > 1 ? "s" : ""}</span>}
+            {dormantCount > 0 && <span title={`Dossiers ouverts sans aucune activité enregistrée depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus. Enregistrez une action (appel, note, tâche) pour les réveiller.`} style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#FEE2E2", color:"#991B1B", fontWeight:700 }}>⚠ {dormantCount} sans activité</span>}
             {paused.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{paused.length} en pause</span>}
             {won.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#D1FAE5", color:"#065F46", fontWeight:600 }}>{won.length} gagné{won.length !== 1 ? "s" : ""}</span>}
             {lost.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-5)", fontWeight:600 }}>{lost.length} perdu{lost.length !== 1 ? "s" : ""}</span>}
@@ -248,7 +248,7 @@ async function Content() {
   );
 }
 
-type DealType = { id:string; code:string|null; name:string; deal_type:string; deal_status:string; deal_stage:string; priority_level:string; sector:string|null; location:string|null; target_date:string|null; target_amount:number|null; currency:string|null; description:string|null; screening_status:string|null };
+type DealType = { id:string; code:string|null; name:string; deal_type:string; deal_status:string; deal_stage:string; priority_level:string; sector:string|null; location:string|null; target_date:string|null; target_amount:number|null; currency:string|null; description:string|null; screening_status:string|null; created_at:string|null };
 
 const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> = {
   not_started:        { bg: "var(--surface-3)", tx: "var(--text-5)", label: "À screener" },
@@ -268,7 +268,7 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount, health }
   const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date());
   const daysSinceActivity = lastActivity ? daysSince(lastActivity) : null;
   const inactive = deal.deal_status !== "open";
-  const dormant = isDormant(lastActivity, deal.deal_status);
+  const dormant = isDormant(lastActivity, deal.deal_status, deal.created_at);
   const fmtAmount = (n: number|null, c: string|null) => {
     if (!n) return null;
     return n >= 1e6 ? `${(n/1e6).toFixed(1)}M ${c??"€"}` : n >= 1e3 ? `${(n/1e3).toFixed(0)}k ${c??"€"}` : `${n} ${c??"€"}`;
@@ -296,10 +296,10 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount, health }
               </div>
               {dormant && (
                 <span
-                  title={`Aucune activité depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus`}
+                  title={`Aucune activité enregistrée depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus. Enregistrez une action (appel, note, tâche) pour le réveiller. Distinct du statut « Dormant » de la prospection.`}
                   style={{ display:"inline-block", marginTop:5, fontSize:10, fontWeight:700, padding:"1px 6px", background:"#FEE2E2", color:"#991B1B", borderRadius:3 }}
                 >
-                  DORMANT
+                  SANS ACTIVITÉ
                 </span>
               )}
             </div>

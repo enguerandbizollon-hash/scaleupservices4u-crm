@@ -146,6 +146,46 @@ function SectionHeader({ icon:Icon, title, count, expanded, onToggle, onAdd, add
 }
 
 // ════════════════════════════════════════════════════════════
+// Statut du dossier, éditable depuis l'en-tête (retour terrain 2026-07-31 :
+// « je n'ai plus de possibilité de changer », le statut n'était accessible
+// que par la page Modifier). Pilote les listes : en cours, en pause, gagné,
+// perdu. updateDealField valide déjà deal_status côté serveur.
+const DEAL_STATUS_OPTIONS: Array<{ value: string; label: string; bg: string; tx: string }> = [
+  { value: "open",   label: "En cours", bg: "#D1FAE5",          tx: "#065F46" },
+  { value: "paused", label: "En pause", bg: "#FEF3C7",          tx: "#92400E" },
+  { value: "won",    label: "Gagné",    bg: "#DBEAFE",          tx: "#1E40AF" },
+  { value: "lost",   label: "Perdu",    bg: "var(--surface-3)", tx: "var(--text-5)" },
+];
+
+function DealStatusSelect({ dealId, initial, onChanged }: { dealId: string; initial: string; onChanged: () => void }) {
+  const [current, setCurrent] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const meta = DEAL_STATUS_OPTIONS.find(o => o.value === current) ?? DEAL_STATUS_OPTIONS[0];
+
+  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    const prev = current;
+    setCurrent(value);
+    setSaving(true);
+    const res = await updateDealField(dealId, "deal_status", value);
+    setSaving(false);
+    if (!res.success) {
+      setCurrent(prev);
+      alert(`Statut non modifié : ${res.error}`);
+      return;
+    }
+    onChanged();
+  }
+
+  return (
+    <select value={current} onChange={handleChange} disabled={saving}
+      title="Statut du dossier : En cours / En pause / Gagné / Perdu"
+      style={{ padding:"8px 12px", borderRadius:9, border:"1px solid var(--border)", background:meta.bg, color:meta.tx, fontSize:13, fontWeight:700, fontFamily:"inherit", cursor:"pointer", outline:"none", opacity: saving ? 0.6 : 1 }}>
+      {DEAL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
 export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancialData, initialFees, initialClientOrganization, initialSuggestions }: {
   deal: any;
   initialOrgs: Org[];
@@ -312,6 +352,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
               <div style={{ marginTop:10 }}><TagInput objectType="deal" objectId={deal.id} /></div>
             </div>
             <div style={{ display:"flex", gap:8, flexShrink:0, flexWrap:"wrap" }}>
+              <DealStatusSelect dealId={deal.id} initial={deal.deal_status ?? "open"} onChanged={() => router.refresh()} />
               {deal.deal_type === "ma_sell" && (
                 <>
                   <a
