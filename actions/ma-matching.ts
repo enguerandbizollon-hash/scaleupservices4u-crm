@@ -209,7 +209,7 @@ export async function getAcquirerMatches(
 
   // Relation CRM : contacts rattachés + dernier échange (deux chemins d'actions).
   const [contactsRes, actionsDirectRes, actionsPivotRes, suggestionsRes] = await Promise.all([
-    supabase.from("contact_organizations").select("organization_id").in("organization_id", orgIds),
+    supabase.from("organization_contacts").select("organization_id").in("organization_id", orgIds),
     supabase.from("actions").select("organization_id, created_at").in("organization_id", orgIds)
       .order("created_at", { ascending: false }).limit(1000),
     supabase.from("action_organizations").select("organization_id, actions(created_at)").in("organization_id", orgIds).limit(1000),
