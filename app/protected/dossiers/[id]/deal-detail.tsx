@@ -186,7 +186,7 @@ function DealStatusSelect({ dealId, initial, onChanged }: { dealId: string; init
   );
 }
 
-export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancialData, initialFees, initialClientOrganization, initialSuggestions }: {
+export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancialData, initialFees, initialClientOrganization, initialSuggestions, initialTab }: {
   deal: any;
   initialOrgs: Org[];
   initialContacts: Contact[];
@@ -194,6 +194,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
   initialFees: FeeRow[];
   initialClientOrganization: { id: string; name: string; company_stage: string | null; organization_type: string | null; is_client: boolean; actionnariat?: ActionnaireNormalise[] | null } | null;
   initialSuggestions: SuggestionWithRelations[];
+  initialTab?: string | null;
 }) {
   // State sections
   const [orgs, setOrgs] = useState<Org[]>(initialOrgs);
@@ -230,7 +231,22 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({});
 
-  const [activeTab, setActiveTab] = useState<"dossier" | "screening" | "acquereurs" | "sourcing" | "honoraires" | "financier" | "documents">("dossier");
+  // Onglets adressables par URL (?tab=acquereurs) : le matching et chaque
+  // espace du dossier deviennent partageables (favori, notification, lien).
+  type TabKey = "dossier" | "screening" | "acquereurs" | "sourcing" | "honoraires" | "financier" | "documents";
+  const validTabs: string[] = [
+    "dossier", "honoraires", "financier", "screening", "documents",
+    ...(deal.deal_type === "ma_sell" || deal.deal_type === "ma_buy" ? ["sourcing"] : []),
+    ...(deal.deal_type === "ma_sell" ? ["acquereurs"] : []),
+  ];
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    initialTab && validTabs.includes(initialTab) ? (initialTab as TabKey) : "dossier",
+  );
+  // replaceState (shallow) : l'URL suit l'onglet sans refetch serveur.
+  const openTab = (tab: TabKey) => {
+    setActiveTab(tab);
+    window.history.replaceState(null, "", `/protected/dossiers/${deal.id}${tab === "dossier" ? "" : `?tab=${tab}`}`);
+  };
 
   // Drawer latéral pour entités liées (contacts, organisations)
   const [drawerEntity, setDrawerEntity] = useState<EntityRef>(null);
@@ -410,7 +426,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           financialData={initialFinancialData}
           suggestions={initialSuggestions}
           clientOrg={initialClientOrganization}
-          onOpenMarket={() => setActiveTab(deal.deal_type === "ma_sell" ? "acquereurs" : "sourcing")}
+          onOpenMarket={() => openTab(deal.deal_type === "ma_sell" ? "acquereurs" : "sourcing")}
         />
 
         {/* Espaces de travail — Deal OS : 3 moments au lieu de 7 onglets à plat */}
@@ -444,7 +460,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
                 {espaces.map(e => {
                   const isActive = e.key === activeEspace.key;
                   return (
-                    <button key={e.key} onClick={() => setActiveTab(e.panes[0].key)} style={{
+                    <button key={e.key} onClick={() => openTab(e.panes[0].key)} style={{
                       padding: "8px 18px", border: "none", background: "none", cursor: "pointer",
                       fontSize: 13.5, fontWeight: isActive ? 800 : 500,
                       color: isActive ? "var(--text-1)" : "var(--text-4)",
@@ -461,7 +477,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
                   {activeEspace.panes.map(p => {
                     const isActive = activeTab === p.key;
                     return (
-                      <button key={p.key} onClick={() => setActiveTab(p.key)} style={{
+                      <button key={p.key} onClick={() => openTab(p.key)} style={{
                         padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
                         cursor: "pointer", fontFamily: "inherit",
                         border: "1px solid var(--border)",

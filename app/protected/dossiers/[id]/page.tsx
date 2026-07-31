@@ -9,8 +9,9 @@ export const revalidate = 0;
 // IA du matching (jusqu'à 10 appels Claude) dépasse les 15 s par défaut.
 export const maxDuration = 300;
 
-async function Content({ params }: { params: Promise<{ id: string }> }) {
+async function Content({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const supabase = await createClient();
 
   const { data: deal, error: dealError } = await supabase
@@ -80,14 +81,15 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
       initialFees={deal.fee_milestones ?? []}
       initialClientOrganization={clientOrg}
       initialSuggestions={initialSuggestions}
+      initialTab={tab ?? null}
     />
   );
 }
 
-export default function DossierPage({ params }: { params: Promise<{ id: string }> }) {
+export default function DossierPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   return (
     <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
-      <Content params={params}/>
+      <Content params={params} searchParams={searchParams}/>
     </Suspense>
   );
 }
