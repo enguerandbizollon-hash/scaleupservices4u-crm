@@ -230,6 +230,10 @@ export function computeCedabilite(
     score += 6;
     raisons.push("+6 qualification RGE non renouvelée (désengagement du carnet de commandes)");
   }
+  if (signaux.types.includes("recrutement_direction")) {
+    score += 6;
+    raisons.push("+6 recrute un poste de direction (relève ou transmissibilité en préparation)");
+  }
 
   return { score: Math.max(0, Math.min(100, score)), raisons };
 }

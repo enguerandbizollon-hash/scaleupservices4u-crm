@@ -10,7 +10,7 @@ export const revalidate = 0;
 
 const VALID_TYPES = new Set([
   "vente_cession", "procedure_collective", "radiation", "depot_comptes", "entree_screening",
-  "fusion_absorption", "location_gerance", "changement_dirigeant", "rge_expire",
+  "fusion_absorption", "location_gerance", "changement_dirigeant", "rge_expire", "recrutement_direction",
 ]);
 
 async function Content({ searchParams }: { searchParams: Promise<{ type?: string; nonlus?: string }> }) {

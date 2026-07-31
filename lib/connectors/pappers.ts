@@ -1,15 +1,15 @@
-/**
- * lib/connectors/pappers.ts — Connecteur Pappers (données légales FR, payant).
+﻿/**
+ * lib/connectors/pappers.ts â€” Connecteur Pappers (donnÃ©es lÃ©gales FR, payant).
  *
- * Pattern base.ts (phase 2, temps 3). Factorise les 3 implémentations qui
+ * Pattern base.ts (phase 2, temps 3). Factorise les 3 implÃ©mentations qui
  * vivaient inline dans app/api/pappers/* et app/api/enrich/organisation.
  *
- * Décision carte phase 2 : Pappers reste OFF par défaut (API payante).
- * Sans PAPPERS_API_KEY, chaque fonction répond proprement « non configuré »
- * et la chaîne d'enrichissement continue avec les sources gratuites.
+ * DÃ©cision carte phase 2 : Pappers reste OFF par dÃ©faut (API payante).
+ * Sans PAPPERS_API_KEY, chaque fonction rÃ©pond proprement Â« non configurÃ© Â»
+ * et la chaÃ®ne d'enrichissement continue avec les sources gratuites.
  *
- * Amélioration v64 : l'enrichissement persiste désormais siren/naf dans les
- * colonnes STRUCTURÉES (et le secteur dérivé via sectorFromNaf), plus
+ * AmÃ©lioration v64 : l'enrichissement persiste dÃ©sormais siren/naf dans les
+ * colonnes STRUCTURÃ‰ES (et le secteur dÃ©rivÃ© via sectorFromNaf), plus
  * seulement en texte dans les notes.
  */
 
@@ -18,13 +18,13 @@ import { sectorFromNaf } from "@/lib/crm/matching-maps";
 
 const API_BASE = "https://api.pappers.fr/v2";
 
-// ── Configuration ────────────────────────────────────────────────────────────
+// â”€â”€ Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function isPappersConfigured(): boolean {
-  return !!process.env.PAPPERS_API_KEY;
+  return !!(process.env.PAPPERS_API_KEY || process.env.PAPPERS_API_TOKEN);
 }
 
-// ── Formes (subset utilisé de /recherche) ────────────────────────────────────
+// â”€â”€ Formes (subset utilisÃ© de /recherche) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface PappersSearchResult {
   siren?: string;
@@ -61,32 +61,32 @@ export const PAPPERS_EFFECTIF_LABELS: Record<string, string> = {
   "53": "+10000",
 };
 
-// ── Recherche (endpoint /recherche, fonctionne avec nom ET SIREN/SIRET) ──────
+// â”€â”€ Recherche (endpoint /recherche, fonctionne avec nom ET SIREN/SIRET) â”€â”€â”€â”€â”€â”€
 
 export async function searchPappers(
   query: string,
   nombre: number = 10,
 ): Promise<{ resultats: PappersSearchResult[]; total: number }> {
-  const key = process.env.PAPPERS_API_KEY;
+  const key = (process.env.PAPPERS_API_KEY || process.env.PAPPERS_API_TOKEN);
   if (!key) throw new Error("PAPPERS_API_KEY manquante");
   const q = query.trim();
   if (!q) return { resultats: [], total: 0 };
 
   const url = `${API_BASE}/recherche?q=${encodeURIComponent(q)}&api_token=${key}&nombre=${Math.min(20, nombre)}`;
   const res = await fetch(url, { cache: "no-store" });
-  if (res.status === 401) throw new Error("Clé API Pappers invalide ou expirée");
+  if (res.status === 401) throw new Error("ClÃ© API Pappers invalide ou expirÃ©e");
   if (!res.ok) throw new Error(`Pappers ${res.status}`);
   const data = await res.json() as { resultats?: PappersSearchResult[]; entreprises?: PappersSearchResult[]; total?: number };
   const resultats = data.resultats ?? data.entreprises ?? [];
   return { resultats, total: data.total ?? resultats.length };
 }
 
-// ── Fiche entreprise complète (endpoint /entreprise, payant) ─────────────────
-// Deal OS chantier B : actionnariat (bénéficiaires effectifs) + finances
-// profondes (EBE/EBITDA, dettes, trésorerie). Noms de champs vérifiés sur
+// â”€â”€ Fiche entreprise complÃ¨te (endpoint /entreprise, payant) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Deal OS chantier B : actionnariat (bÃ©nÃ©ficiaires effectifs) + finances
+// profondes (EBE/EBITDA, dettes, trÃ©sorerie). Noms de champs vÃ©rifiÃ©s sur
 // le client OpenAPI officiel (qdequippe-tech/pappers-php-api, 2026-07-30).
 
-/** Bénéficiaire effectif brut (sous-ensemble utilisé du JSON Pappers). */
+/** BÃ©nÃ©ficiaire effectif brut (sous-ensemble utilisÃ© du JSON Pappers). */
 export interface RawPappersBeneficiaire {
   type?: string | null;                              // physique | morale
   nom?: string | null;
@@ -107,7 +107,7 @@ export interface RawPappersFinance {
   annee?: number | null;
   chiffre_affaires?: number | null;
   resultat?: number | null;
-  excedent_brut_exploitation?: number | null;        // EBE ≈ EBITDA
+  excedent_brut_exploitation?: number | null;        // EBE â‰ˆ EBITDA
   resultat_exploitation?: number | null;             // EBIT
   marge_nette?: number | null;
   taux_croissance_chiffre_affaires?: number | null;
@@ -131,12 +131,12 @@ export type PappersFetchResult =
   | { ok: false; error: string };
 
 /**
- * Fiche complète par SIREN. Les erreurs Pappers (crédits épuisés, accès
- * bénéficiaires non accordé) remontent avec leur message d'origine :
- * l'utilisateur doit savoir QUOI régler dans son espace Pappers.
+ * Fiche complÃ¨te par SIREN. Les erreurs Pappers (crÃ©dits Ã©puisÃ©s, accÃ¨s
+ * bÃ©nÃ©ficiaires non accordÃ©) remontent avec leur message d'origine :
+ * l'utilisateur doit savoir QUOI rÃ©gler dans son espace Pappers.
  */
 export async function fetchEntreprisePappers(siren: string): Promise<PappersFetchResult> {
-  const key = process.env.PAPPERS_API_KEY;
+  const key = (process.env.PAPPERS_API_KEY || process.env.PAPPERS_API_TOKEN);
   if (!key) return { ok: false, error: "PAPPERS_API_KEY manquante dans .env.local" };
   const clean = siren.replace(/\D/g, "");
   if (!/^\d{9}$/.test(clean)) return { ok: false, error: "SIREN invalide" };
@@ -145,18 +145,18 @@ export async function fetchEntreprisePappers(siren: string): Promise<PappersFetc
     const res = await fetch(`${API_BASE}/entreprise?api_token=${key}&siren=${clean}`, { cache: "no-store" });
     const data = await res.json().catch(() => null) as (PappersEntrepriseFiche & { error?: string; message?: string }) | null;
     if (!res.ok || !data || data.error) {
-      const msg = [data?.error, data?.message].filter(Boolean).join(" · ") || `Pappers ${res.status}`;
+      const msg = [data?.error, data?.message].filter(Boolean).join(" Â· ") || `Pappers ${res.status}`;
       return { ok: false, error: msg };
     }
     return { ok: true, fiche: data };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur réseau Pappers" };
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur rÃ©seau Pappers" };
   }
 }
 
-// ── Normalisations pures (testées) ───────────────────────────────────────────
+// â”€â”€ Normalisations pures (testÃ©es) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** Actionnaire normalisé, forme stockée en JSONB (univers + organizations). */
+/** Actionnaire normalisÃ©, forme stockÃ©e en JSONB (univers + organizations). */
 export interface ActionnaireNormalise {
   type: "physique" | "morale";
   nom: string;
@@ -171,7 +171,7 @@ export interface ActionnaireNormalise {
   representant_legal: boolean;
 }
 
-/** "MM/AAAA" (format Pappers) → âge révolu, précision mois. */
+/** "MM/AAAA" (format Pappers) â†’ Ã¢ge rÃ©volu, prÃ©cision mois. */
 export function ageFromMmYyyy(value: string | null | undefined, now: Date = new Date()): number | null {
   if (!value) return null;
   const m = value.match(/^(\d{2})\/(\d{4})$/);
@@ -184,7 +184,7 @@ export function ageFromMmYyyy(value: string | null | undefined, now: Date = new 
   return age;
 }
 
-/** Bénéficiaires bruts → actionnariat normalisé, trié par parts décroissantes. */
+/** BÃ©nÃ©ficiaires bruts â†’ actionnariat normalisÃ©, triÃ© par parts dÃ©croissantes. */
 export function normalizeBeneficiaires(
   raw: RawPappersBeneficiaire[] | null | undefined,
   now: Date = new Date(),
@@ -207,7 +207,7 @@ export function normalizeBeneficiaires(
     .sort((a, b) => (b.pourcentage_parts ?? -1) - (a.pourcentage_parts ?? -1));
 }
 
-/** Année de finances univers, forme étendue rétrocompatible ({ca, resultat_net} + profondeur Pappers). */
+/** AnnÃ©e de finances univers, forme Ã©tendue rÃ©trocompatible ({ca, resultat_net} + profondeur Pappers). */
 export interface FinanceYearEnrichie {
   ca?: number | null;
   resultat_net?: number | null;
@@ -223,8 +223,8 @@ export interface FinanceYearEnrichie {
 
 /**
  * Fusionne les finances Pappers dans le JSONB finances existant d'une fiche
- * univers. Les clés existantes (ca, resultat_net venues de l'API gratuite)
- * ne sont écrasées que si Pappers apporte une valeur non nulle.
+ * univers. Les clÃ©s existantes (ca, resultat_net venues de l'API gratuite)
+ * ne sont Ã©crasÃ©es que si Pappers apporte une valeur non nulle.
  */
 export function mergeFinancesPappers(
   existing: Record<string, FinanceYearEnrichie> | null | undefined,
@@ -252,7 +252,7 @@ export function mergeFinancesPappers(
   return out;
 }
 
-// ── Enrichissement d'une organisation existante ──────────────────────────────
+// â”€â”€ Enrichissement d'une organisation existante â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface PappersEnrichmentReport {
   source: "pappers";
@@ -263,9 +263,9 @@ export interface PappersEnrichmentReport {
 }
 
 /**
- * Enrichit une organisation existante depuis Pappers. Les champs déjà
- * remplis ne sont JAMAIS écrasés (règle « organisme vivant », CLAUDE.md).
- * Persiste siren/naf structurés + secteur dérivé (v64).
+ * Enrichit une organisation existante depuis Pappers. Les champs dÃ©jÃ 
+ * remplis ne sont JAMAIS Ã©crasÃ©s (rÃ¨gle Â« organisme vivant Â», CLAUDE.md).
+ * Persiste siren/naf structurÃ©s + secteur dÃ©rivÃ© (v64).
  */
 export async function enrichExistingOrganizationWithPappers(
   supabase: SupabaseClient,
@@ -294,7 +294,7 @@ export async function enrichExistingOrganizationWithPappers(
     const ville = r.ville ?? r.siege?.ville;
     const codePostal = r.code_postal ?? r.siege?.code_postal;
 
-    // Identité légale structurée (v64)
+    // IdentitÃ© lÃ©gale structurÃ©e (v64)
     const siren = String(r.siren ?? "").replace(/\D/g, "");
     if (!existing.siren && /^\d{9}$/.test(siren)) updates.siren = siren;
     if (!existing.naf && r.code_naf) {
@@ -312,13 +312,13 @@ export async function enrichExistingOrganizationWithPappers(
       updates.website = r.site_internet;
     }
     if (!existing.employee_count && r.tranche_effectif) {
-      // Pappers retourne une tranche. On extrait la borne basse comme proxy numérique.
+      // Pappers retourne une tranche. On extrait la borne basse comme proxy numÃ©rique.
       const lower = (PAPPERS_EFFECTIF_LABELS[r.tranche_effectif] ?? "").split(/[-+]/)[0];
       const n = parseInt(lower ?? "", 10);
       if (Number.isFinite(n) && n > 0) updates.employee_count = n;
     }
 
-    // Notes : compléments non structurés (forme juridique, CA), une seule fois.
+    // Notes : complÃ©ments non structurÃ©s (forme juridique, CA), une seule fois.
     const noteParts: string[] = [];
     if (r.forme_juridique) noteParts.push(`Forme: ${r.forme_juridique}`);
     if (r.tranche_effectif) noteParts.push(`Effectif: ${PAPPERS_EFFECTIF_LABELS[r.tranche_effectif] ?? r.tranche_effectif}`);

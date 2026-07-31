@@ -30,6 +30,7 @@ import { recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
 import { fetchRgeExpirations, groupRgeBySiren } from "@/lib/connectors/rge";
 import { fetchFusacqBuzz } from "@/lib/connectors/fusacq";
+import { searchOffres, offreMatchesEntreprise, isOffreDirection, isFranceTravailConfigured } from "@/lib/connectors/france-travail";
 import { searchEntreprisesByName } from "@/lib/connectors/recherche-entreprises";
 import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
 
@@ -297,6 +298,64 @@ export async function GET(req: Request) {
   } catch (e) {
     errors.push(`fusacq: ${e instanceof Error ? e.message : "erreur"}`);
     perFamille["Fusacq Buzz"] = { fetched: 0, inserted: 0, skipped: 0 };
+  }
+
+  // ── 2 sexies. France Travail : offres de direction des fiches chaudes ────
+  // Le signal le plus convergent de la recherche : une PME au radar élevé
+  // qui recrute un directeur prépare une relève ou une transmissibilité.
+  // Borné aux 60 fiches les plus chaudes actionnables ; rattachement par
+  // nom + garde de similarité (l'API n'expose pas le SIRET des offres).
+  if (isFranceTravailConfigured()) {
+    try {
+      const { data: chaudes } = await supabase
+        .from("univers_entreprises")
+        .select("siren, nom, departement")
+        .in("statut", ["nouveau", "a_approcher", "approche", "echange"])
+        .gte("cedabilite_score", 55)
+        .order("cedabilite_score", { ascending: false })
+        .limit(60);
+
+      let inserted = 0;
+      let scanned = 0;
+      for (const fiche of chaudes ?? []) {
+        try {
+          const offres = await searchOffres({
+            motsCles: fiche.nom,
+            departement: fiche.departement,
+            publieeDepuisJours: 31,
+          });
+          scanned++;
+          const direction = offres.filter((o) => offreMatchesEntreprise(o, fiche.nom) && isOffreDirection(o));
+          for (const o of direction) {
+            const { data, error } = await supabase
+              .from("signaux")
+              .upsert({
+                siren: fiche.siren,
+                source: "france_travail",
+                signal_type: "recrutement_direction",
+                signal_date: o.date_creation ?? toDate,
+                titre: `Recrute un poste de direction : ${fiche.nom} (${o.intitule})`,
+                severity: "opportunite",
+                payload: { intitule: o.intitule, lieu: o.lieu, type_contrat: o.type_contrat, url: o.url },
+                external_id: o.id,
+                organization_id: orgBySiren.get(fiche.siren) ?? null,
+              }, { onConflict: "source,external_id", ignoreDuplicates: true })
+              .select("id");
+            if (error) errors.push(`france-travail upsert ${fiche.siren}: ${error.message}`);
+            else if ((data?.length ?? 0) > 0) {
+              inserted++;
+              if (universSirens.has(fiche.siren)) touchedUnivers.add(fiche.siren);
+            }
+          }
+        } catch (e) {
+          errors.push(`france-travail ${fiche.siren}: ${e instanceof Error ? e.message : "erreur"}`);
+        }
+      }
+      perFamille["France Travail (direction)"] = { fetched: scanned, inserted, skipped: 0 };
+    } catch (e) {
+      errors.push(`france-travail: ${e instanceof Error ? e.message : "erreur"}`);
+      perFamille["France Travail (direction)"] = { fetched: 0, inserted: 0, skipped: 0 };
+    }
   }
 
   // ── 2 bis. Radar : rescorer les fiches univers touchées ──────────────────

@@ -32,6 +32,7 @@ export const SIGNAL_TYPE_LABELS: Record<string, string> = {
   fusion_absorption: "Fusion / TUP",
   location_gerance: "Location-gérance",
   rge_expire: "RGE non renouvelé",
+  recrutement_direction: "Recrute un directeur",
 };
 
 export const SEVERITY_COLORS: Record<string, string> = {
