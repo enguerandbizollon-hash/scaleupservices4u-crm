@@ -10,19 +10,24 @@ export const maxDuration = 300;
 const PAGE_SIZE = 50;
 const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "echange", "dormant", "ecarte", "promu"]);
 
-type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string; fiche?: string }>;
+type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string; fiche?: string; filtre?: string }>;
 
 async function Content({ searchParams }: { searchParams: ProspectionSearchParams }) {
-  const { statut, page: pageParam, tri, q: qParam, fiche: ficheParam } = await searchParams;
+  const { statut, page: pageParam, tri, q: qParam, fiche: ficheParam, filtre } = await searchParams;
   const supabase = await createClient();
 
   const activeStatut = statut && VALID_STATUTS.has(statut) ? statut : null;
+  // Filtres du bandeau KPI : le clic sur une tuile doit montrer EXACTEMENT la
+  // population comptée (audit 2026-07-31 : chiffre 0 face à une liste de 74).
+  const activeFiltre = filtre === "chaudes" || filtre === "entrees7j" ? filtre : null;
   // Tri radar par DÉFAUT (audit 2026-07-30) : les fiches chaudes en tête,
   // c'est la raison d'être de l'univers. tri=recent pour l'ordre d'arrivée.
   const sortRadar = tri !== "recent";
   const q = (qParam ?? "").trim() || null;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
+  const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const sevenDaysAgoDate = sevenDaysAgoIso.slice(0, 10);
 
   let universQuery = supabase
     .from("univers_entreprises")
@@ -37,15 +42,18 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
       ? universQuery.eq("siren", q)
       : universQuery.ilike("nom", `%${q.replace(/[%_]/g, "\\$&")}%`);
   }
+  // Mêmes prédicats que les compteurs KPI plus bas, à l'identique.
+  if (activeFiltre === "chaudes") {
+    universQuery = universQuery.gte("cedabilite_score", 70).not("statut", "in", '("ecarte","promu")');
+  } else if (activeFiltre === "entrees7j") {
+    universQuery = universQuery.gte("first_seen_at", sevenDaysAgoIso);
+  }
 
   const countByStatut = (s: string) =>
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", s);
 
   // Bandeau de flux (audit 2026-07-30 : « il me faut des KPI, du flux ») :
   // l'écran dit ce qui entre, ce qui chauffe, ce qui attend une décision.
-  const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const sevenDaysAgoDate = sevenDaysAgoIso.slice(0, 10);
-
   const [universRes, profilesRes, nouveau, aApprocher, approche, echange, dormant, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
     universQuery,
     supabase
@@ -115,6 +123,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
       statCounts={statCounts}
       flux={flux}
       activeStatut={activeStatut}
+      activeFiltre={activeFiltre}
       sortRadar={sortRadar}
       searchQ={q}
       initialFiche={initialFiche}

@@ -147,13 +147,14 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, univers, universTotal, statCounts, flux, activeStatut, sortRadar, searchQ, initialFiche, page, pageSize }: {
+export function ProspectionClient({ profiles, univers, universTotal, statCounts, flux, activeStatut, activeFiltre, sortRadar, searchQ, initialFiche, page, pageSize }: {
   profiles: ProfileRow[];
   univers: UniversRow[];
   universTotal: number;
   statCounts: Record<string, number>;
   flux: FluxKpis;
   activeStatut: string | null;
+  activeFiltre: "chaudes" | "entrees7j" | null;
   sortRadar: boolean;
   searchQ: string | null;
   initialFiche: { siren: string; nom: string; statut: string } | null;
@@ -357,14 +358,18 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
 
   // Tri radar par défaut : l'URL ne porte un paramètre que pour y déroger.
   // Un seul constructeur d'URL : statut, tri et recherche se préservent.
-  const buildHref = (over: { statut?: string | null; radar?: boolean; q?: string | null; page?: number } = {}) => {
+  const buildHref = (over: { statut?: string | null; radar?: boolean; q?: string | null; page?: number; filtre?: string | null } = {}) => {
     const p = new URLSearchParams();
     const s = over.statut !== undefined ? over.statut : activeStatut;
     const radar = over.radar !== undefined ? over.radar : sortRadar;
     const qv = over.q !== undefined ? over.q : searchQ;
+    // Filtre KPI (chaudes, entrées 7 j) : préservé en pagination/tri, mais un
+    // clic explicite sur un statut en sort, les deux populations s'excluent.
+    const f = over.filtre !== undefined ? over.filtre : (over.statut !== undefined ? null : activeFiltre);
     if (s) p.set("statut", s);
     if (!radar) p.set("tri", "recent");
     if (qv) p.set("q", qv);
+    if (f) p.set("filtre", f);
     if (over.page && over.page > 1) p.set("page", String(over.page));
     const qs = p.toString();
     return `/protected/prospection${qs ? `?${qs}` : ""}`;
@@ -397,8 +402,8 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 14 }}>
           {([
             { n: flux.total, label: "Univers", sub: "fiches suivies", href: buildHref({ statut: null, q: null }), color: "var(--text-1)" },
-            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70, à traiter", href: buildHref({ statut: null, q: null, radar: true }), color: "#991B1B" },
-            { n: flux.entrees7j, label: "Entrées 7 j", sub: "flux de la semaine", href: buildHref({ statut: null, q: null, radar: false }), color: "#0F766E" },
+            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70, hors promues/écartées", href: buildHref({ statut: null, q: null, radar: true, filtre: "chaudes" }), color: "#991B1B" },
+            { n: flux.entrees7j, label: "Entrées 7 j", sub: "flux de la semaine", href: buildHref({ statut: null, q: null, radar: false, filtre: "entrees7j" }), color: "#0F766E" },
             { n: flux.aTrier, label: "À trier", sub: "en attente de décision", href: buildHref({ statut: "nouveau", q: null }), color: "#B45309" },
             { n: flux.signaux7j, label: "Signaux 7 j", sub: "BODACC + veille", href: "/protected/signaux", color: "#B45309" },
             { n: `${flux.couvertureRadar}%`, label: "Radar", sub: "fiches scorées", href: null, color: flux.couvertureRadar >= 95 ? "#065F46" : "#B45309" },
@@ -596,6 +601,12 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
               {meta.label} ({(statCounts[key] ?? 0).toLocaleString("fr-FR")})
             </Link>
           ))}
+          {activeFiltre && (
+            <Link href={buildHref({ filtre: null })} style={{ ...toggleChip(true), display: "inline-flex", alignItems: "center", gap: 5 }}
+              title="Filtre du bandeau KPI actif, cliquer pour l'enlever">
+              {activeFiltre === "chaudes" ? "Chaudes : radar ≥ 70, hors promues/écartées" : "Entrées des 7 derniers jours"} ✕
+            </Link>
+          )}
           <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 2px" }} />
           <Link href={buildHref({ radar: true })} style={{ ...toggleChip(sortRadar), display: "inline-flex", alignItems: "center", gap: 5 }}
             title="Les fiches les plus cédables en tête (tri par défaut)">
