@@ -19,7 +19,7 @@ import {
   runScreening,
   type ScreeningFilters,
 } from "@/lib/connectors/recherche-entreprises";
-import { universRowFromHit } from "@/lib/crm/univers-ingest";
+import { universRowFromHit, mergeFinancesReingest } from "@/lib/crm/univers-ingest";
 import { fetchSignalTypesBySiren, scoreUniversRows } from "@/lib/crm/cedabilite-ingest";
 import { enqueueNotification } from "@/lib/crm/notifications";
 import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
@@ -32,18 +32,19 @@ const BATCH = 500;
 
 type Supabase = ReturnType<typeof createAdminClient>;
 
-/** État existant des fiches (score + statut) : détecte les passages à chaud. */
+/** État existant des fiches (score, statut, finances) : détecte les passages
+ * à chaud et permet la fusion des finances (Pappers survit à la re-veille). */
 async function existingFiches(
   supabase: Supabase,
   sirens: string[],
-): Promise<Map<string, { score: number | null; statut: string }>> {
-  const map = new Map<string, { score: number | null; statut: string }>();
+): Promise<Map<string, { score: number | null; statut: string; finances: Record<string, Record<string, number | null | undefined>> }>> {
+  const map = new Map<string, { score: number | null; statut: string; finances: Record<string, Record<string, number | null | undefined>> }>();
   for (let i = 0; i < sirens.length; i += BATCH) {
     const { data } = await supabase
       .from("univers_entreprises")
-      .select("siren, cedabilite_score, statut")
+      .select("siren, cedabilite_score, statut, finances")
       .in("siren", sirens.slice(i, i + BATCH));
-    for (const r of data ?? []) map.set(r.siren, { score: r.cedabilite_score, statut: r.statut });
+    for (const r of data ?? []) map.set(r.siren, { score: r.cedabilite_score, statut: r.statut, finances: r.finances ?? {} });
   }
   return map;
 }
@@ -99,9 +100,14 @@ export async function GET(req: Request) {
 
       // 1. Rafraîchir l'univers (statut et first_seen_at préservés), radar
       //    calculé à l'ingestion : la veille rescore chaque fiche revue.
+      //    Fusion des finances : Pappers survit à la re-veille (revue 2026-07-30).
       const bruts = run.hits.map((h) => universRowFromHit(h, profile.id, nowIso));
-      const typesBySiren = await fetchSignalTypesBySiren(supabase, bruts.map((r) => r.siren));
-      const rows = scoreUniversRows(bruts, typesBySiren);
+      const fusionnes = bruts.map((r) => ({
+        ...r,
+        finances: mergeFinancesReingest(avant.get(r.siren)?.finances, r.finances),
+      }));
+      const typesBySiren = await fetchSignalTypesBySiren(supabase, fusionnes.map((r) => r.siren));
+      const rows = scoreUniversRows(fusionnes, typesBySiren);
       for (let i = 0; i < rows.length; i += BATCH) {
         const { error } = await supabase
           .from("univers_entreprises")

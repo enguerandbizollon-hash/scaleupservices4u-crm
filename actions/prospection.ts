@@ -19,7 +19,7 @@ import {
 } from "@/lib/connectors/recherche-entreprises";
 import { computeCedabilite } from "@/lib/crm/cedabilite";
 import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
-import { universRowFromHit } from "@/lib/crm/univers-ingest";
+import { universRowFromHit, mergeFinancesReingest } from "@/lib/crm/univers-ingest";
 import { autofillScreeningDraft } from "@/lib/crm/screening-autofill";
 import { enqueueNotification } from "@/lib/crm/notifications";
 import { upsertContact, linkContactToOrganisation } from "./contacts";
@@ -177,10 +177,25 @@ export async function runScreeningIngest(input: {
     const nowIso = new Date().toISOString();
     const bruts = result.hits.map((h) => universRowFromHit(h, input.profileId ?? null, nowIso));
 
+    // Les finances Pappers déjà acquises survivent à la re-chasse (fusion,
+    // revue 2026-07-30) : l'API gratuite rafraîchit CA/RN sans rien effacer.
+    const financesBySiren = new Map<string, Record<string, Record<string, number | null | undefined>>>();
+    for (let i = 0; i < bruts.length; i += UPSERT_BATCH) {
+      const { data: exist } = await supabase
+        .from("univers_entreprises")
+        .select("siren, finances")
+        .in("siren", bruts.slice(i, i + UPSERT_BATCH).map((r) => r.siren));
+      for (const e of exist ?? []) financesBySiren.set(e.siren, e.finances ?? {});
+    }
+    const fusionnes = bruts.map((r) => ({
+      ...r,
+      finances: mergeFinancesReingest(financesBySiren.get(r.siren), r.finances),
+    }));
+
     // Radar calculé à l'ingestion (cran 1) : chaque fiche ressort scorée,
     // signaux BODACC croisés, sans attendre le bouton de recalcul.
-    const typesBySiren = await fetchSignalTypesBySiren(supabase, bruts.map((r) => r.siren));
-    const rows = scoreUniversRows(bruts, typesBySiren);
+    const typesBySiren = await fetchSignalTypesBySiren(supabase, fusionnes.map((r) => r.siren));
+    const rows = scoreUniversRows(fusionnes, typesBySiren);
 
     for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
       const { error } = await supabase
@@ -236,7 +251,12 @@ export async function recomputeCedabilite(): Promise<ProspectionActionResult<{ s
     if (error) return { success: false, error: error.message };
     if (!page || page.length === 0) break;
 
-    const typesBySiren = await fetchSignalTypesBySiren(supabase, page.map((p) => p.siren));
+    let typesBySiren: Map<string, string[]>;
+    try {
+      typesBySiren = await fetchSignalTypesBySiren(supabase, page.map((p) => p.siren));
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Lecture des signaux en échec" };
+    }
 
     const updates = page.map((f) => {
       const r = computeCedabilite(

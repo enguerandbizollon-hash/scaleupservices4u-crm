@@ -12,17 +12,23 @@ import { computeCedabilite, type FicheForCedabilite } from "./cedabilite";
 
 const BATCH = 500;
 
-/** Types de signaux portés par chaque SIREN (croisement table signaux). */
+/**
+ * Types de signaux portés par chaque SIREN (croisement table signaux).
+ * JETTE en cas d'erreur de lecture (revue 2026-07-30) : avaler l'erreur
+ * revenait à scorer sans signaux, donc à rescorer chaude une fiche radiée
+ * ou déjà cédée. Mieux vaut échouer bruyamment que mal scorer.
+ */
 export async function fetchSignalTypesBySiren(
   supabase: SupabaseClient,
   sirens: string[],
 ): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   for (let i = 0; i < sirens.length; i += BATCH) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("signaux")
       .select("siren, signal_type")
       .in("siren", sirens.slice(i, i + BATCH));
+    if (error) throw new Error(`Lecture des signaux : ${error.message}`);
     for (const s of data ?? []) {
       const arr = map.get(s.siren) ?? [];
       arr.push(s.signal_type);
@@ -68,7 +74,14 @@ export async function recomputeCedabiliteForSirens(
     }
     if (!fiches || fiches.length === 0) continue;
 
-    const typesBySiren = await fetchSignalTypesBySiren(supabase, fiches.map((f) => f.siren));
+    let typesBySiren: Map<string, string[]>;
+    try {
+      typesBySiren = await fetchSignalTypesBySiren(supabase, fiches.map((f) => f.siren));
+    } catch (e) {
+      // Signaux illisibles : on SAUTE le lot plutôt que de le scorer sans eux.
+      errors.push(e instanceof Error ? e.message : "Lecture des signaux en échec");
+      continue;
+    }
     // nom inclus : requis par le chemin INSERT de l'upsert (NOT NULL),
     // jamais emprunté en pratique puisque toutes les lignes existent.
     const updates = fiches.map((f) => {

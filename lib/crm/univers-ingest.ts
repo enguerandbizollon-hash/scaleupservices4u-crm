@@ -6,6 +6,33 @@
 import type { ScreeningHit } from "@/lib/connectors/recherche-entreprises";
 import { sectorFromNaf } from "@/lib/crm/matching-maps";
 
+type FinanceYearLoose = Record<string, number | null | undefined>;
+
+/**
+ * Fusion des finances à la re-ingestion (revue 2026-07-30) : l'API gratuite
+ * rafraîchit CA et résultat net mais ne doit JAMAIS effacer les champs
+ * ramenés par Pappers (ebitda, dettes, trésorerie, caf...) ni les exercices
+ * qu'elle ne connaît pas. Une valeur fraîche non nulle gagne, le reste
+ * survit. Sans cette fusion, chaque chasse ou veille appauvrissait la fiche
+ * et le radar était rescoré sur des finances dégradées.
+ */
+export function mergeFinancesReingest(
+  existing: Record<string, FinanceYearLoose> | null | undefined,
+  fresh: Record<string, FinanceYearLoose> | null | undefined,
+): Record<string, FinanceYearLoose> {
+  const out: Record<string, FinanceYearLoose> = {};
+  for (const [year, vals] of Object.entries(existing ?? {})) {
+    out[year] = { ...(vals ?? {}) };
+  }
+  for (const [year, vals] of Object.entries(fresh ?? {})) {
+    out[year] = { ...(out[year] ?? {}) };
+    for (const [k, v] of Object.entries(vals ?? {})) {
+      if (v != null) out[year][k] = v;
+    }
+  }
+  return out;
+}
+
 export function universRowFromHit(hit: ScreeningHit, profileId: string | null, nowIso: string) {
   const { raw, normalized } = hit;
   const naf = normalized.activite_principale_code;
