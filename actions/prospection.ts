@@ -1009,11 +1009,27 @@ export async function createDossierFromUnivers(
   const dealId = deal.id;
   const userId = user.id;
   after(async () => {
+    // Un échec ici laissait le dossier « À screener » à vie sans explication
+    // (audit 2026-07-31 : 3 dossiers sur 4 muets) : l'échec passe par la
+    // cloche, qui pointe vers le dossier où la génération se relance à la main.
+    const notifyFailure = async (admin: ReturnType<typeof createAdminClient>, detail: string) => {
+      await enqueueNotification(admin, {
+        user_id: userId,
+        kind: "screening_draft",
+        title: `Screening non généré : ${dealName}`,
+        body: `L'analyse automatique a échoué (${detail}). Ouvrez le dossier et relancez la génération depuis l'onglet Screening.`,
+        link_url: `/protected/dossiers/${dealId}`,
+        source_type: "deal",
+        source_id: dealId,
+        trigger_date: new Date().toISOString().slice(0, 10),
+      });
+    };
     try {
       const admin = createAdminClient();
       const r = await autofillScreeningDraft(admin, userId, dealId);
       if (r.error) {
         console.error(`screening autofill ${dealId}: ${r.error}`);
+        await notifyFailure(admin, r.error);
         return;
       }
       if (r.filled) {
@@ -1029,7 +1045,11 @@ export async function createDossierFromUnivers(
         });
       }
     } catch (e) {
-      console.error(`screening autofill ${dealId}:`, e instanceof Error ? e.message : e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`screening autofill ${dealId}:`, msg);
+      try {
+        await notifyFailure(createAdminClient(), msg);
+      } catch { /* le journal serveur garde la trace */ }
     }
   });
 
