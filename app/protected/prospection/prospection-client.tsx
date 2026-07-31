@@ -180,7 +180,17 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
 
   // Fiche ouverte dans le tiroir de détail. Un deep-link ?fiche=SIREN
   // (signal, notification) ouvre le tiroir dès l'arrivée sur la page.
+  // Revue 2026-07-30 : un initialiseur useState n'est lu qu'au montage, or la
+  // cloche navigue côté client vers cette même route sans remonter le
+  // composant. L'effet ci-dessous synchronise la prop, puis retire ?fiche=
+  // de l'URL pour que les revalidations ne rouvrent pas le tiroir fermé.
   const [openedFiche, setOpenedFiche] = useState<{ siren: string; nom: string; statut: string } | null>(initialFiche);
+  useEffect(() => {
+    if (!initialFiche) return;
+    setOpenedFiche(initialFiche);
+    router.replace(buildHref(), { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFiche?.siren]);
 
   const secteursDisponibles = useMemo(
     () => [...new Set(Object.values(NAF_DIVISION_TO_SECTOR))].sort((a, b) => a.localeCompare(b, "fr")),

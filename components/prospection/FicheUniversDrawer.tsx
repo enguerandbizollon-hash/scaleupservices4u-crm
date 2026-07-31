@@ -57,6 +57,11 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   // Garde synchrone anti double-clic : `pending` ne bascule qu'au rendu
   // suivant, un second clic rapide (à travers deux confirm) passerait sinon.
   const busyRef = useRef(false);
+  // Revue 2026-07-30 : la navigation fiche à fiche change le SIREN sans
+  // démonter le composant. Toute réponse serveur lancée pour la fiche A doit
+  // être JETÉE si l'utilisateur est passé à la fiche B entre-temps.
+  const sirenRef = useRef(siren);
+  sirenRef.current = siren;
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +72,9 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     setCreatedNote(null);
     setEnrichError(null);
     setEnrichNote(null);
+    setEnriching(false);
+    setContactByDirigeant({});
+    setContactBusy(null);
     setStatut(statutSeed);
     getUniversFicheDetail(siren).then((res) => {
       if (!alive) return;
@@ -85,10 +93,11 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onClose(); return; }
-      // Flèches : revue fiche à fiche, sauf pendant une saisie.
+      // Aucun raccourci pendant une saisie : Échap dans la note d'approche
+      // doit sortir du champ, pas fermer le tiroir en perdant le texte.
       const t = e.target as HTMLElement | null;
       if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
+      if (e.key === "Escape") { onClose(); return; }
       if (e.key === "ArrowLeft" && prevFiche && onNavigate) onNavigate(prevFiche);
       if (e.key === "ArrowRight" && nextFiche && onNavigate) onNavigate(nextFiche);
     };
@@ -106,7 +115,9 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
 
   function handleNoteBlur() {
     if ((detail?.approche_note ?? "") === noteDraft.trim()) return;
-    updateUniversApprocheNote(siren, noteDraft).then((res) => {
+    const forSiren = siren;
+    updateUniversApprocheNote(forSiren, noteDraft).then((res) => {
+      if (sirenRef.current !== forSiren) return; // fiche changée entre-temps
       if (res.success) {
         setDetail((d) => (d ? { ...d, approche_note: noteDraft.trim() || null } : d));
         setNoteSaved(true);
@@ -119,7 +130,9 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
 
   function handleDormantDate(dateStr: string) {
     if (!dateStr) return;
-    updateUniversStatut(siren, "dormant", { dormantUntil: dateStr }).then((res) => {
+    const forSiren = siren;
+    updateUniversStatut(forSiren, "dormant", { dormantUntil: dateStr }).then((res) => {
+      if (sirenRef.current !== forSiren) return;
       if (res.success) setDetail((d) => (d ? { ...d, dormant_until: res.data.dormant_until } : d));
       else setActionError(res.error);
     });
@@ -133,7 +146,9 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     if (contactBusy != null) return;
     setContactBusy(index);
     setActionError(null);
-    promoteDirigeantToContact(siren, index).then((res) => {
+    const forSiren = siren;
+    promoteDirigeantToContact(forSiren, index).then((res) => {
+      if (sirenRef.current !== forSiren) return;
       setContactBusy(null);
       if (res.success) {
         setContactByDirigeant((prev) => ({ ...prev, [index]: res.data.contact_id }));
@@ -149,9 +164,12 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     setEnriching(true);
     setEnrichError(null);
     setEnrichNote(null);
-    const res = await enrichProspect360(siren);
+    const forSiren = siren;
+    const res = await enrichProspect360(forSiren);
+    if (sirenRef.current !== forSiren) return; // fiche changée pendant l'appel IA
     if (res.success) {
-      const fresh = await getUniversFicheDetail(siren);
+      const fresh = await getUniversFicheDetail(forSiren);
+      if (sirenRef.current !== forSiren) return;
       if (fresh.success) setDetail(fresh.data);
       if (res.data.pappers_note) setEnrichNote(`Pappers : ${res.data.pappers_note}`);
     } else {
@@ -163,7 +181,9 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   function handleStatut(next: UniversStatut) {
     setStatut(next);
     onLocalStatut(siren, next);
-    updateUniversStatut(siren, next).then((res) => {
+    const forSiren = siren;
+    updateUniversStatut(forSiren, next).then((res) => {
+      if (sirenRef.current !== forSiren) return;
       if (res.success) {
         // Le serveur pose la date de réveil (défaut 6 mois) ou l'efface.
         setDetail((d) => (d ? { ...d, statut: next, dormant_until: res.data.dormant_until } : d));
@@ -178,12 +198,14 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     if (!confirm(`Promouvoir « ${nom} » en organisation CRM ?`)) return;
     busyRef.current = true;
     setActionError(null);
+    const forSiren = siren;
     startTransition(async () => {
-      const res = await promoteUniversToOrganization(siren);
+      const res = await promoteUniversToOrganization(forSiren);
       busyRef.current = false;
+      if (sirenRef.current !== forSiren) return;
       if (res.success) {
         setStatut("promu");
-        onLocalStatut(siren, "promu");
+        onLocalStatut(forSiren, "promu");
         setDetail((d) => (d ? { ...d, statut: "promu", organization_id: res.data.organization_id } : d));
       } else {
         setActionError(res.error);
@@ -202,12 +224,14 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
     if (!confirm(`Créer le dossier « Cession ${nom} » (organisation liée, dirigeant prérempli) ?`)) return;
     busyRef.current = true;
     setActionError(null);
+    const forSiren = siren;
     startTransition(async () => {
-      const res = await createDossierFromUnivers(siren);
+      const res = await createDossierFromUnivers(forSiren);
       busyRef.current = false;
+      if (sirenRef.current !== forSiren) return;
       if (res.success) {
         setStatut("promu");
-        onLocalStatut(siren, "promu");
+        onLocalStatut(forSiren, "promu");
         setDetail((d) => (d ? {
           ...d,
           statut: "promu",
