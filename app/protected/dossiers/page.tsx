@@ -41,13 +41,13 @@ async function Content() {
     return (
       <div style={{ padding:32, minHeight:"100vh", background:"var(--bg)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
-          <h1 style={{ margin:0, fontSize:24, fontWeight:700 }}>Dossiers</h1>
+          <h1 style={{ margin:0, fontSize:24, fontWeight:700 }}>Mandats</h1>
           <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-            <Plus size={14}/> Nouveau dossier
+            <Plus size={14}/> Nouveau mandat
           </Link>
         </div>
         <div style={{ textAlign:"center", padding:"60px 24px", color:"var(--text-5)", fontSize:14 }}>
-          Aucun dossier — <Link href="/protected/dossiers/nouveau" style={{ color:"#1a56db" }}>créer le premier</Link>
+          Aucun mandat, <Link href="/protected/dossiers/nouveau" style={{ color:"#1a56db" }}>créer le premier</Link>
         </div>
       </div>
     );
@@ -152,7 +152,7 @@ async function Content() {
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
         <div>
-          <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>Dossiers</h1>
+          <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>Mandats</h1>
           <div style={{ display:"flex", gap:8, marginTop:6 }}>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{deals.length} total</span>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>{open.length} en cours</span>
@@ -200,7 +200,7 @@ async function Content() {
             ]}
           />
           <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-            <Plus size={14}/> Nouveau dossier
+            <Plus size={14}/> Nouveau mandat
           </Link>
         </div>
       </div>

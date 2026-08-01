@@ -3,28 +3,31 @@ import { GlobalSearch } from "./components/global-search";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, BarChart2, CalendarDays, CheckSquare, Inbox, Radar, Crosshair } from "lucide-react";
+import { Sunrise, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, BarChart2, CalendarDays, CheckSquare, Inbox, Radar, Crosshair, Handshake } from "lucide-react";
 
-// Navigation en moments du métier (Deal OS, chantier D) : le menu suit le
-// flux de travail, pas l'historique des modules. Aucune page supprimée,
-// tout est rangé : Trouver (la machine à mandats), Exécuter (le quotidien),
+// Navigation en moments du métier (refonte 2026-08-01, validée avec la carte
+// des 7 maillons) : Ce matin (la revue), Cédants (trouver et qualifier),
+// Mandats (exécuter et matcher les acquéreurs), Exécution (le quotidien),
 // Annuaire (le référentiel), Outillage (l'occasionnel).
 const NAV_GROUPS: Array<{
   title: string | null;
-  items: Array<{ href: string; label: string; dot: string; bg: string; icon: typeof LayoutDashboard }>;
+  items: Array<{ href: string; label: string; dot: string; bg: string; icon: typeof Sunrise }>;
 }> = [
   { title: null, items: [
-    { href:"/protected",               label:"Dashboard",     dot:"#3468B0", bg:"rgba(52,104,176,.18)",  icon:LayoutDashboard },
+    { href:"/protected",               label:"Ce matin",      dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Sunrise },
   ]},
-  { title: "Trouver", items: [
+  { title: "Cédants", items: [
     { href:"/protected/prospection",   label:"Prospection",   dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:Crosshair },
     { href:"/protected/signaux",       label:"Signaux",       dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Radar },
   ]},
-  { title: "Exécuter", items: [
-    { href:"/protected/dossiers",      label:"Dossiers",      dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
+  { title: "Mandats", items: [
+    { href:"/protected/dossiers",      label:"Mandats",       dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
+    { href:"/protected/acquereurs",    label:"Acquéreurs",    dot:"#6366F1", bg:"rgba(99,102,241,.18)",  icon:Handshake },
+  ]},
+  { title: "Exécution", items: [
     { href:"/protected/taches",        label:"Tâches",        dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },
     { href:"/protected/agenda",        label:"Agenda",        dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:CalendarDays },
-    { href:"/protected/inbox",         label:"Boîte de tri",  dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
+    { href:"/protected/inbox",         label:"Boîte emails",  dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
   ]},
   { title: "Annuaire", items: [
     { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
