@@ -134,6 +134,7 @@ export async function createOrganisationAction(
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/protected/organisations");
+  revalidatePath("/protected/acquereurs");
   return { success: true, id: org.id };
 }
 
@@ -202,8 +203,9 @@ export async function updateOrganisationAction(
 
   revalidatePath("/protected/organisations");
   revalidatePath(`/protected/organisations/${id}`);
-  // Les dossiers M&A utilisent les données investisseur pour le matching (fonds PE acquéreurs)
+  // Le matching et la base acquéreurs lisent le profil acquéreur
   revalidatePath("/protected/dossiers");
+  revalidatePath("/protected/acquereurs");
   return { success: true, id };
 }
 
