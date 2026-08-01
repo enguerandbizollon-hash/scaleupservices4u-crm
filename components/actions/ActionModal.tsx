@@ -197,7 +197,9 @@ export default function ActionModal({
       setEmailCcInput("");
       setGmailThreadId(editingAction.gmail_thread_id || "");
       setAgendaNotes(editingAction.agenda_notes || "");
-      setReminderDays([]); // reminder_days n'est pas dans ActionRow; reload à implémenter si besoin
+      // Recharger la valeur réelle : la remise à [] effaçait les rappels
+      // à chaque édition (updateAction whiteliste reminder_days).
+      setReminderDays(editingAction.reminder_days ?? []);
       setDocumentUrl(editingAction.document_url || "");
       setDealId(editingAction.deal_id || "");
       setOrganizationId(editingAction.organization_id || "");

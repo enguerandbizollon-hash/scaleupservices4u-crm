@@ -60,6 +60,7 @@ export interface ActionRow {
   end_datetime: string | null;
   duration_minutes: number | null;
   hard_deadline: boolean;
+  reminder_days: number[] | null;
   location: string | null;
   meet_link: string | null;
   phone_number: string | null;
