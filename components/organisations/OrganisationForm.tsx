@@ -3,19 +3,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, ArrowLeft } from "lucide-react";
-import { OrganisationTypeGrid, INVESTOR_TYPES } from "./OrganisationTypeGrid";
-import { InvestorProfileFields, type InvestorProfileData } from "./InvestorProfileFields";
+import { OrganisationTypeGrid } from "./OrganisationTypeGrid";
 import { CompanyProfileFields, type CompanyProfileData } from "./CompanyProfileFields";
 import { MaSellerFields, type MaSellerData } from "./MaSellerFields";
 import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
 import { AcquirerProfileFields, type AcquirerProfileData } from "./AcquirerProfileFields";
 import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
+import { ACQUIRER_BUYER_TYPES } from "@/lib/crm/acquirer-scoring";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import { DedupAlert } from "./DedupAlert";
 
-// Types qui affichent le profil entreprise (hors investisseurs)
+// Types qui affichent le profil entreprise. Les fonds y figurent aussi :
+// le save écrase toute colonne absente du bloc affiché, donc exclure un type
+// revenait à effacer secteur/effectif au premier enregistrement (piège audit).
 const COMPANY_PROFILE_TYPES = [
-  "client", "prospect_client", "target", "buyer",
+  "client", "prospect_client", "target", "buyer", "corporate",
+  "investor", "business_angel", "family_office",
   "bank", "advisor", "law_firm", "accounting_firm", "consulting_firm", "other",
 ];
 
@@ -99,7 +102,7 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
   const [error, setError] = useState("");
 
   // General fields
-  const [orgType, setOrgType] = useState(initialData.organization_type ?? "investor");
+  const [orgType, setOrgType] = useState(initialData.organization_type ?? "other");
   const [name, setName] = useState(initialData.name ?? "");
   const [status, setStatus] = useState(initialData.base_status ?? "to_qualify");
   const [location, setLocation] = useState(initialData.location ?? "");
@@ -107,17 +110,6 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
   const [linkedin, setLinkedin] = useState(initialData.linkedin_url ?? "");
   const [description, setDescription] = useState(initialData.description ?? "");
   const [notes, setNotes] = useState(initialData.notes ?? "");
-
-  // Investor profile
-  const [investorData, setInvestorData] = useState<InvestorProfileData>({
-    ticketMin:   initialData.investor_ticket_min ?? null,
-    ticketMax:   initialData.investor_ticket_max ?? null,
-    stageMin:    initialData.investor_stage_min ?? (initialData.investor_stages ?? [])[0] ?? null,
-    stageMax:    initialData.investor_stage_max ?? (initialData.investor_stages ?? []).at(-1) ?? null,
-    sectors:     initialData.investor_sectors ?? [],
-    geographies: initialData.investor_geographies ?? [],
-    thesis:      initialData.investor_thesis ?? "",
-  });
 
   // Company profile
   const [companyData, setCompanyData] = useState<CompanyProfileData>({
@@ -141,10 +133,9 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     excluded_sectors:      initialData.excluded_sectors ?? [],
   });
 
-  // Acquirer profile — les fonds et family offices sont des acquéreurs
-  // à part entière en small cap (décision phase 3) : ils portent les
-  // critères d'acquisition en plus de leur profil investisseur.
-  const ACQUIRER_PROFILE_TYPES = ["buyer", "corporate", "investor", "family_office"];
+  // Acquirer profile — toutes les familles scorées par le matching portent
+  // le profil acquéreur. Même liste que le scorer (ACQUIRER_BUYER_TYPES) :
+  // un business_angel scoré mais sans formulaire perdait son profil au save.
   const [acquirerData, setAcquirerData] = useState<AcquirerProfileData>({
     acquirer_type:           initialData.acquirer_type ?? "",
     acquisition_motivations: initialData.acquisition_motivations ?? [],
@@ -160,11 +151,9 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
     acquirer_summary:        initialData.acquirer_summary ?? "",
   });
 
-  const isInvestorType     = INVESTOR_TYPES.includes(orgType);
   const isCompanyType      = COMPANY_PROFILE_TYPES.includes(orgType);
   const isMaTarget         = orgType === "target";
-  const isMaBuyer          = orgType === "buyer";
-  const isAcquirerType     = ACQUIRER_PROFILE_TYPES.includes(orgType);
+  const isAcquirerType     = ACQUIRER_BUYER_TYPES.includes(orgType);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -172,17 +161,6 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
 
     setLoading(true);
     setError("");
-
-    // Construire investor_stages[] depuis stageMin/stageMax
-    const STAGE_ORDER = ["Seed", "Pré-Série A", "Série A", "Série B", "Growth", "Late Stage"];
-    let investorStages: string[] = [];
-    if (isInvestorType && investorData.stageMin && investorData.stageMax) {
-      const minIdx = STAGE_ORDER.indexOf(investorData.stageMin);
-      const maxIdx = STAGE_ORDER.indexOf(investorData.stageMax);
-      if (minIdx >= 0 && maxIdx >= 0) {
-        investorStages = STAGE_ORDER.slice(Math.min(minIdx, maxIdx), Math.max(minIdx, maxIdx) + 1);
-      }
-    }
 
     const data = {
       name:         name.trim(),
@@ -193,15 +171,16 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       linkedin_url: linkedin.trim() || null,
       description:  description.trim() || null,
       notes:        notes.trim() || null,
-      // Investor
-      investor_ticket_min:  isInvestorType ? investorData.ticketMin : null,
-      investor_ticket_max:  isInvestorType ? investorData.ticketMax : null,
-      investor_stages:      isInvestorType ? investorStages : [],
-      investor_sectors:     isInvestorType ? investorData.sectors : [],
-      investor_geographies: isInvestorType ? investorData.geographies : [],
-      investor_thesis:      isInvestorType ? (investorData.thesis.trim() || null) : null,
-      investor_stage_min:   isInvestorType ? investorData.stageMin : null,
-      investor_stage_max:   isInvestorType ? investorData.stageMax : null,
+      // Investor (colonnes héritées du fundraising : plus de saisie, on
+      // repasse les valeurs existantes telles quelles pour ne rien effacer)
+      investor_ticket_min:  initialData.investor_ticket_min ?? null,
+      investor_ticket_max:  initialData.investor_ticket_max ?? null,
+      investor_stages:      initialData.investor_stages ?? [],
+      investor_sectors:     initialData.investor_sectors ?? [],
+      investor_geographies: initialData.investor_geographies ?? [],
+      investor_thesis:      initialData.investor_thesis ?? null,
+      investor_stage_min:   initialData.investor_stage_min ?? null,
+      investor_stage_max:   initialData.investor_stage_max ?? null,
       // Company profile
       sector:         isCompanyType ? (companyData.sector || null) : null,
       founded_year:   isCompanyType ? companyData.founded_year : null,
@@ -211,9 +190,10 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
       // M&A seller
       sale_readiness:  isMaTarget ? maSellerData.sale_readiness : null,
       partial_sale_ok: isMaTarget ? maSellerData.partial_sale_ok : true,
-      // M&A buyer — rationale + excluded_sectors uniquement
-      acquisition_rationale: isMaBuyer ? (maBuyerData.acquisition_rationale.trim() || null) : null,
-      excluded_sectors:      isMaBuyer ? maBuyerData.excluded_sectors : [],
+      // M&A buyer — rationale + excluded_sectors, pour TOUTES les familles
+      // acquéreurs (le scorer lit excluded_sectors quel que soit le type).
+      acquisition_rationale: isAcquirerType ? (maBuyerData.acquisition_rationale.trim() || null) : null,
+      excluded_sectors:      isAcquirerType ? maBuyerData.excluded_sectors : [],
       // Acquirer profile — source unique pour target_sectors, target_geographies,
       // target_revenue_*, target_ebitda_*, acquirer_type, motivations, history
       target_sectors:          isAcquirerType ? acquirerData.target_sectors : [],
@@ -320,18 +300,7 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
             excludeId={initialData.id}
           />
 
-          {/* Bloc 3 — Profil Investisseur (conditionnel) */}
-          {isInvestorType && (
-            <div style={section}>
-              <InvestorProfileFields
-                orgType={orgType}
-                data={investorData}
-                onChange={setInvestorData}
-              />
-            </div>
-          )}
-
-          {/* Bloc 3b — Profil Entreprise (client, prospect, cible, repreneur…) */}
+          {/* Bloc 3b — Profil Entreprise (client, prospect, cible, acquéreur…) */}
           {isCompanyType && (
             <div style={section}>
               <CompanyProfileFields data={companyData} onChange={setCompanyData} />
@@ -345,14 +314,14 @@ export function OrganisationForm({ mode, initialData = {} }: OrganisationFormPro
             </div>
           )}
 
-          {/* Bloc 3d — Critères acquéreur M&A (type = buyer) */}
-          {isMaBuyer && (
+          {/* Bloc 3d — Rationale + secteurs exclus (toutes familles acquéreurs) */}
+          {isAcquirerType && (
             <div style={section}>
               <MaBuyerFields data={maBuyerData} onChange={setMaBuyerData} />
             </div>
           )}
 
-          {/* Bloc 3e — Profil acquéreur M&A (type = buyer, corporate) */}
+          {/* Bloc 3e — Profil acquéreur (toutes familles scorées par le matching) */}
           {isAcquirerType && (
             <div style={section}>
               <AcquirerProfileFields data={acquirerData} onChange={setAcquirerData} />
