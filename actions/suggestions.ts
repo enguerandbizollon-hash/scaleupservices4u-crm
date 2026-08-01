@@ -438,7 +438,7 @@ async function setSuggestionStatus(
 
   const { data: suggestion, error: loadErr } = await supabase
     .from("deal_target_suggestions")
-    .select("deal_id")
+    .select("deal_id, organization_id, role_suggested")
     .eq("id", suggestionId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -458,8 +458,27 @@ async function setSuggestionStatus(
 
   if (error) return { success: false, error: error.message };
 
-  // Si approuvée : upgrade le contact principal en role_in_dossier via deal_organizations
-  // (facultatif V1, déjà géré par le consultant via onglet)
+  // Approuver un acquéreur doit NOURRIR la base acquéreurs : une organisation
+  // restée en "other" est requalifiée en "buyer" et entre dans le périmètre
+  // du matching (audit 2026-07-31 : la base acquéreurs restait vide parce
+  // qu'aucun geste ne typait jamais les organisations). Un type métier posé
+  // à la main n'est jamais écrasé.
+  if (status === "approved" && suggestion.role_suggested === "acquirer" && suggestion.organization_id) {
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("organization_type")
+      .eq("id", suggestion.organization_id)
+      .maybeSingle();
+    if (org && (org.organization_type === "other" || org.organization_type == null)) {
+      await supabase
+        .from("organizations")
+        .update({ organization_type: "buyer" })
+        .eq("id", suggestion.organization_id);
+      revalidatePath("/protected/organisations");
+      revalidatePath("/protected/acquereurs");
+    }
+  }
+
   revalidatePath(`/protected/dossiers/${suggestion.deal_id}`);
   return { success: true };
 }
