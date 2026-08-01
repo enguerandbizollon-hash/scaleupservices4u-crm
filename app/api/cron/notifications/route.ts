@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueueNotification } from "@/lib/crm/notifications";
 import { startCronRun, finishCronRun } from "@/lib/crm/cron-runs";
+import { computeAndPersistIntent, fetchMailRowsForThreads, type SuggestionForIntent } from "@/lib/crm/intent-ingest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -278,7 +279,7 @@ export async function GET(req: Request) {
   {
     const { data: dues, error: dueErr } = await supabase
       .from("deal_target_suggestions")
-      .select("id, user_id, deal_id, organization_id, status, next_followup_at, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, organizations(name), deals(name)")
+      .select("id, user_id, deal_id, organization_id, status, next_followup_at, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, last_outreach_at, gmail_thread_id, organizations(name), deals(name)")
       .not("next_followup_at", "is", null)
       .lte("next_followup_at", today)
       .neq("status", "rejected")
@@ -308,6 +309,18 @@ export async function GET(req: Request) {
         });
         if (res.error) errors.push(`followup ${s.id}: ${res.error}`);
         else queuedFollowups++;
+      }
+
+      // Rafraîchir le score d'intention des échéances scannées : les mails
+      // de tous les fils en UNE requête (jamais de requête par ligne).
+      const threadIds = [...new Set((dues ?? []).map(s => s.gmail_thread_id).filter((t): t is string => !!t))];
+      const mailRows = await fetchMailRowsForThreads(supabase, threadIds);
+      for (const s of dues ?? []) {
+        try {
+          await computeAndPersistIntent(supabase, s.user_id, s as unknown as SuggestionForIntent, mailRows);
+        } catch (e) {
+          errors.push(`intent ${s.id}: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
     }
   }

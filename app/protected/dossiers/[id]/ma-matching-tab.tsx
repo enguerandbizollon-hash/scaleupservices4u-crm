@@ -196,6 +196,12 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
                 {SUGGESTION_STATUS_META[status].label}
               </span>
             )}
+            {suggestion?.intent_score != null && (
+              <span title="Score d'intention : la CHALEUR de cet acquéreur sur ce mandat (étape atteinte, réactivité aux emails, engagement du fil, fraîcheur). Distinct du score de matching, qui mesure le fit."
+                style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#FFF7ED", color: "#C2410C" }}>
+                Intention {Math.round(suggestion.intent_score)}
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 20, background: "var(--surface-2)", color: "var(--text-4)", border: "1px solid var(--border)" }}>

@@ -15,6 +15,7 @@ import {
   isOutboundStep,
   FOLLOWUP_AFTER_DONE_DAYS,
 } from "@/lib/crm/funnel";
+import { computeAndPersistIntent } from "@/lib/crm/intent-ingest";
 
 type FunnelResult =
   | { success: true; data: { stage: string; next_followup_at: string | null } }
@@ -30,10 +31,12 @@ interface SuggestionRow {
   im_sent_at: string | null;
   offer_received_at: string | null;
   next_followup_at: string | null;
+  last_outreach_at: string | null;
+  gmail_thread_id: string | null;
 }
 
 const SUGGESTION_COLS =
-  "id, deal_id, organization_id, status, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, next_followup_at";
+  "id, deal_id, organization_id, status, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, next_followup_at, last_outreach_at, gmail_thread_id";
 
 type FunnelContext =
   | { ok: false; error: string }
@@ -124,6 +127,12 @@ export async function markFunnelStep(suggestionId: string, step: FunnelStepKey):
     metadata: { next_followup_at: nextFollowup },
   });
 
+  // Recalcul du score d'intention avec l'état à jour (étape + last_outreach).
+  await computeAndPersistIntent(supabase, userId, {
+    ...merged,
+    last_outreach_at: isOutboundStep(step) ? nowIso : s.last_outreach_at,
+  });
+
   revalidateFunnel(s.deal_id);
   return { success: true, data: { stage, next_followup_at: nextFollowup } };
 }
@@ -210,6 +219,8 @@ export async function markFollowupDone(suggestionId: string): Promise<FunnelResu
   await logEvent(supabase, userId, s, "followup_done", {
     metadata: { next_followup_at: next },
   });
+
+  await computeAndPersistIntent(supabase, userId, { ...s, last_outreach_at: now.toISOString() });
 
   revalidateFunnel(s.deal_id);
   return { success: true, data: { stage: computeFunnelStage(s), next_followup_at: next } };
