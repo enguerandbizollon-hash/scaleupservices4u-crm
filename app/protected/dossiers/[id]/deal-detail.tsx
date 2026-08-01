@@ -383,6 +383,15 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
                     Teaser
                   </a>
                   <a
+                    href={`/protected/dossiers/${deal.id}/im`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Information Memorandum nominatif (post-NDA, projections incluses, généré par l'IA, contrôlé par vous)"
+                    style={{ padding:"8px 16px", borderRadius:9, background:"#192348", border:"1px solid #192348", fontSize:13, color:"#fff", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}
+                  >
+                    IM
+                  </a>
+                  <a
                     href={`/protected/dossiers/${deal.id}/liste-acquereurs`}
                     target="_blank"
                     rel="noopener noreferrer"
