@@ -20,15 +20,17 @@ export const STATUT_META: Record<string, StatutMeta> = {
   promu:       { label: "Promu",        bg: "#D1FAE5", tx: "#065F46" },
 };
 
-// Libellés des types de signaux affichés dans le tiroir (sous-ensemble
-// du flux Signaux, réutilisé pour l'historique BODACC d'un SIREN).
+// Libellés des types de signaux : SOURCE UNIQUE, consommée par le tiroir 360,
+// la page Signaux et la revue du matin. « Entrée screening » est devenu
+// « Nouvelle cible » (sweep vocabulaire 2026-07-31 : le mot screening est
+// réservé à la qualification d'un dossier).
 export const SIGNAL_TYPE_LABELS: Record<string, string> = {
   vente_cession: "Vente / cession",
   procedure_collective: "Procédure collective",
   radiation: "Radiation",
   depot_comptes: "Dépôt de comptes",
-  entree_screening: "Entrée screening",
-  changement_dirigeant: "Changement dirigeant",
+  entree_screening: "Nouvelle cible",
+  changement_dirigeant: "Changement de direction",
   fusion_absorption: "Fusion / TUP",
   location_gerance: "Location-gérance",
   rge_expire: "RGE non renouvelé",

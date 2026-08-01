@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Check, CheckCheck, ExternalLink, Building2, Radar } from "lucide-react";
 import { markSignalRead, markAllSignalsRead } from "@/actions/signaux";
+import { SIGNAL_TYPE_LABELS } from "@/components/prospection/statut-meta";
 
 export type SignalRow = {
   id: string;
@@ -24,17 +25,18 @@ export type SignalRow = {
   url: string | null;
 };
 
+// Libellés depuis la source unique (statut-meta.ts), couleurs locales.
 const TYPE_META: Record<string, { label: string; bg: string; tx: string }> = {
-  vente_cession:        { label: "Cession",              bg: "#FFF7ED", tx: "#C2410C" },
-  procedure_collective: { label: "Procédure collective", bg: "#FEE2E2", tx: "#991B1B" },
-  radiation:            { label: "Radiation",            bg: "var(--surface-3)", tx: "var(--text-4)" },
-  depot_comptes:        { label: "Dépôt de comptes",     bg: "#DBEAFE", tx: "#1D4ED8" },
-  entree_screening:     { label: "Nouvelle cible",       bg: "#D1FAE5", tx: "#065F46" },
-  fusion_absorption:    { label: "Fusion / TUP",         bg: "#FFF7ED", tx: "#C2410C" },
-  location_gerance:     { label: "Location-gérance",     bg: "#FEF3C7", tx: "#92400E" },
-  changement_dirigeant: { label: "Chgt direction",       bg: "#EDE9FE", tx: "#5B21B6" },
-  rge_expire:           { label: "RGE non renouvelé",    bg: "#FEF3C7", tx: "#92400E" },
-  recrutement_direction:{ label: "Recrute un directeur", bg: "#D1FAE5", tx: "#065F46" },
+  vente_cession:        { label: SIGNAL_TYPE_LABELS.vente_cession,        bg: "#FFF7ED", tx: "#C2410C" },
+  procedure_collective: { label: SIGNAL_TYPE_LABELS.procedure_collective, bg: "#FEE2E2", tx: "#991B1B" },
+  radiation:            { label: SIGNAL_TYPE_LABELS.radiation,            bg: "var(--surface-3)", tx: "var(--text-4)" },
+  depot_comptes:        { label: SIGNAL_TYPE_LABELS.depot_comptes,        bg: "#DBEAFE", tx: "#1D4ED8" },
+  entree_screening:     { label: SIGNAL_TYPE_LABELS.entree_screening,     bg: "#D1FAE5", tx: "#065F46" },
+  fusion_absorption:    { label: SIGNAL_TYPE_LABELS.fusion_absorption,    bg: "#FFF7ED", tx: "#C2410C" },
+  location_gerance:     { label: SIGNAL_TYPE_LABELS.location_gerance,     bg: "#FEF3C7", tx: "#92400E" },
+  changement_dirigeant: { label: SIGNAL_TYPE_LABELS.changement_dirigeant, bg: "#EDE9FE", tx: "#5B21B6" },
+  rge_expire:           { label: SIGNAL_TYPE_LABELS.rge_expire,           bg: "#FEF3C7", tx: "#92400E" },
+  recrutement_direction:{ label: SIGNAL_TYPE_LABELS.recrutement_direction, bg: "#D1FAE5", tx: "#065F46" },
 };
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -46,12 +48,12 @@ const SEVERITY_DOT: Record<string, string> = {
 const FILTERS: { value: string | null; label: string }[] = [
   { value: null,                    label: "Tous" },
   { value: "entree_screening",      label: "Nouvelles cibles" },
-  { value: "vente_cession",         label: "Cessions" },
+  { value: "vente_cession",         label: "Ventes / cessions" },
   { value: "location_gerance",      label: "Locations-gérances" },
   { value: "fusion_absorption",     label: "Fusions / TUP" },
   { value: "rge_expire",            label: "RGE non renouvelés" },
   { value: "recrutement_direction", label: "Recrutements direction" },
-  { value: "changement_dirigeant",  label: "Chgts direction" },
+  { value: "changement_dirigeant",  label: "Changements de direction" },
   { value: "procedure_collective",  label: "Procédures collectives" },
   { value: "radiation",             label: "Radiations" },
   { value: "depot_comptes",         label: "Dépôts de comptes" },
