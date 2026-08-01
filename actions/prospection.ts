@@ -404,6 +404,7 @@ async function ensureOrganizationFromFiche(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   fiche: FichePourPromotion,
+  organizationType: string = "other",
 ): Promise<{ orgId: string; created: boolean } | { error: string }> {
   const { data: existing } = await supabase
     .from("organizations")
@@ -418,7 +419,7 @@ async function ensureOrganizationFromFiche(
     .insert({
       user_id: userId,
       name: fiche.nom,
-      organization_type: "other",
+      organization_type: organizationType,
       base_status: "to_qualify",
       siren: fiche.siren,
       naf: fiche.naf,
@@ -462,6 +463,61 @@ export async function promoteUniversToOrganization(
   revalidatePath("/protected/prospection");
   revalidatePath("/protected/organisations");
   return { success: true, data: { organization_id: ensured.orgId, created: ensured.created } };
+}
+
+/**
+ * Flux consolidateurs (routine Vectis, flux 2) : une fiche univers marquée
+ * comme ACQUÉREUR. L'organisation naît (ou se requalifie) en "corporate",
+ * entre donc dans le périmètre du matching acquéreurs, et son profil
+ * acquéreur reste à compléter. Le statut cédant de la fiche ne bouge pas :
+ * une entreprise qui achète aujourd'hui peut céder demain.
+ */
+export async function markUniversAsAcquirer(
+  siren: string,
+): Promise<ProspectionActionResult<{ organization_id: string; created: boolean; requalifiee: boolean }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, naf, secteur, ville, departement, date_creation")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const ensured = await ensureOrganizationFromFiche(supabase, user.id, fiche, "corporate");
+  if ("error" in ensured) return { success: false, error: ensured.error };
+
+  // Organisation déjà existante : requalifier seulement si elle est restée
+  // en "other", jamais écraser un type métier posé à la main.
+  let requalifiee = false;
+  if (!ensured.created) {
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("organization_type")
+      .eq("id", ensured.orgId)
+      .maybeSingle();
+    if (org && (org.organization_type === "other" || org.organization_type == null)) {
+      const { error: upErr } = await supabase
+        .from("organizations")
+        .update({ organization_type: "corporate" })
+        .eq("id", ensured.orgId);
+      if (upErr) return { success: false, error: upErr.message };
+      requalifiee = true;
+    }
+  }
+
+  const { error: linkErr } = await supabase
+    .from("univers_entreprises")
+    .update({ organization_id: ensured.orgId, updated_at: new Date().toISOString() })
+    .eq("siren", siren);
+  if (linkErr) return { success: false, error: linkErr.message };
+
+  revalidatePath("/protected/prospection");
+  revalidatePath("/protected/organisations");
+  revalidatePath("/protected/acquereurs");
+  return { success: true, data: { organization_id: ensured.orgId, created: ensured.created, requalifiee } };
 }
 
 /**

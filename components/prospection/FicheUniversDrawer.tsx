@@ -7,12 +7,12 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   X, Loader2, Building2, FolderPlus, ExternalLink, Gauge, ArrowUpRight,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Handshake,
 } from "lucide-react";
 import {
   getUniversFicheDetail, createDossierFromUnivers, promoteUniversToOrganization,
   updateUniversStatut, updateUniversApprocheNote, enrichProspect360,
-  promoteDirigeantToContact,
+  promoteDirigeantToContact, markUniversAsAcquirer,
   type UniversFicheDetail, type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
@@ -218,6 +218,32 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
   // dossier est là si on le veut, et le brouillon de screening se génère
   // en tâche de fond (la cloche préviendra).
   const [createdNote, setCreatedNote] = useState<string | null>(null);
+
+  // Flux consolidateurs (routine, flux 2) : cette entreprise ACHÈTE.
+  // La marquer acquéreur la fait entrer dans le matching des mandats.
+  function handleMarkAcquirer() {
+    if (busyRef.current) return;
+    const nom = detail?.nom ?? nomSeed;
+    if (!confirm(`Marquer « ${nom} » comme acquéreur (organisation corporate, profil acquéreur à compléter) ?`)) return;
+    busyRef.current = true;
+    setActionError(null);
+    const forSiren = siren;
+    startTransition(async () => {
+      const res = await markUniversAsAcquirer(forSiren);
+      busyRef.current = false;
+      if (sirenRef.current !== forSiren) return;
+      if (res.success) {
+        setDetail((d) => (d ? { ...d, organization_id: res.data.organization_id } : d));
+        setCreatedNote(res.data.created
+          ? "Organisation acquéreur créée. Complétez son profil acquéreur (opérations, fourchettes) pour nourrir le matching."
+          : res.data.requalifiee
+            ? "Organisation requalifiée en acquéreur. Complétez son profil acquéreur pour nourrir le matching."
+            : "Organisation déjà typée : vérifiez son profil acquéreur depuis sa fiche.");
+      } else {
+        setActionError(res.error);
+      }
+    });
+  }
   function handleCreateDossier() {
     if (busyRef.current) return;
     const nom = detail?.nom ?? nomSeed;
@@ -628,6 +654,11 @@ export function FicheUniversDrawer({ siren, nomSeed, statutSeed, onClose, onLoca
               <ArrowUpRight size={13} /> Promouvoir seulement
             </button>
           )}
+          <button onClick={handleMarkAcquirer} disabled={pending || !detail}
+            title="Flux consolidateurs : cette entreprise achète. La marquer acquéreur la fait entrer dans le matching de vos mandats de cession."
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid #C7D2FE", background: "#EEF2FF", color: "#3730A3", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: pending || !detail ? 0.55 : 1 }}>
+            <Handshake size={13} /> Marquer acquéreur
+          </button>
         </div>
       </div>
     </>
