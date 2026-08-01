@@ -1,316 +1,315 @@
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { Suspense } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
-import { DashboardClient } from "./dashboard-client";
+import { createClient } from "@/lib/supabase/server";
 import { getFeesKpis } from "@/actions/fees";
 import { projectYearEndFromYtd } from "@/lib/crm/fee-calculator";
-import { stageLabel } from "@/lib/crm/matching-maps";
-import { AlertsBar, type DashboardAlert } from "@/components/dashboard/AlertsBar";
 import { isDormant } from "@/lib/crm/health-score";
+import {
+  Sunrise, Flame, Inbox as InboxIcon, Radar, CheckSquare, AlertTriangle,
+  CalendarDays, FolderOpen, Bell, ChevronRight, Users,
+} from "lucide-react";
 
-// Les widgets lisent des données mutables (actions, deals, relances) :
-// on force le rendu dynamique pour que revalidatePath depuis les Server
-// Actions déclenche un vrai re-fetch.
 export const dynamic = "force-dynamic";
 
-const PRIO: Record<string,string> = { high:"var(--rec-dot)", medium:"var(--sell-dot)", low:"var(--border-2)" };
-const DT: Record<string,{label:string;bg:string;tx:string;border:string}> = {
-  ma_sell:    {label:"M&A Sell",   bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
-  ma_buy:     {label:"M&A Buy",    bg:"var(--buy-bg)", tx:"var(--buy-tx)", border:"var(--buy-mid)"},
+// « Ce matin » : la revue du matin, pas un tableau de bord de stocks.
+// Trois questions, dans l'ordre du métier : qu'est-ce qui a changé depuis
+// hier ? qu'est-ce que je dois décider ? qu'est-ce que je fais aujourd'hui ?
+// Chaque chiffre est un lien vers la liste EXACTE qu'il compte
+// (?filtre=chaudes, ?statut=nouveau, ?nonlus=1...), jamais un chiffre mort.
+
+const KIND_META: Record<string, { label: string; bg: string; tx: string }> = {
+  veille_profil:   { label: "Passée chaude",   bg: "#FEE2E2", tx: "#991B1B" },
+  reveil_cedant:   { label: "Réveil cédant",   bg: "#E0F2FE", tx: "#0369A1" },
+  screening_draft: { label: "Screening",       bg: "#FEF3C7", tx: "#92400E" },
+  fee_overdue:     { label: "Honoraires",      bg: "#FEE2E2", tx: "#991B1B" },
+  action_reminder: { label: "Rappel",          bg: "var(--surface-3)", tx: "var(--text-3)" },
+  task_due:        { label: "Tâche",           bg: "var(--surface-3)", tx: "var(--text-3)" },
+  rgpd_expiry:     { label: "RGPD",            bg: "var(--surface-3)", tx: "var(--text-3)" },
 };
-// V55 : libellés unifiés via stageLabel() depuis matching-maps.
-const STAGE: Record<string,string> = {};
 
-function fmt(v:string|null){ if(!v)return"—"; return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}); }
-function daysSince(v:string){ return Math.floor((Date.now()-new Date(v).getTime())/86400000); }
+const EVT_ICON: Record<string, string> = { meeting: "🤝", call: "📞", deadline: "⏰" };
 
-async function Content() {
-  const supabase = await createClient();
-  const cutoff15 = new Date(Date.now()-15*864e5).toISOString().split("T")[0];
-  const cutoff30 = new Date(Date.now()-30*864e5).toISOString().split("T")[0];
-  const today    = new Date().toISOString().split("T")[0];
-  const in30     = new Date(Date.now()+30*864e5).toISOString().split("T")[0];
-
-  // Toutes les lectures de tâches, activités et événements viennent
-  // désormais de la table unifiée actions (V35). Les filtres type/status
-  // remplacent les filtres task_status / event_type des anciennes tables.
-  const [dealsRes, openTasksRes, relancesRes, recentActsRes, upcomingEventsRes, kpiRes, allContactsRes, closedDealsRes] = await Promise.all([
-    supabase.from("deals").select("id,name,deal_type,deal_status,deal_stage,priority_level,target_date,target_amount,currency,next_action_date").eq("deal_status","open").order("priority_level"),
-    // Tâches ouvertes — widget "Tâches à faire"
-    supabase.from("actions")
-      .select("id,title,priority,due_date,deal_id,deals(name)")
-      .eq("type","task")
-      .not("status","in",'("done","cancelled","completed")')
-      .order("due_date",{ascending:true})
-      .limit(6),
-    supabase.from("contacts").select("id,first_name,last_name,last_contact_date,organization_contacts(organizations(name))").not("last_contact_date","is",null).lte("last_contact_date",cutoff15).not("base_status","in","(excluded,inactive)").order("last_contact_date",{ascending:true}).limit(8),
-    // Activités récentes — widget "Activités récentes" (tout sauf tâches)
-    supabase.from("actions")
-      .select("id,title,type,email_direction,start_datetime,due_date,deal_id,deals(name)")
-      .neq("type","task")
-      .order("created_at",{ascending:false})
-      .limit(8),
-    // Événements à venir — widget calendrier 30j (meetings / calls / deadlines ouverts)
-    supabase.from("actions")
-      .select("id,title,type,due_date,start_datetime,deal_id,deals(name)")
-      .in("type",["meeting","call","deadline"])
-      .not("status","in",'("done","cancelled","completed")')
-      .gte("due_date",today)
-      .lte("due_date",in30)
-      .order("due_date",{ascending:true})
-      .limit(20),
-    Promise.all([
-      supabase.from("deals").select("*",{count:"exact",head:true}).eq("deal_status","open"),
-      supabase.from("contacts").select("*",{count:"exact",head:true}),
-      supabase.from("organizations").select("*",{count:"exact",head:true}),
-      supabase.from("actions").select("*",{count:"exact",head:true}).eq("type","task").not("status","in",'("done","cancelled","completed")'),
-      // V53e : dossiers open non encore prêts pour outreach (not_started + drafting)
-      supabase.from("deals").select("*",{count:"exact",head:true})
-        .eq("deal_status","open")
-        .in("screening_status",["not_started","drafting"]),
-    ]),
-    supabase.from("contacts")
-      .select("id,first_name,last_name,email,organization_contacts(organizations(name))")
-      .not("base_status","in","(excluded,inactive)")
-      .order("last_name").limit(200),
-    // V58 — dossiers clôturés (won + lost) sur 12 mois glissants pour le
-    // taux de conversion par métier dans la bande analytique.
-    supabase.from("deals")
-      .select("id,deal_type,deal_status")
-      .in("deal_status",["won","lost"])
-      .gte("updated_at", new Date(Date.now() - 365 * 864e5).toISOString()),
-  ]);
-
-  const deals      = dealsRes.data ?? [];
-  const tasks      = openTasksRes.data ?? [];
-  const relances   = relancesRes.data ?? [];
-  const activities = recentActsRes.data ?? [];
-  const events     = upcomingEventsRes.data ?? [];
-  const [cDeals, cContacts, cOrgs, cTasks, cToScreen] = await kpiRes;
-
-  // V52 — KPIs honoraires cabinet (pipeline / facturé / encaissé YTD / projection)
-  const feesRaw = await getFeesKpis();
-  const feesKpis = {
-    ...feesRaw,
-    projection: projectYearEndFromYtd(feesRaw.paid_ytd),
-  };
-
-  // Alertes proactives : signaux qu'on remonte en haut du dashboard.
-  // 4 signaux en parallèle, agrégation par count.
-  const cutoffFees30 = new Date(Date.now() - 30 * 864e5).toISOString().split("T")[0]!;
-  const [tasksOverdueRes, feesOverdueRes, openDealsForDormantRes, rgpdRes, inboxRes] = await Promise.all([
-    supabase
-      .from("actions")
-      .select("id", { count: "exact", head: true })
-      .eq("type", "task")
-      .not("status", "in", '("done","cancelled","completed")')
-      .lt("due_date", today!),
-    supabase
-      .from("fee_milestones")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
-      .lt("due_date", cutoffFees30),
-    supabase
-      .from("deals")
-      .select("id")
-      .eq("deal_status", "open"),
-    supabase
-      .from("contacts")
-      .select("id", { count: "exact", head: true })
-      .not("rgpd_expiry_date", "is", null)
-      .lte("rgpd_expiry_date", in30!)
-      .gte("rgpd_expiry_date", today!),
-    supabase
-      .from("actions")
-      .select("id", { count: "exact", head: true })
-      .eq("type", "email")
-      .eq("needs_review", true),
-  ]);
-
-  // Calculer dormants : 1 requête pour les open deals, puis joindre avec
-  // la dernière activité (déjà partiellement chargée via recentActsRes mais
-  // limitée à 8). On fait une requête dédiée pour avoir le compte exact.
-  let dormantDealsCount = 0;
-  const openDealIds = (openDealsForDormantRes.data ?? []).map(d => d.id);
-  if (openDealIds.length > 0) {
-    const { data: lastActs } = await supabase
-      .from("actions")
-      .select("deal_id,start_datetime,due_date")
-      .in("deal_id", openDealIds)
-      .neq("type", "task")
-      .order("start_datetime", { ascending: false, nullsFirst: false });
-    const lastByDeal = new Map<string, string | null>();
-    for (const a of lastActs ?? []) {
-      if (!a.deal_id) continue;
-      if (!lastByDeal.has(a.deal_id)) {
-        lastByDeal.set(a.deal_id, a.start_datetime ?? a.due_date ?? null);
-      }
-    }
-    for (const id of openDealIds) {
-      if (isDormant(lastByDeal.get(id) ?? null, "open")) dormantDealsCount++;
-    }
-  }
-
-  const alerts: DashboardAlert[] = [
-    { kind: "inbox_to_review", count: inboxRes.count ?? 0,        href: "/protected/inbox" },
-    { kind: "tasks_overdue",   count: tasksOverdueRes.count ?? 0, href: "/protected/dossiers" },
-    { kind: "fees_overdue",    count: feesOverdueRes.count ?? 0,  href: "/protected/dossiers" },
-    { kind: "deals_dormant",   count: dormantDealsCount,          href: "/protected/dossiers?view=kanban" },
-    { kind: "rgpd_expiring",   count: rgpdRes.count ?? 0,         href: "/protected/contacts" },
-  ];
-
-  // Mapping Action.type → clé historique pour ACT_ICON / EVT_COLOR
-  // du DashboardClient (qui connaît email_sent, follow_up, etc.).
-  const toLegacyType = (t: string, emailDir?: string | null) => {
-    if (t === "email") return emailDir === "received" ? "email_received" : "email_sent";
-    if (t === "deadline") return "deadline";
-    if (t === "document_request") return "other";
-    return t; // task, call, meeting, note
-  };
-
-  // Préparer les événements du calendrier (30 prochains jours)
-  const calendarEvents = events.map(e => {
-    const deal = Array.isArray(e.deals) ? e.deals[0] : e.deals as any;
-    return {
-      id: e.id,
-      title: e.title,
-      date: (e.due_date ?? e.start_datetime) as string,
-      type: toLegacyType(e.type),
-      dealName: deal?.name ?? null,
-      contactName: null as string | null,
-    };
-  });
-  // Ajouter les tâches dans le calendrier
-  const calendarTasks = tasks.filter(t => t.due_date).map(t => {
-    const deal = Array.isArray(t.deals) ? t.deals[0] : t.deals as any;
-    return { id:t.id, title:t.title, date:t.due_date!, type:"task", dealName:deal?.name ?? null, contactName:null };
-  });
-
-  // V58 — Bande analytique : Pipeline par stade + Conversion par métier + Top 5 dossiers.
-  // Les 3 stats sont calculées côté server pour éviter des allers-retours.
-
-  // 1. Pipeline par stade (sur l'ensemble des open deals, agrégé par stage).
-  //    On expose count + totalAmount + un sample du métier dominant pour pouvoir
-  //    légender côté UI.
-  const pipelineByStage: Record<string, { count: number; amount_total: number; types: Record<string, number> }> = {};
-  for (const d of deals) {
-    const stage = d.deal_stage ?? "kickoff";
-    if (!pipelineByStage[stage]) pipelineByStage[stage] = { count: 0, amount_total: 0, types: {} };
-    pipelineByStage[stage]!.count++;
-    if (typeof d.target_amount === "number") pipelineByStage[stage]!.amount_total += d.target_amount;
-    pipelineByStage[stage]!.types[d.deal_type] = (pipelineByStage[stage]!.types[d.deal_type] ?? 0) + 1;
-  }
-  const pipelineStats = Object.entries(pipelineByStage).map(([stage, v]) => ({
-    stage,
-    label: stageLabel(stage),
-    count: v.count,
-    amount_total: v.amount_total,
-    dominant_type: Object.entries(v.types).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "ma_sell",
-  })).sort((a, b) => b.count - a.count);
-
-  // 2. Conversion par métier (won / (won+lost) sur 12 mois glissants).
-  const closedDeals = (closedDealsRes.data ?? []) as Array<{ id: string; deal_type: string; deal_status: string }>;
-  const conversionByType: Record<string, { won: number; lost: number }> = {};
-  for (const d of closedDeals) {
-    if (!conversionByType[d.deal_type]) conversionByType[d.deal_type] = { won: 0, lost: 0 };
-    if (d.deal_status === "won")  conversionByType[d.deal_type]!.won++;
-    if (d.deal_status === "lost") conversionByType[d.deal_type]!.lost++;
-  }
-  const conversionStats = Object.entries(conversionByType).map(([type, v]) => {
-    const total = v.won + v.lost;
-    return {
-      type,
-      label: DT[type]?.label ?? type,
-      color: DT[type]?.tx ?? "var(--text-2)",
-      won: v.won,
-      lost: v.lost,
-      total,
-      rate: total > 0 ? Math.round((v.won / total) * 100) : 0,
-    };
-  }).filter(s => s.total > 0).sort((a, b) => b.total - a.total);
-
-  // 3. Top 5 dossiers actifs (high priority en tête, puis échéance proche).
-  //    On annexe la prochaine action (premier event ou première tâche par due_date).
-  const nextActionByDeal: Record<string, { title: string; date: string }> = {};
-  for (const e of events) {
-    if (!e.deal_id || !e.due_date) continue;
-    if (!nextActionByDeal[e.deal_id]) {
-      nextActionByDeal[e.deal_id] = { title: e.title as string, date: e.due_date as string };
-    }
-  }
-  for (const t of tasks) {
-    if (!t.deal_id || !t.due_date) continue;
-    const existing = nextActionByDeal[t.deal_id];
-    if (!existing || (t.due_date as string) < existing.date) {
-      nextActionByDeal[t.deal_id] = { title: t.title as string, date: t.due_date as string };
-    }
-  }
-  const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 };
-  const topDeals = [...deals]
-    .sort((a, b) => {
-      const pa = priorityRank[a.priority_level] ?? 3;
-      const pb = priorityRank[b.priority_level] ?? 3;
-      if (pa !== pb) return pa - pb;
-      const ta = a.target_date ?? "9999-12-31";
-      const tb = b.target_date ?? "9999-12-31";
-      return ta.localeCompare(tb);
-    })
-    .slice(0, 5)
-    .map(d => ({
-      id: d.id,
-      name: d.name,
-      type: d.deal_type,
-      stage: d.deal_stage,
-      priority: d.priority_level,
-      target_amount: d.target_amount ?? null,
-      currency: d.currency ?? "EUR",
-      type_label: DT[d.deal_type]?.label ?? d.deal_type,
-      type_color: DT[d.deal_type]?.tx ?? "var(--text-2)",
-      stage_label: stageLabel(d.deal_stage),
-      next_action: nextActionByDeal[d.id] ?? null,
-    }));
-
-  const analytics = {
-    pipeline: pipelineStats,
-    conversion: conversionStats,
-    top_deals: topDeals,
-  };
-
-  return (
-    <>
-    <div style={{ padding: "24px 24px 0" }}>
-      <AlertsBar alerts={alerts} />
-    </div>
-    <DashboardClient
-      kpis={[
-        { label:"Dossiers actifs",  val:cDeals.count??0,    href:"/protected/dossiers",      color:"#3468B0" },
-        { label:"À screener",       val:cToScreen.count??0, href:"/protected/dossiers",      color:(cToScreen.count??0)>0?"#B45309":"#15A348" },
-        { label:"Organisations",    val:cOrgs.count??0,     href:"/protected/organisations", color:"#D97706" },
-        { label:"Contacts",         val:cContacts.count??0, href:"/protected/contacts",      color:"#A8306A" },
-        { label:"Tâches ouvertes",  val:cTasks.count??0,    href:"/protected/dossiers",      color:(cTasks.count??0)>0?"#DC2626":"#15A348" },
-      ]}
-      feesKpis={feesKpis}
-      deals={deals.map(d => ({ id:d.id, name:d.name, type:d.deal_type, stage:d.deal_stage, priority:d.priority_level, targetDate:d.target_date, dt:DT[d.deal_type]??DT.ma_sell, stageLabel:stageLabel(d.deal_stage), prioColor:PRIO[d.priority_level]??PRIO.medium }))}
-      relances={relances.map(c => { const org=(c.organization_contacts as any[])?.[0]?.organizations; return { id:c.id, firstName:c.first_name, lastName:c.last_name, days:daysSince(c.last_contact_date!), orgName:Array.isArray(org)?org[0]?.name:org?.name }; })}
-      tasks={tasks.map(t => { const deal=Array.isArray(t.deals)?t.deals[0]:t.deals as any; return { id:t.id, title:t.title, priority:t.priority ?? "medium", dueDate:t.due_date, dealId:t.deal_id, dealName:deal?.name, overdue:!!(t.due_date&&new Date(t.due_date)<new Date()), prioColor:PRIO[t.priority ?? "medium"]??PRIO.medium }; })}
-      activities={activities.map(a => { const deal=Array.isArray(a.deals)?a.deals[0]:a.deals as any; return { id:a.id, title:a.title, type:toLegacyType(a.type, a.email_direction), date:(a.start_datetime ?? a.due_date) as string, dealId:a.deal_id, dealName:deal?.name }; })}
-      calendarItems={[...calendarEvents, ...calendarTasks]}
-      allContacts={(allContactsRes.data ?? []).map((c:any) => {
-        const org = (c.organization_contacts as any[])?.[0]?.organizations;
-        const orgName = Array.isArray(org) ? org[0]?.name : org?.name;
-        return { id:c.id, first_name:c.first_name, last_name:c.last_name, email:c.email, org_name:orgName };
-      })}
-      analytics={analytics}
-    />
-    </>
-  );
+function fmtMoney(n: number) {
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M€`;
+  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(0)} k€`;
+  return `${Math.round(n)} €`;
+}
+function fmtHeure(iso: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+function daysAgo(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000));
 }
 
-export default function DashboardPage() {
+const card: React.CSSProperties = {
+  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden",
+};
+const cardHeader: React.CSSProperties = {
+  padding: "11px 14px", borderBottom: "1px solid var(--border)",
+  fontSize: 11.5, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".06em",
+  display: "flex", alignItems: "center", gap: 7,
+};
+
+export default async function CeMatinPage() {
+  const supabase = await createClient();
+
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const yesterdayIso = new Date(Date.now() - 86_400_000).toISOString();
+  const sevenDaysIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const cutoff15 = new Date(Date.now() - 15 * 86_400_000).toISOString().slice(0, 10);
+  const cutoff30Fees = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+
+  const [
+    notifRes, signauxUnread, chaudes, aTrier, entrees7j, relancesRes,
+    overdueTasksRes, todayTasksRes, todayEventsRes, feesOverdue,
+    openDealsRes, cronRes, fees,
+  ] = await Promise.all([
+    supabase.from("notifications")
+      .select("id,kind,title,link_url,read_at,created_at")
+      .or(`read_at.is.null,created_at.gte.${yesterdayIso}`)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase.from("signaux").select("id", { count: "exact", head: true }).is("read_at", null),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true })
+      .gte("cedabilite_score", 70).not("statut", "in", '("ecarte","promu")'),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", "nouveau"),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("first_seen_at", sevenDaysIso),
+    supabase.from("contacts")
+      .select("id,first_name,last_name,title,last_contact_date")
+      .not("last_contact_date", "is", null)
+      .lte("last_contact_date", cutoff15)
+      .not("base_status", "in", '("excluded","inactive")')
+      .order("last_contact_date", { ascending: true })
+      .limit(6),
+    supabase.from("actions")
+      .select("id,title,due_date,deal_id", { count: "exact" })
+      .eq("type", "task")
+      .not("status", "in", '("done","cancelled","completed")')
+      .lt("due_date", todayStr)
+      .order("due_date", { ascending: true })
+      .limit(5),
+    supabase.from("actions")
+      .select("id,title,due_date,deal_id", { count: "exact" })
+      .eq("type", "task")
+      .not("status", "in", '("done","cancelled","completed")')
+      .eq("due_date", todayStr)
+      .limit(5),
+    supabase.from("actions")
+      .select("id,title,type,due_time")
+      .in("type", ["meeting", "call", "deadline"])
+      .not("status", "in", '("done","cancelled","completed")')
+      .eq("due_date", todayStr)
+      .order("due_time", { ascending: true }),
+    supabase.from("fee_milestones").select("id", { count: "exact", head: true })
+      .eq("status", "pending").lt("due_date", cutoff30Fees),
+    supabase.from("deals").select("id,name,created_at").eq("deal_status", "open"),
+    supabase.from("cron_runs").select("job,started_at,finished_at,ok").order("started_at", { ascending: false }).limit(30),
+    getFeesKpis(),
+  ]);
+
+  // Mandats sans activité : même règle que la liste dossiers (les actions
+  // futures ne comptent pas, référence création pour les dossiers neufs).
+  const openDeals = openDealsRes.data ?? [];
+  let sansActivite = 0;
+  if (openDeals.length > 0) {
+    const { data: acts } = await supabase
+      .from("actions")
+      .select("deal_id,start_datetime,due_date")
+      .in("deal_id", openDeals.map(d => d.id))
+      .neq("type", "task")
+      .order("start_datetime", { ascending: false, nullsFirst: false });
+    const lastByDeal: Record<string, string> = {};
+    const nowMs = Date.now();
+    for (const a of acts ?? []) {
+      if (!a.deal_id) continue;
+      const when = a.start_datetime ?? a.due_date;
+      if (!when || new Date(when).getTime() > nowMs) continue;
+      if (!lastByDeal[a.deal_id]) lastByDeal[a.deal_id] = when;
+    }
+    sansActivite = openDeals.filter(d => isDormant(lastByDeal[d.id] ?? null, "open", d.created_at)).length;
+  }
+
+  // Dernier passage de chaque veille (cron_runs, premier par job).
+  const lastRunByJob: Record<string, { ok: boolean | null; finished_at: string | null; started_at: string }> = {};
+  for (const r of cronRes.data ?? []) {
+    if (!lastRunByJob[r.job]) lastRunByJob[r.job] = { ok: r.ok, finished_at: r.finished_at, started_at: r.started_at };
+  }
+  const veilles = [
+    { job: "bodacc-ingest", label: "Veille BODACC + signaux" },
+    { job: "veille-profils", label: "Veille profils de chasse" },
+  ].map(v => ({ ...v, run: lastRunByJob[v.job] ?? null }));
+
+  const notifications = notifRes.data ?? [];
+  const relances = relancesRes.data ?? [];
+  const todayEvents = todayEventsRes.data ?? [];
+  const projection = projectYearEndFromYtd(fees.paid_ytd);
+
+  const dateLongue = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+
+  // Les 6 décisions du matin, chacune vers sa liste exacte.
+  const tiles: Array<{ n: number; label: string; sub: string; href: string; color: string; icon: React.ReactNode }> = [
+    { n: chaudes.count ?? 0, label: "Chaudes à traiter", sub: "radar ≥ 70, hors promues/écartées", href: "/protected/prospection?filtre=chaudes", color: "#991B1B", icon: <Flame size={13} /> },
+    { n: aTrier.count ?? 0, label: "À trier", sub: "fiches en attente de décision", href: "/protected/prospection?statut=nouveau", color: "#B45309", icon: <InboxIcon size={13} /> },
+    { n: entrees7j.count ?? 0, label: "Entrées 7 j", sub: "nouvelles fiches dans l'univers", href: "/protected/prospection?filtre=entrees7j&tri=recent", color: "#0F766E", icon: <Radar size={13} /> },
+    { n: signauxUnread.count ?? 0, label: "Signaux non lus", sub: "BODACC, RGE, recrutements...", href: "/protected/signaux?nonlus=1", color: "#B45309", icon: <Radar size={13} /> },
+    { n: overdueTasksRes.count ?? 0, label: "Tâches en retard", sub: "à rattraper ou requalifier", href: "/protected/taches", color: "#DC2626", icon: <AlertTriangle size={13} /> },
+    { n: sansActivite, label: "Mandats sans activité", sub: "ouverts, rien depuis 21 jours", href: "/protected/dossiers", color: "#7E57C2", icon: <FolderOpen size={13} /> },
+  ];
+
   return (
-    <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
-      <Content/>
-    </Suspense>
+    <div style={{ padding: "28px 24px", minHeight: "100vh", background: "var(--bg)" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)", display: "flex", alignItems: "center", gap: 9 }}>
+              <Sunrise size={20} color="#B45309" /> Ce matin
+            </h1>
+            <p style={{ margin: "5px 0 0", fontSize: 13, color: "var(--text-4)", textTransform: "capitalize" }}>{dateLongue}</p>
+          </div>
+          {/* État des veilles de la nuit */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {veilles.map(v => (
+              <span key={v.job} title={v.run ? `Dernier passage : ${new Date(v.run.started_at).toLocaleString("fr-FR")}` : "Jamais exécutée (crons Vercel, pas en local)"}
+                style={{
+                  fontSize: 11.5, fontWeight: 600, padding: "4px 11px", borderRadius: 20,
+                  background: v.run == null ? "var(--surface-3)" : v.run.ok === true ? "#D1FAE5" : v.run.ok === false ? "#FEE2E2" : "#FEF3C7",
+                  color: v.run == null ? "var(--text-5)" : v.run.ok === true ? "#065F46" : v.run.ok === false ? "#991B1B" : "#92400E",
+                }}>
+                {v.label} : {v.run == null ? "jamais passée" : v.run.ok === true ? `OK ${fmtHeure(v.run.finished_at ?? v.run.started_at)}` : v.run.ok === false ? "échec" : "en cours"}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Les décisions du matin */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, margin: "16px 0" }}>
+          {tiles.map(t => (
+            <Link key={t.label} href={t.href} style={{ ...card, padding: "12px 14px", textDecoration: "none", display: "block" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: t.n > 0 ? t.color : "var(--text-5)", lineHeight: 1.1 }}>
+                {t.n.toLocaleString("fr-FR")}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".04em", marginTop: 4 }}>
+                {t.icon} {t.label}
+              </div>
+              <div style={{ fontSize: 10.5, color: "var(--text-5)", marginTop: 2 }}>{t.sub}</div>
+            </Link>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 12, marginBottom: 12 }}>
+
+          {/* Depuis hier : ce que les veilles et les tâches de fond ont produit */}
+          <div style={card}>
+            <div style={cardHeader}><Bell size={12} /> Depuis hier</div>
+            {notifications.length === 0 ? (
+              <div style={{ padding: "28px 16px", textAlign: "center", fontSize: 12.5, color: "var(--text-5)" }}>
+                Rien de neuf : pas de fiche passée chaude, pas de réveil, pas d&apos;alerte.
+              </div>
+            ) : notifications.map((n, i) => {
+              const meta = KIND_META[n.kind] ?? { label: n.kind, bg: "var(--surface-3)", tx: "var(--text-4)" };
+              const inner = (
+                <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px", borderBottom: i < notifications.length - 1 ? "1px solid var(--border)" : "none", opacity: n.read_at ? 0.55 : 1 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 6, background: meta.bg, color: meta.tx, flexShrink: 0, whiteSpace: "nowrap" }}>
+                    {meta.label}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: n.read_at ? 500 : 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {n.title}
+                  </span>
+                  {n.link_url && <ChevronRight size={12} color="var(--text-5)" style={{ flexShrink: 0 }} />}
+                </div>
+              );
+              return n.link_url
+                ? <Link key={n.id} href={n.link_url} style={{ textDecoration: "none", display: "block" }}>{inner}</Link>
+                : <div key={n.id}>{inner}</div>;
+            })}
+          </div>
+
+          {/* Aujourd'hui : la journée en un bloc */}
+          <div style={card}>
+            <div style={cardHeader}><CalendarDays size={12} /> Aujourd&apos;hui</div>
+            <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {todayEvents.length === 0 && (todayTasksRes.data ?? []).length === 0 && (overdueTasksRes.data ?? []).length === 0 && (feesOverdue.count ?? 0) === 0 ? (
+                <div style={{ padding: "18px 0", textAlign: "center", fontSize: 12.5, color: "var(--text-5)" }}>
+                  Journée dégagée : ni rendez-vous, ni tâche due, ni retard.
+                </div>
+              ) : (
+                <>
+                  {todayEvents.map(e => (
+                    <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--text-1)" }}>
+                      <span>{EVT_ICON[e.type] ?? "📌"}</span>
+                      {e.due_time && <span style={{ fontWeight: 700, color: "var(--text-3)" }}>{String(e.due_time).slice(0, 5)}</span>}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
+                    </div>
+                  ))}
+                  {(todayTasksRes.data ?? []).map(t => (
+                    <Link key={t.id} href={t.deal_id ? `/protected/dossiers/${t.deal_id}` : "/protected/taches"}
+                      style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--text-2)", textDecoration: "none" }}>
+                      <CheckSquare size={12} color="#F59E0B" />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+                    </Link>
+                  ))}
+                  {(overdueTasksRes.data ?? []).map(t => (
+                    <Link key={t.id} href={t.deal_id ? `/protected/dossiers/${t.deal_id}` : "/protected/taches"}
+                      style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#991B1B", textDecoration: "none" }}>
+                      <AlertTriangle size={12} color="#DC2626" />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+                      <span style={{ fontSize: 11, color: "var(--text-5)", flexShrink: 0 }}>retard {daysAgo(t.due_date)}j</span>
+                    </Link>
+                  ))}
+                  {(feesOverdue.count ?? 0) > 0 && (
+                    <Link href="/protected/statistiques" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 700, color: "#991B1B", textDecoration: "none" }}>
+                      <AlertTriangle size={12} color="#DC2626" />
+                      {feesOverdue.count} jalon{(feesOverdue.count ?? 0) > 1 ? "s" : ""} d&apos;honoraires en retard de plus de 30 jours
+                    </Link>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Relances : les dirigeants qu'on laisse refroidir */}
+        {relances.length > 0 && (
+          <div style={{ ...card, marginBottom: 12 }}>
+            <div style={cardHeader}><Users size={12} /> Relances : sans nouvelle depuis 15 jours ou plus</div>
+            {relances.map((c, i) => {
+              const d = daysAgo(c.last_contact_date);
+              return (
+                <Link key={c.id} href={`/protected/contacts/${c.id}`}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: i < relances.length - 1 ? "1px solid var(--border)" : "none", textDecoration: "none" }}>
+                  <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: "var(--text-1)" }}>
+                    {[c.first_name, c.last_name].filter(Boolean).join(" ")}
+                    {c.title && <span style={{ fontWeight: 400, color: "var(--text-4)" }}> · {c.title}</span>}
+                  </span>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: (d ?? 0) >= 30 ? "#991B1B" : "#B45309" }}>
+                    {d}j sans contact
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Honoraires : le cap de l'année */}
+        <div style={{ ...card, padding: "13px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+          {[
+            { label: "Honoraires pipeline", v: fees.pending, color: "var(--text-2)" },
+            { label: "Facturé", v: fees.invoiced, color: "#1D4ED8" },
+            { label: "Encaissé YTD", v: fees.paid_ytd, color: "#065F46" },
+            { label: "Projection fin d'année", v: projection ?? 0, color: "var(--text-3)" },
+          ].map(k => (
+            <Link key={k.label} href="/protected/statistiques" style={{ textDecoration: "none" }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: k.color }}>{fmtMoney(k.v)}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-5)", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 2 }}>{k.label}</div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
