@@ -6,14 +6,14 @@ import { FinancialTab, type FinancialRow } from "../../dossiers/[id]/financial-t
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
 import { EnrichFromInseeButton } from "@/components/organisations/EnrichFromInseeButton";
-import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES } from "@/lib/crm/matching-maps";
+import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES, OPERATION_TYPES, DEAL_STANCES } from "@/lib/crm/matching-maps";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
 import { OrganisationAddressBlock } from "@/components/organisations/OrganisationAddressBlock";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
 import { organizationTypeLabels, dealTypeLabels } from "@/lib/crm/labels";
 
-const INVESTOR_TYPES = ["investor", "business_angel", "family_office", "corporate"];
+import { ACQUIRER_BUYER_TYPES } from "@/lib/crm/acquirer-scoring";
 const COMPANY_PROFILE_TYPES = ["client","prospect_client","target","buyer","bank","advisor","law_firm","accounting_firm","consulting_firm","other"];
 
 const fmtRevenue = (v: number | null) => {
@@ -92,16 +92,6 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
               <span style={{ fontSize:11.5, fontWeight:600, padding:"3px 10px", borderRadius:20, background:sc.bg, color:sc.tx }}>
                 {STATUS_LABELS[org.base_status] ?? org.base_status}
               </span>
-              {org.investment_ticket && (
-                <span style={{ fontSize:11.5, fontWeight:500, padding:"3px 10px", borderRadius:20, background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>
-                  {org.investment_ticket}
-                </span>
-              )}
-              {org.investment_stage && (
-                <span style={{ fontSize:11.5, fontWeight:500, padding:"3px 10px", borderRadius:20, background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>
-                  {org.investment_stage}
-                </span>
-              )}
               {org.company_stage && (() => {
                 const s = ORG_COMPANY_STAGES.find(x => x.value === org.company_stage);
                 return s ? (
@@ -238,60 +228,6 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
             }}
           />
 
-          {/* Profil investisseur */}
-          {INVESTOR_TYPES.includes(org.organization_type) && (
-            <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"20px 24px" }}>
-              <div style={{ fontSize:13, fontWeight:700, color:"var(--text-1)", marginBottom:14 }}>Profil investisseur</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                {org.investor_ticket_min != null && (
-                  <div>
-                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Ticket</div>
-                    <div style={{ fontSize:13.5, color:"var(--text-1)", fontWeight:600 }}>
-                      {fmtRevenue(org.investor_ticket_min)} – {org.investor_ticket_max ? fmtRevenue(org.investor_ticket_max) : "∞"}
-                    </div>
-                  </div>
-                )}
-                {org.investor_stages?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Stades</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {org.investor_stages.map((s: string) => (
-                        <span key={s} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"#EEF2FF", color:"#3730A3", fontWeight:600 }}>{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {org.investor_sectors?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Secteurs</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {org.investor_sectors.map((s: string) => (
-                        <span key={s} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"#F0FDF4", color:"#166534", fontWeight:600 }}>{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {org.investor_geographies?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Géographies</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {org.investor_geographies.map((g: string) => {
-                        const label = GEOGRAPHIES.find(x => x.value === g)?.label ?? g;
-                        return <span key={g} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"#ECFEFF", color:"#0E7490", fontWeight:600 }}>{label}</span>;
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-              {org.investor_thesis && (
-                <div style={{ marginTop:12, paddingTop:12, borderTop:"1px solid var(--border)" }}>
-                  <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>Thèse d'investissement</div>
-                  <p style={{ fontSize:13, color:"var(--text-2)", margin:0, lineHeight:1.6 }}>{org.investor_thesis}</p>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Profil entreprise */}
           {COMPANY_PROFILE_TYPES.includes(org.organization_type) && (
             org.company_stage || org.revenue_range || org.employee_count || org.founded_year || org.sector
@@ -359,12 +295,23 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
             </div>
           )}
 
-          {/* Profil acquéreur M&A */}
-          {org.organization_type === "buyer" && (
-            org.acquisition_rationale || org.target_sectors?.length > 0 || org.target_geographies?.length > 0 || org.target_revenue_min
+          {/* Profil acquéreur : toutes les familles scorées par le matching.
+              C'est CE bloc que la grille phase 3 lit (operation_types,
+              deal_stance, fourchettes, secteurs) : il doit être visible. */}
+          {ACQUIRER_BUYER_TYPES.includes(org.organization_type) && (
+            org.acquisition_rationale || org.acquirer_summary || org.acquisition_history ||
+            (org.operation_types?.length ?? 0) > 0 || org.deal_stance ||
+            org.target_sectors?.length > 0 || org.target_geographies?.length > 0 ||
+            org.target_revenue_min || org.target_ebitda_min
           ) && (
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"20px 24px" }}>
-              <div style={{ fontSize:13, fontWeight:700, color:"var(--text-1)", marginBottom:14 }}>Critères d'acquisition</div>
+              <div style={{ fontSize:13, fontWeight:700, color:"var(--text-1)", marginBottom:14 }}>Profil acquéreur</div>
+              {org.acquirer_summary && (
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>Ce qu'il cherche</div>
+                  <p style={{ fontSize:13, color:"var(--text-2)", margin:0, lineHeight:1.6 }}>{org.acquirer_summary}</p>
+                </div>
+              )}
               {org.acquisition_rationale && (
                 <div style={{ marginBottom:12 }}>
                   <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>Rationale</div>
@@ -372,11 +319,39 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
                 </div>
               )}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                {(org.operation_types?.length ?? 0) > 0 && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>Opérations pratiquées</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {(org.operation_types as string[]).map((o) => (
+                        <span key={o} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"#EEF2FF", color:"#3730A3", fontWeight:600 }}>
+                          {OPERATION_TYPES.find(x => x.value === o)?.label ?? o}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {org.deal_stance && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Posture</div>
+                    <div style={{ fontSize:13.5, color:"var(--text-1)", fontWeight:600 }}>
+                      {DEAL_STANCES.find(x => x.value === org.deal_stance)?.label ?? org.deal_stance}
+                    </div>
+                  </div>
+                )}
                 {(org.target_revenue_min || org.target_revenue_max) && (
                   <div>
                     <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Fourchette CA cible</div>
                     <div style={{ fontSize:13.5, color:"var(--text-1)", fontWeight:600 }}>
                       {fmtRevenue(org.target_revenue_min) ?? "—"} – {fmtRevenue(org.target_revenue_max) ?? "∞"}
+                    </div>
+                  </div>
+                )}
+                {(org.target_ebitda_min || org.target_ebitda_max) && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Fourchette EBITDA cible</div>
+                    <div style={{ fontSize:13.5, color:"var(--text-1)", fontWeight:600 }}>
+                      {fmtRevenue(org.target_ebitda_min) ?? "—"} – {fmtRevenue(org.target_ebitda_max) ?? "∞"}
                     </div>
                   </div>
                 )}
@@ -412,14 +387,19 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
                   </div>
                 )}
               </div>
+              {org.acquisition_history && (
+                <div style={{ marginTop:12, paddingTop:12, borderTop:"1px solid var(--border)" }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>Historique d'acquisitions</div>
+                  <p style={{ fontSize:13, color:"var(--text-2)", margin:0, lineHeight:1.6, whiteSpace:"pre-wrap" }}>{org.acquisition_history}</p>
+                </div>
+              )}
             </div>
           )}
 
           {/* Aucune donnée de profil */}
-          {!INVESTOR_TYPES.includes(org.organization_type) &&
-           !(org.company_stage || org.revenue_range || org.employee_count || org.founded_year || org.sector) &&
+          {!(org.company_stage || org.revenue_range || org.employee_count || org.founded_year || org.sector) &&
            org.organization_type !== "target" &&
-           !(org.organization_type === "buyer" && (org.acquisition_rationale || org.target_sectors?.length > 0)) && (
+           !(ACQUIRER_BUYER_TYPES.includes(org.organization_type) && (org.acquisition_rationale || org.acquirer_summary || org.target_sectors?.length > 0)) && (
             <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, padding:"40px 24px", textAlign:"center", color:"var(--text-5)", fontSize:13 }}>
               Aucune donnée de profil — <Link href={`/protected/organisations/${org.id}/modifier`} style={{ color:"#1a56db" }}>compléter la fiche</Link>
             </div>
