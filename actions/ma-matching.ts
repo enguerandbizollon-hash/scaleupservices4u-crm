@@ -349,7 +349,12 @@ export async function ensureAcquirerSuggestion(
       deal_id: dealId,
       organization_id: organizationId,
       role_suggested: "acquirer",
-      source_connector: "matching",
+      // "manual" et pas "matching" : dts_source_check (v56) n'accepte que
+      // apollo|harmonic|vibe|pappers|insee|manual|ai|portal. La valeur
+      // "matching" violait la contrainte : Approuver/Contacté/Écarter et la
+      // justification IA échouaient pour toute org sans suggestion préalable.
+      // v73 ajoutera "matching" au CHECK et cette ligne y repassera.
+      source_connector: "manual",
       status: "suggested",
       score_algo: scoreAlgo ?? null,
     })
