@@ -1,23 +1,16 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { organizationTypeLabels } from "@/lib/crm/labels";
 import { OrganisationsList } from "./organisations-list";
 
 export const revalidate = 60;
-
-const TYPE_LABELS: Record<string,string> = {
-  client:"Client", prospect_client:"Prospect client", investor:"Investisseur",
-  business_angel:"Business Angel", buyer:"Repreneur", target:"Cible",
-  law_firm:"Cabinet juridique", bank:"Banque", advisor:"Conseil",
-  accounting_firm:"Cabinet comptable", family_office:"Family office",
-  corporate:"Corporate", consulting_firm:"Cabinet de conseil", other:"Autre"
-};
 
 async function Content() {
   const supabase = await createClient();
 
   const [orgsRes, contactLinksRes, openTasksRes, recentActsRes] = await Promise.all([
     supabase.from("organizations")
-      .select("id,name,organization_type,base_status,sector,location,country,website,notes,investment_ticket,investment_stage,description")
+      .select("id,name,organization_type,base_status,sector,location,country,website,notes,description")
       .order("name", { ascending: true }),
     supabase.from("organization_contacts")
       .select("organization_id,contact_id,role_label,is_primary,contacts(id,first_name,last_name,title,email,base_status,last_contact_date)"),
@@ -61,14 +54,12 @@ async function Content() {
     id:              o.id,
     name:            o.name,
     typeKey:         o.organization_type,
-    typeLabel:       TYPE_LABELS[o.organization_type] ?? o.organization_type,
+    typeLabel:       organizationTypeLabels[o.organization_type] ?? o.organization_type,
     status:          o.base_status ?? "to_qualify",
     sector:          o.sector ?? "",
     location:        (o as any).location || o.country || "",
     website:         o.website ?? null,
     notes:           o.notes ?? "",
-    investmentTicket: (o as any).investment_ticket ?? "",
-    investmentStage:  (o as any).investment_stage ?? "",
     description:     (o as any).description ?? "",
     contacts:        contactsByOrg[o.id] ?? [],
     openTasks:       tasksByOrg[o.id] ?? 0,

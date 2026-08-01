@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER } from "@/lib/crm/labels";
 import { createContactAction } from "./actions";
 import { GeoSelectField } from "@/components/ui/GeoSelectField";
 
@@ -14,26 +15,7 @@ const contactStatusOptions = [
   { value: "excluded", label: "Exclu" },
 ];
 
-const ticketOptions = [
-  "50K € – 100K €","100K € – 250K €","250K € – 500K €","500K € – 1M €",
-  "1M € – 2M €","2M € – 5M €","5M € – 10M €","+10M €","N/A",
-];
-
-const orgTypeOptions = [
-  { value: "client", label: "Client" },
-  { value: "prospect_client", label: "Prospect client" },
-  { value: "investor", label: "Investisseur" },
-  { value: "buyer", label: "Repreneur" },
-  { value: "target", label: "Cible" },
-  { value: "law_firm", label: "Cabinet juridique" },
-  { value: "bank", label: "Banque" },
-  { value: "advisor", label: "Conseil" },
-  { value: "accounting_firm", label: "Cabinet comptable" },
-  { value: "family_office", label: "Family office" },
-  { value: "corporate", label: "Corporate" },
-  { value: "consulting_firm", label: "Cabinet de conseil" },
-  { value: "other", label: "Autre" },
-];
+const orgTypeOptions = ORG_TYPE_SELECT_ORDER.map(v => ({ value: v, label: organizationTypeLabels[v] }));
 
 async function Content() {
   const supabase = await createClient();
@@ -96,13 +78,6 @@ async function Content() {
               <div>
                 <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Géographie</label>
                 <GeoSelectField name="country" className="w-full rounded-xl border border-[#E8E0D0] px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[#0F1B2D]">Ticket investissement</label>
-                <select name="investment_ticket_label" defaultValue="" className="w-full rounded-xl border border-[#E8E0D0] px-4 py-3 text-sm outline-none focus:border-[#0F1B2D]">
-                  <option value="">Sélectionner</option>
-                  {ticketOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
               </div>
             </div>
           </div>

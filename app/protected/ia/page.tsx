@@ -6,10 +6,10 @@ import Link from "next/link";
 type Message = { role: "user" | "assistant"; text: string };
 
 const SUGGESTIONS = [
-  "Quels sont mes dossiers actifs ?",
-  "Quels contacts dois-je relancer cette semaine ?",
+  "Quels mandats demandent une action cette semaine ?",
+  "Quels dirigeants dois-je relancer ?",
   "Crée une tâche de relance pour demain",
-  "Résume les dernières activités",
+  "Résume les dernières activités sur mes mandats",
 ];
 
 export default function IAPage() {
@@ -68,8 +68,8 @@ export default function IAPage() {
           <Sparkles size={15} color="var(--text-3)"/>
         </div>
         <div>
-          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-1)" }}>Assistant CRM</div>
-          <div style={{ fontSize:12, color:"var(--text-5)" }}>Analyse, rédige, crée des tâches et activités</div>
+          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-1)" }}>Assistant Vectis Finance</div>
+          <div style={{ fontSize:12, color:"var(--text-5)" }}>Analyse tes mandats, rédige, crée tâches et relances</div>
         </div>
         <button onClick={() => setMessages([])} style={{ marginLeft:"auto", fontSize:12, color:"var(--text-5)", background:"none", border:"none", cursor:"pointer" }}>
           Effacer

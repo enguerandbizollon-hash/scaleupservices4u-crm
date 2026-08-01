@@ -7,13 +7,14 @@ import { ViewToggle } from "@/components/dossiers/ViewToggle";
 import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
 import { ExportCSVButton, type ExportRow } from "@/components/exports/export-csv-button";
 import { stageLabel } from "@/lib/crm/matching-maps";
+import { dealTypeLabels } from "@/lib/crm/labels";
 import { computeDealHealth, isDormant, DORMANT_THRESHOLD_DAYS, type DealHealthResult } from "@/lib/crm/health-score";
 
 export const revalidate = 60;
 
 const DT: Record<string, { label:string; icon:string; bg:string; tx:string; dot:string; border:string }> = {
-  ma_sell:     { label:"M&A Sell",    icon:"🏢", bg:"var(--sell-bg)", tx:"var(--sell-tx)", dot:"var(--sell-dot)", border:"var(--sell-mid)" },
-  ma_buy:      { label:"M&A Buy",     icon:"🎯", bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  dot:"var(--buy-dot)",  border:"var(--buy-mid)"  },
+  ma_sell:     { label:dealTypeLabels.ma_sell, icon:"🏢", bg:"var(--sell-bg)", tx:"var(--sell-tx)", dot:"var(--sell-dot)", border:"var(--sell-mid)" },
+  ma_buy:      { label:dealTypeLabels.ma_buy,  icon:"🎯", bg:"var(--buy-bg)",  tx:"var(--buy-tx)",  dot:"var(--buy-dot)",  border:"var(--buy-mid)"  },
 };
 // V55 : libellés unifiés via stageLabel() depuis matching-maps (legacy map
 // maintenue pour rétro-compat pendant la transition).

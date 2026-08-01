@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { createAction, updateAction, generateMeetLinkAction, generateActionSummaryAction, type ActionRow } from "@/actions/actions";
 import { getAllContactsSimple, getOrgsForContact, getContactsForOrg, upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { getAllOrganisationsSimple, createOrganisationAction } from "@/actions/organisations";
+import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER } from "@/lib/crm/labels";
 import { getAllDealsSimple } from "@/actions/deals";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1109,17 +1110,7 @@ export default function ActionModal({
                       <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-4)", marginBottom: 3 }}>TYPE *</label>
                       <select value={orgCreateType} onChange={e => setOrgCreateType(e.target.value)}
                         style={{ width: "100%", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", outline: "none", background: "var(--surface)", color: "var(--text-1)", boxSizing: "border-box" }}>
-                        <option value="investor">Investisseur</option>
-                        <option value="business_angel">Business Angel</option>
-                        <option value="family_office">Family Office</option>
-                        <option value="corporate">Corporate / CVC</option>
-                        <option value="bank">Banque</option>
-                        <option value="client">Client</option>
-                        <option value="buyer">Repreneur</option>
-                        <option value="law_firm">Cabinet juridique</option>
-                        <option value="accounting_firm">Cabinet comptable</option>
-                        <option value="consulting_firm">Conseil</option>
-                        <option value="other">Autre</option>
+                        {ORG_TYPE_SELECT_ORDER.map(t => <option key={t} value={t}>{organizationTypeLabels[t]}</option>)}
                       </select>
                     </div>
                     <div style={{ gridColumn: "1 / -1" }}>

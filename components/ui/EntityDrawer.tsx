@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { organizationTypeLabels, dealTypeLabels } from "@/lib/crm/labels";
 import {
   X, ArrowUpRight, Mail, Phone, Linkedin, Globe, MapPin,
   Building2, FolderOpen, User,
@@ -157,16 +158,9 @@ const STATUS_BG: Record<string, { bg: string; tx: string }> = {
   dormant:    { bg: "var(--surface-3)", tx: "var(--text-4)" },
   excluded:   { bg: "#FEE2E2",          tx: "#991B1B" },
 };
-const ORG_TYPE_LABEL: Record<string, string> = {
-  client: "Client", prospect_client: "Prospect", investor: "Investisseur",
-  buyer: "Repreneur", target: "Cible", law_firm: "Cabinet juridique",
-  bank: "Banque", advisor: "Conseil", accounting_firm: "Expert-comptable",
-  family_office: "Family Office", corporate: "Corporate",
-  consulting_firm: "Cabinet de conseil", other: "Autre",
-};
-const DEAL_TYPE_LABEL: Record<string, string> = {
-  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-};
+// Libellés depuis la source unique (lib/crm/labels.ts).
+const ORG_TYPE_LABEL = organizationTypeLabels;
+const DEAL_TYPE_LABEL = dealTypeLabels;
 
 function ContactBody({ contact }: { contact: ContactSummary }) {
   const sc = STATUS_BG[contact.base_status] ?? STATUS_BG.to_qualify;

@@ -1,20 +1,24 @@
 "use client";
+import { organizationTypeLabels as L } from "@/lib/crm/labels";
 
+// Grille de sélection du type : libellés depuis la source unique
+// (lib/crm/labels.ts), descriptions métier M&A small cap, familles
+// acquéreurs regroupées.
 export const ORG_TYPES = [
-  { value: "investor",          label: "Investisseur",        desc: "VC, PE, Growth" },
-  { value: "business_angel",    label: "Business Angel",      desc: "Investisseur individuel" },
-  { value: "family_office",     label: "Family Office",       desc: "SFO, MFO, GFI" },
-  { value: "corporate",         label: "Corporate / CVC",     desc: "Investisseur corporate" },
-  { value: "bank",              label: "Banque",              desc: "Banque privée, commerciale" },
-  { value: "client",            label: "Client",              desc: "Société accompagnée" },
-  { value: "prospect_client",   label: "Prospect client",     desc: "Cible commerciale" },
-  { value: "target",            label: "Cible M&A",           desc: "Cible d'acquisition" },
-  { value: "buyer",             label: "Repreneur",           desc: "Acquéreur potentiel" },
-  { value: "law_firm",          label: "Cabinet juridique",   desc: "Avocat, notaire" },
-  { value: "advisor",           label: "Conseil",             desc: "Banque d'affaires, advisor" },
-  { value: "accounting_firm",   label: "Cabinet comptable",   desc: "Expert-comptable, audit" },
-  { value: "consulting_firm",   label: "Cabinet de conseil",  desc: "Conseil stratégique" },
-  { value: "other",             label: "Autre",               desc: "" },
+  { value: "client",            label: L.client,            desc: "Société sous mandat" },
+  { value: "prospect_client",   label: L.prospect_client,   desc: "Cédant potentiel" },
+  { value: "target",            label: L.target,            desc: "Cible d'acquisition" },
+  { value: "buyer",             label: L.buyer,             desc: "Acquéreur qualifié" },
+  { value: "corporate",         label: L.corporate,         desc: "Industriel, consolidateur" },
+  { value: "investor",          label: L.investor,          desc: "PE, growth, search fund" },
+  { value: "business_angel",    label: L.business_angel,    desc: "Personne physique qui reprend" },
+  { value: "family_office",     label: L.family_office,     desc: "SFO, MFO, GFI" },
+  { value: "bank",              label: L.bank,              desc: "Banque privée, commerciale" },
+  { value: "advisor",           label: L.advisor,           desc: "Banque d'affaires, advisor" },
+  { value: "law_firm",          label: L.law_firm,          desc: "Avocat, notaire" },
+  { value: "accounting_firm",   label: L.accounting_firm,   desc: "Expertise comptable, audit" },
+  { value: "consulting_firm",   label: L.consulting_firm,   desc: "Conseil stratégique" },
+  { value: "other",             label: L.other,             desc: "" },
 ];
 
 export const INVESTOR_TYPES = ["investor", "business_angel", "family_office", "corporate"];

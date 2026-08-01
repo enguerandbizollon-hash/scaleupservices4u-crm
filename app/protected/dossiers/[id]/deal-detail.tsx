@@ -32,6 +32,7 @@ import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { COMPANY_STAGES, ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, DEAL_CONTEXTS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
+import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER, dealTypeLabels, roleInDossierLabels } from "@/lib/crm/labels";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
 import {
@@ -54,7 +55,7 @@ const DT: Record<string,{bg:string;tx:string;border:string}> = {
   ma_sell:{bg:"var(--sell-bg)",tx:"var(--sell-tx)",border:"var(--sell-mid)"},
   ma_buy:{bg:"var(--buy-bg)",tx:"var(--buy-tx)",border:"var(--buy-mid)"},
 };
-const TYPE_LABELS: Record<string,string> = { ma_sell:"M&A Sell", ma_buy:"M&A Buy" };
+const TYPE_LABELS = dealTypeLabels;
 // V55 : libellés unifiés via stageLabel() depuis matching-maps. Map gardée
 // vide pour éviter toute référence oubliée (remplacée une à une).
 const STAGE_LABELS: Record<string,string> = {};
@@ -72,17 +73,18 @@ const STATUS_L: Record<string,string> = {
   active:"Actif", to_qualify:"Non qualifié", inactive:"Inactif",
   priority:"Actif", qualified:"Actif", dormant:"Non qualifié", excluded:"Inactif",
 };
+// Labels depuis la source unique (roleInDossierLabels), couleurs locales.
 const ROLE_CONFIG: Record<string,{label:string;bg:string;tx:string}> = {
-  client:          {label:"Client",           bg:"#D1FAE5", tx:"#065F46"},
-  banque:          {label:"Banque",           bg:"#DBEAFE", tx:"#1D4ED8"},
-  repreneur:       {label:"Repreneur",        bg:"#EDE9FE", tx:"#5B21B6"},
-  investisseur:    {label:"Investisseur",     bg:"#FEF3C7", tx:"#92400E"},
-  avocat:          {label:"Cabinet juridique",bg:"#F3F4F6", tx:"#374151"},
-  expert_comptable:{label:"Expert-comptable", bg:"#F3F4F6", tx:"#374151"},
-  conseil:         {label:"Conseil",          bg:"#F3F4F6", tx:"#374151"},
-  cible:           {label:"Cible M&A",        bg:"#FEE2E2", tx:"#991B1B"},
-  acquereur:       {label:"Acquéreur",        bg:"#E0E7FF", tx:"#3730A3"},
-  autre:           {label:"Autre",            bg:"var(--surface-3)", tx:"var(--text-4)"},
+  client:          {label:roleInDossierLabels.client,           bg:"#D1FAE5", tx:"#065F46"},
+  banque:          {label:roleInDossierLabels.banque,           bg:"#DBEAFE", tx:"#1D4ED8"},
+  repreneur:       {label:roleInDossierLabels.repreneur,        bg:"#EDE9FE", tx:"#5B21B6"},
+  investisseur:    {label:roleInDossierLabels.investisseur,     bg:"#FEF3C7", tx:"#92400E"},
+  avocat:          {label:roleInDossierLabels.avocat,           bg:"#F3F4F6", tx:"#374151"},
+  expert_comptable:{label:roleInDossierLabels.expert_comptable, bg:"#F3F4F6", tx:"#374151"},
+  conseil:         {label:roleInDossierLabels.conseil,          bg:"#F3F4F6", tx:"#374151"},
+  cible:           {label:roleInDossierLabels.cible,            bg:"#FEE2E2", tx:"#991B1B"},
+  acquereur:       {label:roleInDossierLabels.acquereur,        bg:"#E0E7FF", tx:"#3730A3"},
+  autre:           {label:roleInDossierLabels.autre,            bg:"var(--surface-3)", tx:"var(--text-4)"},
 };
 const ROLE_OPTIONS = Object.entries(ROLE_CONFIG).map(([v,c])=>({value:v,label:c.label}));
 
@@ -656,17 +658,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
                             <div>
                               <label style={{ display:"block", fontSize:11, fontWeight:600, color:"var(--text-4)", marginBottom:3 }}>TYPE *</label>
                               <select value={orgCreateType} onChange={e=>setOrgCreateType(e.target.value)} style={{ width:"100%", padding:"6px 10px", border:"1px solid var(--border)", borderRadius:6, fontSize:13, fontFamily:"inherit", outline:"none", background:"var(--surface)", color:"var(--text-1)", boxSizing:"border-box" }}>
-                                <option value="investor">Investisseur</option>
-                                <option value="business_angel">Business Angel</option>
-                                <option value="family_office">Family Office</option>
-                                <option value="corporate">Corporate / CVC</option>
-                                <option value="bank">Banque</option>
-                                <option value="client">Client</option>
-                                <option value="buyer">Repreneur</option>
-                                <option value="law_firm">Cabinet juridique</option>
-                                <option value="accounting_firm">Cabinet comptable</option>
-                                <option value="consulting_firm">Conseil</option>
-                                <option value="other">Autre</option>
+                                {ORG_TYPE_SELECT_ORDER.map(t => <option key={t} value={t}>{organizationTypeLabels[t]}</option>)}
                               </select>
                             </div>
                             <div>
@@ -844,7 +836,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
               <Field label="Rôle dans l'organisation (optionnel)">
                 <input
                   style={inp}
-                  placeholder="ex: Partner, CFO, DAF, Investisseur."
+                  placeholder="ex : Gérant, DG, DAF, Expert-comptable."
                   value={form.role_label || ""}
                   onChange={setF("role_label")}
                 />

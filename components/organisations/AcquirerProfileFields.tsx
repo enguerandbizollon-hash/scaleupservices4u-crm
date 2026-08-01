@@ -65,18 +65,18 @@ export function AcquirerProfileFields({ data, onChange }: AcquirerProfileFieldsP
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 14 }}>
-        Profil Acquereur M&A
+        Profil acquéreur
       </div>
 
       {/* Type d'acquéreur */}
       <div style={{ marginBottom: 16 }}>
-        <label style={lbl}>Type d&apos;acquereur</label>
+        <label style={lbl}>Type d&apos;acquéreur</label>
         <select
           style={inp}
           value={data.acquirer_type ?? ""}
           onChange={e => onChange({ ...data, acquirer_type: e.target.value })}
         >
-          <option value="">— Non renseigne —</option>
+          <option value="">Non renseigné</option>
           {ACQUIRER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
       </div>
@@ -188,7 +188,7 @@ export function AcquirerProfileFields({ data, onChange }: AcquirerProfileFieldsP
       <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
         <label style={lbl}>Th&egrave;se d&apos;acquisition</label>
         <textarea rows={2} style={{ ...inp, resize: "vertical" }}
-          placeholder="En une phrase : ce que cet acquereur cherche vraiment..."
+          placeholder="En une phrase : ce que cet acquéreur cherche vraiment..."
           value={data.acquirer_summary ?? ""}
           onChange={e => onChange({ ...data, acquirer_summary: e.target.value })} />
       </div>

@@ -343,7 +343,7 @@ export function FeesTab({ deal, initialFees }: { deal: DealForFeesTab; initialFe
 
         {fees.length === 0 ? (
           <div style={{ padding: "28px", textAlign: "center", fontSize: 13, color: "var(--text-5)" }}>
-            Aucun jalon. Ajoutez retainer, success fee ou forfaits pour suivre la facturation du dossier.
+            Aucun jalon. Ajoutez retainer, success fee ou forfaits pour suivre la facturation du mandat.
           </div>
         ) : (
           fees.map((fee, i) => {
@@ -464,7 +464,7 @@ export function FeesTab({ deal, initialFees }: { deal: DealForFeesTab; initialFe
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
-                  <label style={lbl}>Montant fee *</label>
+                  <label style={lbl}>Montant *</label>
                   <input style={inp} type="number" placeholder="0" value={feeForm.amount ?? ""} onChange={setF("amount")} />
                 </div>
                 <div>

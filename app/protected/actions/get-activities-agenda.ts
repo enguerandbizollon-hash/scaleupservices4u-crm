@@ -61,7 +61,7 @@ export async function getAgendaFiltersMetaAction() {
       { id: "closing", label: "Closing", category: "Events" },
       {
         id: "investor_meeting",
-        label: "Réunion investisseur",
+        label: "Réunion acquéreur",
         category: "Advisory",
       },
       { id: "due_diligence", label: "Due diligence", category: "Advisory" },

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { dealTypeLabels } from "@/lib/crm/labels";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -11,9 +12,7 @@ function fmtAmt(n: number, currency = "EUR") {
 function fmtPct(n: number) { return `${n.toFixed(1)} %`; }
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round(a / b * 100); }
 
-const TYPE_LABELS: Record<string, string> = {
-  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-};
+const TYPE_LABELS = dealTypeLabels;
 const TYPE_COLORS: Record<string, { bg: string; tx: string }> = {
   ma_sell:     { bg: "#FFF7ED", tx: "#C2410C" },
   ma_buy:      { bg: "#FFFBEB", tx: "#92400E" },
@@ -237,7 +236,7 @@ async function Content() {
               <div style={{ textAlign: "right" }}>En cours</div>
               <div style={{ textAlign: "right" }}>Gagnés</div>
               <div style={{ textAlign: "right" }}>Win rate</div>
-              <div style={{ textAlign: "right" }}>Fees pipeline</div>
+              <div style={{ textAlign: "right" }}>Honoraires pipeline</div>
             </div>
             {statsByType.length === 0 ? (
               <div style={{ padding: "20px 10px", fontSize: 13, color: "var(--text-5)", textAlign: "center" }}>Aucun dossier</div>

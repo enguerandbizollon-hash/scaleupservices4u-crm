@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { updateDealStageAction } from "@/actions/deals";
+import { dealTypeLabels } from "@/lib/crm/labels";
 import { ViewToggle } from "@/components/dossiers/ViewToggle";
 import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
 import { computeDealHealth, isDormant, DORMANT_THRESHOLD_DAYS } from "@/lib/crm/health-score";
@@ -51,10 +52,11 @@ interface Props {
 }
 
 // ── Présentation par deal_type ───────────────────────────────────────────────
+// (libellés depuis la source unique lib/crm/labels.ts)
 
 const TYPE_META: Record<string, { label: string; icon: string; bg: string; tx: string; border: string }> = {
-  ma_sell:     { label: "M&A Sell",    icon: "🏢", bg: "var(--sell-bg)",  tx: "var(--sell-tx)",  border: "var(--sell-mid)" },
-  ma_buy:      { label: "M&A Buy",     icon: "🎯", bg: "var(--buy-bg)",   tx: "var(--buy-tx)",   border: "var(--buy-mid)"  },
+  ma_sell:     { label: dealTypeLabels.ma_sell, icon: "🏢", bg: "var(--sell-bg)",  tx: "var(--sell-tx)",  border: "var(--sell-mid)" },
+  ma_buy:      { label: dealTypeLabels.ma_buy,  icon: "🎯", bg: "var(--buy-bg)",   tx: "var(--buy-tx)",   border: "var(--buy-mid)"  },
 };
 
 const PRIO_COLOR: Record<string, string> = {

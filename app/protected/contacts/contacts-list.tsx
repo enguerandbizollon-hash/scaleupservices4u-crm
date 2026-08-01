@@ -8,7 +8,7 @@ import { ContactsImportModal } from "./contacts-import-modal";
 import { exportRowsAsCSV } from "@/lib/export/csv";
 import { bulkDeleteContacts, bulkUpdateContactStatus } from "@/actions/contacts";
 
-type Contact = { id:string; fullName:string; firstName:string; lastName:string; title:string; email:string; phone:string; linkedinUrl:string|null; sector:string; ticket:string; organisation:string; status:string; notes:string; };
+type Contact = { id:string; fullName:string; firstName:string; lastName:string; title:string; email:string; phone:string; linkedinUrl:string|null; sector:string; organisation:string; status:string; notes:string; };
 
 const STATUS: Record<string,{label:string;cls:string;bg:string;tx:string}> = {
   active:    {label:"Actif",       cls:"cs-active",    bg:"var(--cs-active-bg)",    tx:"var(--cs-active-tx)"},
@@ -127,7 +127,6 @@ export function ContactsList({contacts:init,stats}:{contacts:Contact[];stats:{to
       {key:"organisation",label:"Organisation"},
       {key:"sector",label:"Secteur"},
       {key:"linkedinUrl",label:"LinkedIn"},
-      {key:"ticket",label:"Ticket"},
       {key:"status",label:"Statut",format:r=>STATUS[r.status]?.label??r.status},
       {key:"notes",label:"Notes"},
     ]);

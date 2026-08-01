@@ -232,7 +232,7 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[]): KPI[] {
   const feeCurrency = currency;
   if (estimatedFee != null && estimatedFee > 0) {
     out.push({
-      label: "Fees estimés",
+      label: "Honoraires estimés",
       value: fmtMoney(estimatedFee, feeCurrency),
       sublabel: confirmedFee != null && confirmedFee > 0
         ? `Confirmés : ${fmtMoney(confirmedFee, feeCurrency)}`
@@ -261,7 +261,7 @@ function buildKPIs(deal: Deal, financialData: FinancialRow[]): KPI[] {
     });
     if (fee.estimated != null && fee.estimated > 0) {
       out.push({
-        label: "Fee estimé (auto)",
+        label: "Honoraire estimé (auto)",
         value: fmtMoney(fee.estimated, fee.currency),
         sublabel: fee.percent != null ? `${fee.percent}% × base ${fmtMoney(fee.base, fee.currency)}` : undefined,
         icon: Sparkles,

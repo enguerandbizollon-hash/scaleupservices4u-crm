@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Search, Plus, User, Building2 } from "lucide-react";
 import { getAllContactsSimple, createContact } from "@/actions/contacts";
 import { getAllOrganisationsSimple, createOrganisationMinimal } from "@/actions/organisations";
+import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER } from "@/lib/crm/labels";
 
 export type PickerEntityType = "contact" | "organization";
 
@@ -11,18 +12,7 @@ type Item = { id: string; label: string; subtitle?: string };
 
 const ORG_TYPE_OPTIONS = [
   { value: "other", label: "Type d'organisation" },
-  { value: "client", label: "Client" },
-  { value: "prospect_client", label: "Prospect" },
-  { value: "investor", label: "Investisseur" },
-  { value: "family_office", label: "Family Office" },
-  { value: "corporate", label: "Corporate" },
-  { value: "buyer", label: "Repreneur" },
-  { value: "target", label: "Cible M&A" },
-  { value: "bank", label: "Banque" },
-  { value: "advisor", label: "Conseil" },
-  { value: "law_firm", label: "Cabinet juridique" },
-  { value: "accounting_firm", label: "Expert-comptable" },
-  { value: "consulting_firm", label: "Cabinet de conseil" },
+  ...ORG_TYPE_SELECT_ORDER.filter(v => v !== "other").map(v => ({ value: v, label: organizationTypeLabels[v] })),
 ];
 
 export function EntityPicker({

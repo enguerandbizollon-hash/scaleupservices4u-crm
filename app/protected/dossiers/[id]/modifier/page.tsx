@@ -52,8 +52,8 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div>
                 <label style={{ cssText: lbl } as any}>Type de mission</label>
                 <select name="deal_type" defaultValue={deal.deal_type} style={{ cssText: sel } as any}>
-                  <option value="ma_sell">M&A Sell-side</option>
-                  <option value="ma_buy">M&A Buy-side</option>
+                  <option value="ma_sell">Cession (sell-side)</option>
+                  <option value="ma_buy">Acquisition (buy-side)</option>
                 </select>
               </div>
 

@@ -16,8 +16,6 @@ const contactStatusOptions = [
   { value: "excluded", label: "Exclu" },
 ];
 
-const ticketOptions = ["50K € – 100K €","100K € – 250K €","250K € – 500K €","500K € – 1M €","1M € – 2M €","2M € – 5M €","5M € – 10M €","+10M €","N/A"];
-
 function Loading() {
   return <div className="p-8"><div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white" /></div>;
 }
@@ -27,7 +25,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
 
   const [{ data: contact, error }, { data: organizations }] = await Promise.all([
-    supabase.from("contacts").select("id,first_name,last_name,email,phone,title,linkedin_url,sector,investment_ticket_label,country,notes,base_status,first_contact_at,last_contact_at,next_follow_up_at").eq("id", id).maybeSingle(),
+    supabase.from("contacts").select("id,first_name,last_name,email,phone,title,linkedin_url,sector,country,notes,base_status,first_contact_at,last_contact_at,next_follow_up_at").eq("id", id).maybeSingle(),
     supabase.from("organizations").select("id,name").order("name", { ascending: true }),
   ]);
 
@@ -67,13 +65,6 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div><label className="mb-2 block text-sm font-medium text-slate-700">LinkedIn</label><input name="linkedin_url" defaultValue={contact.linkedin_url ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
               <div><label className="mb-2 block text-sm font-medium text-slate-700">Secteur</label><input name="sector" defaultValue={contact.sector ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
               <div><label className="mb-2 block text-sm font-medium text-slate-700">Géographie</label><GeoSelectField name="country" defaultValue={contact.country ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" /></div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Ticket investissement</label>
-                <select name="investment_ticket_label" defaultValue={contact.investment_ticket_label ?? ""} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500">
-                  <option value="">Sélectionner</option>
-                  {ticketOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
             </div>
           </div>
 

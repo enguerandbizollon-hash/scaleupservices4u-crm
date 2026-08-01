@@ -7,6 +7,7 @@ import ActionTimeline from "@/components/actions/ActionTimeline";
 import { ContactOrgAssignmentWarning } from "../../components/contact-org-assignment-warning";
 import { TagInput } from "@/components/tags/TagInput";
 import { GEO_LABELS } from "@/lib/crm/matching-maps";
+import { organizationTypeLabels } from "@/lib/crm/labels";
 
 const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
   active:     {bg:"var(--fund-bg)", tx:"var(--fund-tx)"},
@@ -21,10 +22,7 @@ const STATUS_LABELS: Record<string,string> = {
   active:"Actif", priority:"Prioritaire", qualified:"Qualifié",
   to_qualify:"À qualifier", dormant:"Dormant", inactive:"Inactif", excluded:"Exclu",
 };
-const TYPE_LABELS: Record<string,string> = {
-  investor:"Investisseur", family_office:"Family Office", corporate:"Corporate",
-  bank:"Banque", advisor:"Conseil", other:"Autre",
-};
+const TYPE_LABELS = organizationTypeLabels;
 function daysSince(d: string | null) {
   if (!d) return null;
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);

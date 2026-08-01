@@ -8,6 +8,7 @@ import {
 import { approveSuggestion, rejectSuggestion, markSuggestionContacted } from "@/actions/suggestions";
 import type { MaMatchResult } from "@/lib/crm/ma-scoring";
 import { OPERATION_TYPES, DEAL_STANCES, DEAL_CONTEXTS } from "@/lib/crm/matching-maps";
+import { organizationTypeLabels } from "@/lib/crm/labels";
 import Link from "next/link";
 import { ExternalLink, Sparkles, Loader2 } from "lucide-react";
 
@@ -39,11 +40,9 @@ function CriterionBar({ label, earned, max, reason, muted }: { label: string; ea
   );
 }
 
-const ORG_TYPE_LABELS: Record<string, string> = {
-  buyer: "Acheteur", corporate: "Corporate", investor: "Investisseur",
-  business_angel: "Business Angel", family_office: "Family Office",
-  target: "Cible", client: "Client", prospect_client: "Prospect",
-};
+// Un seul mot pour l'acheteur dans tout l'outil : « Acquéreur »
+// (source unique lib/crm/labels.ts, fin du Acheteur/Repreneur selon l'écran).
+const ORG_TYPE_LABELS = organizationTypeLabels;
 
 // ── Vue ACQUÉREURS (ma_sell) — scoring V2, grille métier ─────────────────────
 

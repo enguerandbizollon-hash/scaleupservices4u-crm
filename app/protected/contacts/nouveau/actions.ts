@@ -44,7 +44,6 @@ export async function createContactAction(formData: FormData) {
       title: toNullableString(formData.get("title")),
       linkedin_url: toNullableString(formData.get("linkedin_url")),
       sector: toNullableString(formData.get("sector")),
-      investment_ticket_label: toNullableString(formData.get("investment_ticket_label")),
       country: toNullableString(formData.get("country")),
       notes: toNullableString(formData.get("notes")),
       base_status: String(formData.get("base_status") ?? "active").trim() || "active",

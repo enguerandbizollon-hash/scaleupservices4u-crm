@@ -1,6 +1,6 @@
 export const dealTypeLabels: Record<string, string> = {
-  ma_sell: "M&A Sell-side",
-  ma_buy: "M&A Buy-side",
+  ma_sell: "Cession",
+  ma_buy: "Acquisition",
 };
 
 export const dealStatusLabels: Record<string, string> = {
@@ -23,16 +23,53 @@ export const dealStageLabels: Record<string, string> = {
   search: "Recherche",
 };
 
+// Types d'organisation : SOURCE UNIQUE des libellés (sweep vocabulaire
+// 2026-07-31, pivot M&A small cap). Les valeurs stockées en base ne bougent
+// jamais, seul l'affichage. Un seul mot pour l'acheteur : « Acquéreur ».
+// Familles acquéreurs scorées par le matching (ACQUIRER_BUYER_TYPES) :
+// buyer, corporate, investor, business_angel, family_office.
 export const organizationTypeLabels: Record<string, string> = {
-  investor: "Investisseur",
   client: "Client",
+  prospect_client: "Prospect",
+  target: "Cible",
+  buyer: "Acquéreur",
+  corporate: "Corporate",
+  investor: "Fonds",
+  business_angel: "Repreneur individuel",
+  family_office: "Family Office",
+  bank: "Banque",
+  advisor: "Conseil",
+  law_firm: "Cabinet juridique",
+  accounting_firm: "Expert-comptable",
+  consulting_firm: "Cabinet de conseil",
+  other: "Autre",
+  // Valeurs historiques encore possibles en base
   prospect: "Prospect",
   third_party: "Tiers",
-  bank: "Banque",
-  law_firm: "Avocat",
-  buyer: "Repreneur",
-  corporate: "Corporate",
-  consulting_firm: "Conseil",
+};
+
+// Ordre canonique des types dans les sélecteurs (annuaire d'abord,
+// familles acquéreurs ensuite, tiers de confiance enfin).
+export const ORG_TYPE_SELECT_ORDER: string[] = [
+  "client", "prospect_client", "target",
+  "buyer", "corporate", "investor", "business_angel", "family_office",
+  "bank", "advisor", "law_firm", "accounting_firm", "consulting_firm",
+  "other",
+];
+
+// Rôles d'une organisation dans un dossier (deal_organizations.role_in_dossier).
+// Consommé par la fiche dossier et l'export PDF (qui affichait la valeur brute).
+export const roleInDossierLabels: Record<string, string> = {
+  client: "Client",
+  banque: "Banque",
+  repreneur: "Repreneur",
+  investisseur: "Fonds",
+  avocat: "Cabinet juridique",
+  expert_comptable: "Expert-comptable",
+  conseil: "Conseil",
+  cible: "Cible",
+  acquereur: "Acquéreur",
+  autre: "Autre",
 };
 
 export const organizationStatusLabels: Record<string, string> = {
@@ -163,7 +200,7 @@ export const unifiedActivityTypeLabels: Record<string, string> = {
   delivery: "Rendu",
   closing: "Closing",
   // Nouveaux : services
-  investor_meeting: "Réunion investisseur",
+  investor_meeting: "Réunion acquéreur",
   due_diligence: "Due diligence",
   other: "Autre",
 };

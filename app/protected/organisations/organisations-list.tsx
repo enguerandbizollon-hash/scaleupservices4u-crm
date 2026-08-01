@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { Plus, Search, Mail, Phone, Globe, AlertTriangle, CheckSquare, Activity, ChevronRight, Download, Upload } from "lucide-react";
 import { StatusDropdown } from "../components/status-dropdown";
 import { exportRowsAsCSV } from "@/lib/export/csv";
+import { organizationTypeLabels } from "@/lib/crm/labels";
 import { OrganisationsImportModal } from "./organisations-import-modal";
 
 type Contact = { id:string; first_name:string; last_name:string; title?:string; email?:string; phone?:string; base_status?:string; last_contact_date?:string; role_label?:string; is_primary?:boolean };
 type Org = {
   id:string; name:string; typeKey:string; typeLabel:string; status:string;
   sector:string; location:string; website:string|null; notes:string;
-  investmentTicket:string; investmentStage:string; description:string;
+  description:string;
   contacts: Contact[]; openTasks:number; lastActivity:string|null;
 };
 
@@ -66,13 +67,8 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
     return matchSearch && matchType && matchStatus;
   });
 
-  const TYPE_LABELS: Record<string,string> = {
-    all:"Tous", client:"Client", prospect_client:"Prospect", investor:"Investisseur",
-    business_angel:"Business Angel", buyer:"Repreneur", target:"Cible",
-    law_firm:"Cabinet juridique", bank:"Banque", advisor:"Conseil",
-    accounting_firm:"Cabinet comptable", family_office:"Family office",
-    corporate:"Corporate", consulting_firm:"Conseil strat.", other:"Autre"
-  };
+  // Source unique des libellés de types (lib/crm/labels.ts), + entrée "Tous".
+  const TYPE_LABELS: Record<string,string> = { all: "Tous", ...organizationTypeLabels };
 
   return (
     <div style={{ padding:"28px 24px", minHeight:"100vh", background:"var(--bg)" }}>
@@ -102,8 +98,6 @@ export function OrganisationsList({ orgs, stats }: { orgs: Org[]; stats: { total
               { key:"sector", label:"Secteur" },
               { key:"location", label:"Localisation" },
               { key:"website", label:"Site web" },
-              { key:"investmentTicket", label:"Ticket" },
-              { key:"investmentStage", label:"Stade investissement" },
               { key:"contactsCount", label:"Nb contacts", format:r=>r.contacts.length },
               { key:"primaryContact", label:"Contact principal", format:r=>{const p=r.contacts.find(c=>c.is_primary)??r.contacts[0];return p?`${p.first_name} ${p.last_name}`.trim():"";} },
               { key:"primaryEmail", label:"Email principal", format:r=>{const p=r.contacts.find(c=>c.is_primary)??r.contacts[0];return p?.email??"";} },
@@ -168,7 +162,6 @@ function OrgCard({ org }: { org: Org }) {
   const primaryContact = org.contacts.find(c => c.is_primary) ?? org.contacts[0];
   const otherContacts  = org.contacts.filter(c => c.id !== primaryContact?.id).slice(0, 3);
   const lastAct        = fmtDate(org.lastActivity);
-  const isInvestor     = ["investor","business_angel","family_office","corporate","bank"].includes(org.typeKey);
 
   return (
     <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:14, overflow:"hidden", display:"flex", flexDirection:"column" }}>
@@ -198,21 +191,6 @@ function OrgCard({ org }: { org: Org }) {
           </div>
         )}
 
-        {/* Infos investisseur */}
-        {isInvestor && (org.investmentTicket || org.investmentStage) && (
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {org.investmentTicket && (
-              <span style={{ fontSize:11.5, padding:"2px 8px", borderRadius:6, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>
-                🎯 {org.investmentTicket}
-              </span>
-            )}
-            {org.investmentStage && (
-              <span style={{ fontSize:11.5, padding:"2px 8px", borderRadius:6, background:"var(--surface-2)", color:"var(--text-3)", border:"1px solid var(--border)" }}>
-                {org.investmentStage}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Contacts */}

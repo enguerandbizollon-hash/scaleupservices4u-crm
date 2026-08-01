@@ -11,6 +11,7 @@ import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
 import { OrganisationAddressBlock } from "@/components/organisations/OrganisationAddressBlock";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
+import { organizationTypeLabels, dealTypeLabels } from "@/lib/crm/labels";
 
 const INVESTOR_TYPES = ["investor", "business_angel", "family_office", "corporate"];
 const COMPANY_PROFILE_TYPES = ["client","prospect_client","target","buyer","bank","advisor","law_firm","accounting_firm","consulting_firm","other"];
@@ -22,12 +23,7 @@ const fmtRevenue = (v: number | null) => {
   return `${v} €`;
 };
 
-const TYPE_LABELS: Record<string,string> = {
-  client:"Client", prospect_client:"Prospect", investor:"Investisseur", buyer:"Repreneur",
-  target:"Cible", law_firm:"Cab. juridique", bank:"Banque", advisor:"Conseil",
-  accounting_firm:"Cab. comptable", family_office:"Family Office",
-  corporate:"Corporate", consulting_firm:"Cab. conseil", other:"Autre",
-};
+const TYPE_LABELS = organizationTypeLabels;
 const STATUS_COLORS: Record<string,{bg:string,tx:string}> = {
   active:     {bg:"#D1FAE5",          tx:"#065F46"},
   to_qualify: {bg:"var(--surface-3)", tx:"var(--text-4)"},
@@ -48,9 +44,7 @@ const STATUS_LABELS: Record<string,string> = {
   dormant:    "Non qualifié",
   excluded:   "Inactif",
 };
-const DEAL_TYPE: Record<string,string> = {
-  ma_sell:"M&A Sell", ma_buy:"M&A Buy",
-};
+const DEAL_TYPE = dealTypeLabels;
 const ACT_ICON: Record<string,string> = { email:"✉️", call:"📞", meeting:"🤝", note:"📝", other:"📌" };
 
 function daysSince(d: string | null) {
@@ -64,9 +58,7 @@ function fmtDate(d: string | null) {
 
 type Tab = "contacts" | "dossiers" | "activites" | "profil" | "clientdeals" | "financier";
 
-const CLIENT_DEAL_TYPE_LABELS: Record<string, string> = {
-  ma_sell: "M&A Sell", ma_buy: "M&A Buy",
-};
+const CLIENT_DEAL_TYPE_LABELS = dealTypeLabels;
 const CLIENT_DEAL_STATUS: Record<string, { bg: string; tx: string; label: string }> = {
   open:   { bg: "#D1FAE5",          tx: "#065F46", label: "En cours" },
   won:    { bg: "#DBEAFE",          tx: "#1D4ED8", label: "Gagné"    },

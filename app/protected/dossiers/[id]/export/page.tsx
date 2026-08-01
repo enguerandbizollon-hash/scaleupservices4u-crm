@@ -20,11 +20,12 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { stageLabel } from "@/lib/crm/matching-maps";
+import { roleInDossierLabels } from "@/lib/crm/labels";
 import { ExportPrintBootstrap } from "./export-print-bootstrap";
 
 const DEAL_TYPE_LABEL: Record<string, string> = {
-  ma_sell:     "M&A Sell-side",
-  ma_buy:      "M&A Buy-side",
+  ma_sell:     "Cession (sell-side)",
+  ma_buy:      "Acquisition (buy-side)",
 };
 
 function fmtMoney(n: number | null | undefined, c: string | null | undefined): string {
@@ -292,7 +293,7 @@ async function Content({ params, searchParams }: {
                 {orgs.slice(0, 30).map(o => (
                   <tr key={o.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                     <td style={{ padding: "4px 6px", fontWeight: 600 }}>{o.name}</td>
-                    <td style={{ padding: "4px 6px", color: "#6b7280" }}>{o.role_in_dossier}</td>
+                    <td style={{ padding: "4px 6px", color: "#6b7280" }}>{roleInDossierLabels[o.role_in_dossier] ?? o.role_in_dossier}</td>
                     <td style={{ padding: "4px 6px", color: "#6b7280" }}>{o.location ?? "—"}</td>
                   </tr>
                 ))}

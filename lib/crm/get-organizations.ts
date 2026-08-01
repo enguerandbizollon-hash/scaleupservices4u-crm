@@ -70,12 +70,16 @@ const dealsByOrganizationId = deals.reduce<Record<string, string[]>>((acc, deal)
     linkedDeals: dealsByOrganizationId[org.id] ?? [],
   }));
 
+  // Compteurs sur les CLÉS stockées, jamais sur les libellés affichés
+  // (un renommage de label cassait ces filtres en silence).
   return {
     allOrganizations,
-    clientsCount: allOrganizations.filter((o) => o.typeLabel === "Client").length,
-    investorsCount: allOrganizations.filter((o) => o.typeLabel === "Investisseur").length,
-    thirdPartiesCount: allOrganizations.filter((o) =>
-      ["Avocat", "Conseil", "Banque", "Tiers"].includes(o.typeLabel)
+    clientsCount: organizations.filter((o) => o.organization_type === "client").length,
+    investorsCount: organizations.filter((o) =>
+      ["investor", "business_angel", "family_office"].includes(o.organization_type)
+    ).length,
+    thirdPartiesCount: organizations.filter((o) =>
+      ["law_firm", "advisor", "consulting_firm", "bank", "third_party", "accounting_firm"].includes(o.organization_type)
     ).length,
   };
 }

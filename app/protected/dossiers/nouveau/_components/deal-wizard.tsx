@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createDealWizardAction, type WizardDealPayload } from "../actions";
 import { createOrganisationAction } from "@/actions/organisations";
 import { createContact, linkContactToOrganisation } from "@/actions/contacts";
+import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER } from "@/lib/crm/labels";
 import { EntityPicker } from "@/components/ui/EntityPicker";
 import { Building2 } from "lucide-react";
 import {
@@ -33,8 +34,8 @@ interface Props {
 }
 
 const DEAL_TYPE_LABELS: Record<string, string> = {
-  ma_sell: "M&A Sell-side",
-  ma_buy: "M&A Buy-side",
+  ma_sell: "Cession (sell-side)",
+  ma_buy: "Acquisition (buy-side)",
 };
 
 const DEAL_STAGES = [
@@ -489,7 +490,7 @@ export function DealWizard({ organisations, contacts }: Props) {
               <div style={sectionTitle}>Identité du dossier</div>
               <div style={{ marginBottom: 14 }}>
                 <label style={lbl}>Nom du dossier *</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex. Redpeaks Série A" style={inp} />
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex. Cession Scierie Martin" style={inp} />
               </div>
               <div style={grid2}>
                 <div>
@@ -626,14 +627,7 @@ export function DealWizard({ organisations, contacts }: Props) {
                   <div>
                     <label style={lbl}>Type</label>
                     <select value={clientOrgType} onChange={e => setClientOrgType(e.target.value)} style={inp}>
-                      <option value="client">Client</option>
-                      <option value="investor">Investisseur</option>
-                      <option value="business_angel">Business Angel</option>
-                      <option value="family_office">Family Office</option>
-                      <option value="corporate">Corporate / CVC</option>
-                      <option value="bank">Banque</option>
-                      <option value="buyer">Repreneur</option>
-                      <option value="other">Autre</option>
+                      {ORG_TYPE_SELECT_ORDER.map(t => <option key={t} value={t}>{organizationTypeLabels[t]}</option>)}
                     </select>
                   </div>
                 </div>
@@ -739,7 +733,7 @@ export function DealWizard({ organisations, contacts }: Props) {
         {/* Step 2 — Spécificités */}
         {step === 2 && dealType === "ma_sell" && (
           <div style={sectionCard}>
-            <div style={sectionTitle}>M&A Sell-side — cession</div>
+            <div style={sectionTitle}>Cession : cadrage de l&apos;opération</div>
             <div style={grid3}>
               <div>
                 <label style={lbl}>Valorisation cible ({currencySymbol})</label>
@@ -775,7 +769,7 @@ export function DealWizard({ organisations, contacts }: Props) {
                   onChange={e => setManagementRetention(e.target.checked)} />
                 Le management souhaite rester après cession
               </label>
-              <div style={hint}>Flag utilisé par le scoring M&A pour qualifier les repreneurs compatibles.</div>
+              <div style={hint}>Flag utilisé par le scoring M&A pour qualifier les acquéreurs compatibles.</div>
             </div>
             <div>
               <label style={lbl}>Conditions / earn-out / clauses</label>
@@ -789,7 +783,7 @@ export function DealWizard({ organisations, contacts }: Props) {
 
         {step === 2 && dealType === "ma_buy" && (
           <div style={sectionCard}>
-            <div style={sectionTitle}>M&A Buy-side — critères d&apos;acquisition</div>
+            <div style={sectionTitle}>Acquisition : critères de recherche</div>
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Secteurs visés</label>
               <MultiSelect values={targetSectors} onChange={setTargetSectors}

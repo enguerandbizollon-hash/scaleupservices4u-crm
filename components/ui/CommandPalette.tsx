@@ -27,10 +27,10 @@ type QuickAction = {
 const QUICK_ACTIONS: QuickAction[] = [
   { id: "create-deal",     kind: "create",   label: "Nouveau dossier",        href: "/protected/dossiers/nouveau",      icon: FolderOpen,  color: "var(--fund-tx)", keywords: "dossier deal mission" },
   { id: "create-contact",  kind: "create",   label: "Nouveau contact",        href: "/protected/contacts/nouveau",      icon: User,        color: "var(--buy-tx)",  keywords: "contact personne" },
-  { id: "create-org",      kind: "create",   label: "Nouvelle organisation",  href: "/protected/organisations/nouveau", icon: Building2,   color: "var(--sell-tx)", keywords: "organisation entreprise fonds investisseur" },
+  { id: "create-org",      kind: "create",   label: "Nouvelle organisation",  href: "/protected/organisations/nouveau", icon: Building2,   color: "var(--sell-tx)", keywords: "organisation entreprise acquéreur fonds repreneur" },
   { id: "go-inbox",        kind: "navigate", label: "Boîte de tri (emails)",  href: "/protected/inbox",                 icon: Inbox,       color: "#E11D48",        keywords: "inbox emails tri" },
   { id: "go-tasks",        kind: "navigate", label: "Tâches à faire",         href: "/protected/taches",                icon: CheckSquare, color: "#7E57C2",        keywords: "taches todo a faire" },
-  { id: "go-stats",        kind: "navigate", label: "Statistiques",           href: "/protected/statistiques",          icon: BarChart2,   color: "#0F766E",        keywords: "stats fees performance" },
+  { id: "go-stats",        kind: "navigate", label: "Statistiques",           href: "/protected/statistiques",          icon: BarChart2,   color: "#0F766E",        keywords: "stats honoraires performance" },
 ];
 
 function hrefFor(hit: SearchHit): string {

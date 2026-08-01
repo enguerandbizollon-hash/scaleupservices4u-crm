@@ -27,7 +27,7 @@ const META: Record<DashboardAlert["kind"], {
     bg: "#FEE2E2", tx: "#991B1B", border: "#FCA5A5",
   },
   fees_overdue: {
-    label: (n) => `${n} jalon${n > 1 ? "s" : ""} fees en retard (>30j)`,
+    label: (n) => `${n} jalon${n > 1 ? "s" : ""} d'honoraires en retard (>30j)`,
     icon: FileWarning,
     bg: "#FEF3C7", tx: "#92400E", border: "#FDE68A",
   },
