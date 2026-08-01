@@ -6,7 +6,7 @@ import {
   type AcquirerMatchView,
 } from "@/actions/ma-matching";
 import { approveSuggestion, rejectSuggestion, markSuggestionContacted } from "@/actions/suggestions";
-import { markFunnelStep, undoFunnelStep } from "@/actions/funnel";
+import { markFunnelStep, undoFunnelStep, setNextFollowup, markFollowupDone } from "@/actions/funnel";
 import { createOutreachDraftForSuggestion, createFollowupDraftForSuggestion } from "@/actions/outreach";
 import type { FunnelStepKey } from "@/lib/crm/funnel";
 import { updateDealField } from "@/actions/deals";
@@ -318,6 +318,47 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
           {result.bonusRelation.earned > 0 && (
             <div style={{ fontSize: 11.5, color: "#065F46", marginTop: 6 }}>
               +{result.bonusRelation.earned} relation · {result.bonusRelation.reasons.join(" · ")}
+            </div>
+          )}
+
+          {/* Pilotage de la relance : date éditable, relance faite, stop. */}
+          {funnel.id && (status === "approved" || status === "contacted" || !noStepYet) && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap", fontSize: 11.5 }}>
+              <span style={{ color: "var(--text-4)", fontWeight: 600 }}>Prochaine relance :</span>
+              <input type="date" value={funnel.next_followup_at ? funnel.next_followup_at.slice(0, 10) : ""} disabled={acting}
+                onChange={async e => {
+                  if (!funnel.id) return;
+                  const v = e.target.value || null;
+                  const r = await setNextFollowup(funnel.id, v);
+                  if (r.success) setFunnel(f => ({ ...f, next_followup_at: v }));
+                  else setActionError(r.error);
+                }}
+                style={{ padding: "3px 8px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-1)", fontSize: 11.5, fontFamily: "inherit" }} />
+              <button disabled={acting}
+                title="Trace le geste sortant (last_outreach) et repropose une échéance à J+7"
+                onClick={async () => {
+                  if (!funnel.id || acting) return;
+                  setActing(true);
+                  const r = await markFollowupDone(funnel.id);
+                  setActing(false);
+                  if (r.success) setFunnel(f => ({ ...f, next_followup_at: r.data.next_followup_at }));
+                  else setActionError(r.error);
+                }}
+                style={{ padding: "3px 10px", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-3)", opacity: acting ? 0.6 : 1 }}>
+                Relance faite
+              </button>
+              {funnel.next_followup_at && (
+                <button
+                  onClick={async () => {
+                    if (!funnel.id) return;
+                    const r = await setNextFollowup(funnel.id, null);
+                    if (r.success) setFunnel(f => ({ ...f, next_followup_at: null }));
+                    else setActionError(r.error);
+                  }}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "var(--text-5)", fontFamily: "inherit", padding: 0 }}>
+                  Ne plus relancer
+                </button>
+              )}
             </div>
           )}
         </div>

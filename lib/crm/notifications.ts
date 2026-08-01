@@ -12,14 +12,16 @@ export type NotificationKind =
   | "task_due"
   | "veille_profil"
   | "screening_draft"
-  | "reveil_cedant";
+  | "reveil_cedant"
+  | "suggestion_followup";
 
 export type NotificationSourceType =
   | "action"
   | "fee_milestone"
   | "contact"
   | "screening_profile"
-  | "deal";
+  | "deal"
+  | "suggestion";
 
 export interface NotificationInput {
   user_id: string;

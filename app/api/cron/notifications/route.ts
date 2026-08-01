@@ -267,6 +267,51 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── Job 5 : relances du funnel acquéreur (v73) ────────────────────────────
+  // Déclencheur unique : next_followup_at échue (les règles J+N sont posées
+  // AU GESTE par actions/funnel.ts, le cron ne recalcule rien). Dédup par
+  // l'index unique notifications : trigger_date = la date d'échéance, donc
+  // une seule cloche par échéance même en cron horaire, et décaler la date
+  // recrée naturellement une cloche à la nouvelle échéance.
+  let queuedFollowups = 0;
+  let scannedFollowups = 0;
+  {
+    const { data: dues, error: dueErr } = await supabase
+      .from("deal_target_suggestions")
+      .select("id, user_id, deal_id, organization_id, status, next_followup_at, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, organizations(name), deals(name)")
+      .not("next_followup_at", "is", null)
+      .lte("next_followup_at", today)
+      .neq("status", "rejected")
+      .limit(200);
+
+    if (dueErr) {
+      errors.push(`followups query: ${dueErr.message}`);
+    } else {
+      scannedFollowups = (dues ?? []).length;
+      for (const s of dues ?? []) {
+        const org = Array.isArray(s.organizations) ? s.organizations[0] : s.organizations;
+        const deal = Array.isArray(s.deals) ? s.deals[0] : s.deals;
+        const etape = s.offer_received_at ? "offre reçue"
+          : s.im_sent_at ? "IM envoyé"
+          : s.nda_signed_at ? "NDA signé"
+          : s.teaser_sent_at ? "teaser envoyé"
+          : "approche";
+        const res = await enqueueNotification(supabase, {
+          user_id: s.user_id,
+          kind: "suggestion_followup",
+          title: `Relancer ${(org as { name?: string } | null)?.name ?? "un acquéreur"} (${etape})`,
+          body: `Mandat ${(deal as { name?: string } | null)?.name ?? ""} : relance prévue le ${s.next_followup_at}. Le bouton Brouillon relance prépare l'email dans Gmail.`,
+          link_url: `/protected/dossiers/${s.deal_id}?tab=acquereurs`,
+          source_type: "suggestion",
+          source_id: s.id,
+          trigger_date: s.next_followup_at,
+        });
+        if (res.error) errors.push(`followup ${s.id}: ${res.error}`);
+        else queuedFollowups++;
+      }
+    }
+  }
+
   await finishCronRun(supabase, runId, {
     ok: errors.length === 0,
     summary: {
@@ -274,6 +319,7 @@ export async function GET(req: Request) {
       milestones: { scanned: scannedMilestones, queued: queuedMilestones },
       rgpd: { scanned: scannedRgpd, queued: queuedRgpd },
       reveils_cedants: wokenCedants,
+      followups: { scanned: scannedFollowups, queued: queuedFollowups },
     },
     errors: errors.slice(0, 10),
   });
@@ -285,6 +331,7 @@ export async function GET(req: Request) {
     milestones: { scanned: scannedMilestones, queued: queuedMilestones },
     rgpd: { scanned: scannedRgpd, queued: queuedRgpd },
     reveils_cedants: wokenCedants,
+    followups: { scanned: scannedFollowups, queued: queuedFollowups },
     errors: errors.slice(0, 10),
   });
 }
