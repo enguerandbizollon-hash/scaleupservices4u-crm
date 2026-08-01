@@ -357,13 +357,15 @@ export async function suggestTargetsForDeal(
     // Contact décideur principal : premier contact rattaché à cette org
     const contactId = apolloResult.contactsUpserted.find(c => c.orgId === apolloOrg.orgId)?.contactId ?? null;
 
-    // Upsert via on conflict sur l'index unique partiel (deal_id, organization_id) WHERE status NOT IN ('rejected','contacted')
+    // Upsert aligné sur l'index unique partiel dts_unique_active (v73 :
+    // (deal_id, organization_id) WHERE status <> 'rejected', « contacted »
+    // est un état vivant du funnel, plus un état terminal).
     const { data: existing } = await admin
       .from("deal_target_suggestions")
       .select("id, status")
       .eq("deal_id", dealId)
       .eq("organization_id", apolloOrg.orgId)
-      .not("status", "in", '("rejected","contacted")')
+      .neq("status", "rejected")
       .maybeSingle();
 
     if (existing) {
@@ -438,7 +440,7 @@ async function setSuggestionStatus(
 
   const { data: suggestion, error: loadErr } = await supabase
     .from("deal_target_suggestions")
-    .select("deal_id, organization_id, role_suggested")
+    .select("deal_id, organization_id, role_suggested, status")
     .eq("id", suggestionId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -457,6 +459,22 @@ async function setSuggestionStatus(
     .eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
+
+  // Journal append-only (v73) : reviewed_* est écrasé à chaque transition,
+  // deal_suggestion_events garde l'historique. Best-effort : un échec
+  // d'audit ne fait pas échouer le geste.
+  if (suggestion.organization_id) {
+    await supabase.from("deal_suggestion_events").insert({
+      user_id: user.id,
+      suggestion_id: suggestionId,
+      deal_id: suggestion.deal_id,
+      organization_id: suggestion.organization_id,
+      event_type: "status_change",
+      from_status: suggestion.status ?? null,
+      to_status: status,
+      notes: notes ?? null,
+    });
+  }
 
   // Approuver un acquéreur doit NOURRIR la base acquéreurs : une organisation
   // restée en "other" est requalifiée en "buyer" et entre dans le périmètre

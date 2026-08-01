@@ -155,7 +155,34 @@ export interface AcquirerMatchView {
     status: string;
     score_ai: number | null;
     ai_explanation: string | null;
+    // Funnel d'approche (v73) : dates d'étape + relance + intention.
+    teaser_sent_at: string | null;
+    nda_signed_at: string | null;
+    im_sent_at: string | null;
+    offer_received_at: string | null;
+    next_followup_at: string | null;
+    last_outreach_at: string | null;
+    intent_score: number | null;
   } | null;
+}
+
+/** Ligne de suggestion telle que lue par getAcquirerMatches (v73). */
+interface SuggestionFunnelRow {
+  id: string;
+  organization_id: string;
+  deal_id: string;
+  status: string;
+  created_at: string;
+  score_ai: number | null;
+  ai_explanation: string | null;
+  teaser_sent_at: string | null;
+  nda_signed_at: string | null;
+  im_sent_at: string | null;
+  offer_received_at: string | null;
+  next_followup_at: string | null;
+  last_outreach_at: string | null;
+  intent_score: number | null;
+  deals: { sector: string | null } | { sector: string | null }[] | null;
 }
 
 const MONTHS_24 = 24 * 30.5 * 86_400_000;
@@ -214,7 +241,7 @@ export async function getAcquirerMatches(
       .order("created_at", { ascending: false }).limit(1000),
     supabase.from("action_organizations").select("organization_id, actions(created_at)").in("organization_id", orgIds).limit(1000),
     supabase.from("deal_target_suggestions")
-      .select("id, organization_id, deal_id, status, created_at, score_ai, ai_explanation, deals(sector)")
+      .select("id, organization_id, deal_id, status, created_at, score_ai, ai_explanation, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, next_followup_at, last_outreach_at, intent_score, deals(sector)")
       .eq("user_id", user.id)
       .in("organization_id", orgIds),
   ]);
@@ -241,13 +268,9 @@ export async function getAcquirerMatches(
   const now = Date.now();
   const approaches = new Map<string, number>();
   const rejections = new Map<string, number>();
-  const dealSuggestion = new Map<string, { id: string; status: string; score_ai: number | null; ai_explanation: string | null; created_at: string }>();
+  const dealSuggestion = new Map<string, SuggestionFunnelRow>();
 
-  for (const s of (suggestionsRes.data ?? []) as Array<{
-    id: string; organization_id: string; deal_id: string; status: string;
-    created_at: string; score_ai: number | null; ai_explanation: string | null;
-    deals: { sector: string | null } | { sector: string | null }[] | null;
-  }>) {
+  for (const s of (suggestionsRes.data ?? []) as unknown as SuggestionFunnelRow[]) {
     if (["approved", "contacted"].includes(s.status) && now - new Date(s.created_at).getTime() < MONTHS_24) {
       approaches.set(s.organization_id, (approaches.get(s.organization_id) ?? 0) + 1);
     }
@@ -259,9 +282,11 @@ export async function getAcquirerMatches(
       }
     }
     if (s.deal_id === dealId) {
+      // v73 : « contacted » est un état VIVANT (début du funnel), seul
+      // rejected est archival. Aligné sur l'index unique dts_unique_active.
       const prev = dealSuggestion.get(s.organization_id);
-      const isActive = !["rejected", "contacted"].includes(s.status);
-      const prevActive = prev ? !["rejected", "contacted"].includes(prev.status) : false;
+      const isActive = s.status !== "rejected";
+      const prevActive = prev ? prev.status !== "rejected" : false;
       if (!prev || (isActive && !prevActive) || (isActive === prevActive && s.created_at > prev.created_at)) {
         dealSuggestion.set(s.organization_id, s);
       }
@@ -304,7 +329,19 @@ export async function getAcquirerMatches(
         acquirer_summary: b.acquirer_summary ?? null,
       },
       result,
-      suggestion: sug ? { id: sug.id, status: sug.status, score_ai: sug.score_ai, ai_explanation: sug.ai_explanation } : null,
+      suggestion: sug ? {
+        id: sug.id,
+        status: sug.status,
+        score_ai: sug.score_ai,
+        ai_explanation: sug.ai_explanation,
+        teaser_sent_at: sug.teaser_sent_at ?? null,
+        nda_signed_at: sug.nda_signed_at ?? null,
+        im_sent_at: sug.im_sent_at ?? null,
+        offer_received_at: sug.offer_received_at ?? null,
+        next_followup_at: sug.next_followup_at ?? null,
+        last_outreach_at: sug.last_outreach_at ?? null,
+        intent_score: sug.intent_score ?? null,
+      } : null,
     };
   });
 
@@ -349,12 +386,10 @@ export async function ensureAcquirerSuggestion(
       deal_id: dealId,
       organization_id: organizationId,
       role_suggested: "acquirer",
-      // "manual" et pas "matching" : dts_source_check (v56) n'accepte que
-      // apollo|harmonic|vibe|pappers|insee|manual|ai|portal. La valeur
-      // "matching" violait la contrainte : Approuver/Contacté/Écarter et la
-      // justification IA échouaient pour toute org sans suggestion préalable.
-      // v73 ajoutera "matching" au CHECK et cette ligne y repassera.
-      source_connector: "manual",
+      // Provenance honnête : "matching" est autorisé par dts_source_check
+      // depuis v73 (le hotfix R0 avait posé "manual" le temps que la
+      // migration soit appliquée).
+      source_connector: "matching",
       status: "suggested",
       score_algo: scoreAlgo ?? null,
     })

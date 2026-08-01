@@ -57,6 +57,16 @@ export const ORG_TYPE_SELECT_ORDER: string[] = [
   "other",
 ];
 
+// Étapes du funnel acquéreur (dérivées par lib/crm/funnel.ts).
+export const funnelStageLabels: Record<string, string> = {
+  pre_approche: "Pré-approche",
+  approuve: "Approuvé",
+  teaser_envoye: "Teaser envoyé",
+  nda_signe: "NDA signé",
+  im_envoye: "IM envoyé",
+  offre_recue: "Offre reçue",
+};
+
 // Rôles d'une organisation dans un dossier (deal_organizations.role_in_dossier).
 // Consommé par la fiche dossier et l'export PDF (qui affichait la valeur brute).
 export const roleInDossierLabels: Record<string, string> = {

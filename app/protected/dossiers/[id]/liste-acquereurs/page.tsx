@@ -11,6 +11,8 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAcquirerMatches } from "@/actions/ma-matching";
+import { computeFunnelStage } from "@/lib/crm/funnel";
+import { funnelStageLabels, organizationTypeLabels } from "@/lib/crm/labels";
 import { PrintBar } from "./print-bar";
 
 export const revalidate = 0;
@@ -18,11 +20,6 @@ export const revalidate = 0;
 const NAVY = "#192348";
 const BLUE = "#7EB3D8";
 const SERIF = "Georgia, 'Times New Roman', serif";
-
-const STATUS_LABELS: Record<string, string> = {
-  suggested: "Suggéré", approved: "Approuvé", rejected: "Écarté",
-  deferred: "Plus tard", contacted: "Contacté",
-};
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -72,7 +69,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead>
                 <tr style={{ borderBottom: `2px solid ${NAVY}` }}>
-                  {["#", "Acquéreur", "Type", "Thèse", "Score", "Statut"].map((h) => (
+                  {["#", "Acquéreur", "Type", "Thèse", "Score", "Étape"].map((h) => (
                     <th key={h} style={{ textAlign: h === "Score" ? "center" : "left", padding: "7px 8px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".06em", color: NAVY }}>
                       {h}
                     </th>
@@ -87,7 +84,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                       {m.org.name}
                       {m.org.location && <div style={{ fontSize: 11, fontWeight: 400, color: "#6B7280" }}>{m.org.location}</div>}
                     </td>
-                    <td style={{ padding: "9px 8px", color: "#4B5563" }}>{m.org.organization_type}</td>
+                    <td style={{ padding: "9px 8px", color: "#4B5563" }}>{organizationTypeLabels[m.org.organization_type] ?? m.org.organization_type}</td>
                     <td style={{ padding: "9px 8px", color: "#4B5563", maxWidth: 260 }}>
                       {m.org.acquirer_summary ?? (m.org.operation_types ?? []).join(", ") ?? ""}
                     </td>
@@ -96,7 +93,9 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                       <div style={{ fontSize: 10, color: "#9CA3AF" }}>{m.result.coverage.evaluated}/{m.result.coverage.total} critères</div>
                     </td>
                     <td style={{ padding: "9px 8px", color: "#4B5563" }}>
-                      {m.suggestion ? STATUS_LABELS[m.suggestion.status] ?? m.suggestion.status : "À qualifier"}
+                      {m.suggestion
+                        ? (m.suggestion.status === "rejected" ? "Écarté" : funnelStageLabels[computeFunnelStage(m.suggestion)])
+                        : "À qualifier"}
                     </td>
                   </tr>
                 ))}

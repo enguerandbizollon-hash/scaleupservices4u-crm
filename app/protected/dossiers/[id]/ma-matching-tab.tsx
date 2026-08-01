@@ -6,6 +6,8 @@ import {
   type AcquirerMatchView,
 } from "@/actions/ma-matching";
 import { approveSuggestion, rejectSuggestion, markSuggestionContacted } from "@/actions/suggestions";
+import { markFunnelStep, undoFunnelStep } from "@/actions/funnel";
+import type { FunnelStepKey } from "@/lib/crm/funnel";
 import { updateDealField } from "@/actions/deals";
 import type { MaMatchResult } from "@/lib/crm/ma-scoring";
 import { OPERATION_TYPES, DEAL_STANCES, DEAL_CONTEXTS } from "@/lib/crm/matching-maps";
@@ -55,6 +57,20 @@ const SUGGESTION_STATUS_META: Record<string, { label: string; bg: string; tx: st
   contacted: { label: "Contacté", bg: "#DBEAFE", tx: "#1D4ED8" },
 };
 
+// Les 4 étapes marquables du funnel d'approche (v73), dans l'ordre.
+const STEP_DEFS = [
+  { key: "teaser_envoye" as const, field: "teaser_sent_at" as const, label: "Teaser envoyé" },
+  { key: "nda_signe" as const, field: "nda_signed_at" as const, label: "NDA signé" },
+  { key: "im_envoye" as const, field: "im_sent_at" as const, label: "IM envoyé" },
+  { key: "offre_recue" as const, field: "offer_received_at" as const, label: "Offre reçue" },
+];
+
+function fmtShort(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" }).format(d);
+}
+
 function AcquirerCard({ dealId, match, onStatusChange }: {
   dealId: string;
   match: AcquirerMatchView;
@@ -66,6 +82,39 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
   const { result, org, suggestion } = match;
   const { bg, tx } = scoreColor(result.score);
   const status = suggestion?.status ?? null;
+
+  // État local du funnel, ressemé à chaque rechargement de la liste.
+  const [funnel, setFunnel] = useState({
+    id: suggestion?.id ?? null,
+    teaser_sent_at: suggestion?.teaser_sent_at ?? null,
+    nda_signed_at: suggestion?.nda_signed_at ?? null,
+    im_sent_at: suggestion?.im_sent_at ?? null,
+    offer_received_at: suggestion?.offer_received_at ?? null,
+    next_followup_at: suggestion?.next_followup_at ?? null,
+  });
+
+  async function toggleStep(step: FunnelStepKey, field: "teaser_sent_at" | "nda_signed_at" | "im_sent_at" | "offer_received_at") {
+    if (acting) return;
+    setActing(true);
+    setActionError(null);
+    let sid = funnel.id;
+    if (!sid) {
+      const ensured = await ensureAcquirerSuggestion(dealId, org.id, result.score);
+      if (!ensured.success) { setActionError(ensured.error); setActing(false); return; }
+      sid = ensured.id;
+    }
+    const already = funnel[field];
+    const res = already ? await undoFunnelStep(sid, step) : await markFunnelStep(sid, step);
+    setActing(false);
+    if (!res.success) { setActionError(res.error); return; }
+    setFunnel(f => ({
+      ...f,
+      id: sid,
+      [field]: already ? null : new Date().toISOString(),
+      next_followup_at: res.data.next_followup_at,
+    }));
+    if (!already) onStatusChange(org.id, "contacted");
+  }
 
   async function setStatus(target: "approved" | "rejected" | "contacted") {
     if (acting) return;
@@ -173,6 +222,35 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
           {expanded ? "▲ Détail" : "▼ Détail"}
         </button>
       </div>
+      {/* Le funnel d'approche : chips cliquables, la date la plus avancée
+          fait l'étape. Cliquer une étape marquée l'annule. */}
+      {(status === "approved" || status === "contacted" || funnel.teaser_sent_at || funnel.nda_signed_at || funnel.im_sent_at || funnel.offer_received_at) && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {STEP_DEFS.map(sd => {
+            const done = !!funnel[sd.field];
+            return (
+              <button key={sd.key} onClick={() => toggleStep(sd.key, sd.field)} disabled={acting}
+                title={done ? `${sd.label} le ${fmtShort(funnel[sd.field])} : cliquer pour annuler` : `Marquer : ${sd.label}`}
+                style={{
+                  padding: "3px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${done ? "#3730A3" : "var(--border)"}`,
+                  background: done ? "#EEF2FF" : "var(--surface-2)",
+                  color: done ? "#3730A3" : "var(--text-5)",
+                  opacity: acting ? 0.6 : 1,
+                }}>
+                {done ? "✓ " : ""}{sd.label}{done ? ` · ${fmtShort(funnel[sd.field])}` : ""}
+              </button>
+            );
+          })}
+          {funnel.next_followup_at && (
+            <span title="Prochaine relance proposée (le cron notifie à l'échéance)"
+              style={{ fontSize: 11, color: "#92400E", fontWeight: 600 }}>
+              Relance {fmtShort(funnel.next_followup_at)}
+            </span>
+          )}
+        </div>
+      )}
+
       {actionError && <div style={{ fontSize: 11.5, color: "#991B1B" }}>{actionError}</div>}
 
       {expanded && (
@@ -219,7 +297,22 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
 
   function handleStatusChange(orgId: string, status: string) {
     setMatches(prev => prev.map(m => m.org.id === orgId
-      ? { ...m, suggestion: { id: m.suggestion?.id ?? "", status, score_ai: m.suggestion?.score_ai ?? null, ai_explanation: m.suggestion?.ai_explanation ?? null } }
+      ? {
+          ...m,
+          suggestion: {
+            id: m.suggestion?.id ?? "",
+            status,
+            score_ai: m.suggestion?.score_ai ?? null,
+            ai_explanation: m.suggestion?.ai_explanation ?? null,
+            teaser_sent_at: m.suggestion?.teaser_sent_at ?? null,
+            nda_signed_at: m.suggestion?.nda_signed_at ?? null,
+            im_sent_at: m.suggestion?.im_sent_at ?? null,
+            offer_received_at: m.suggestion?.offer_received_at ?? null,
+            next_followup_at: m.suggestion?.next_followup_at ?? null,
+            last_outreach_at: m.suggestion?.last_outreach_at ?? null,
+            intent_score: m.suggestion?.intent_score ?? null,
+          },
+        }
       : m));
   }
 
