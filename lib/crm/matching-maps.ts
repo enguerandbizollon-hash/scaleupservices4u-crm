@@ -588,10 +588,15 @@ export const SUGGESTION_STATUSES = [
 
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number]["value"];
 
+// Aligné sur dts_role_check (migration v56) : le SQL accepte 6 rôles, le TS
+// n'en listait que 3 (un rôle investor/candidate/partner s'affichait brut).
 export const SUGGESTION_ROLES = [
-  { value: "target",    label: "Cible",        context: "ma_sell,ma_buy" },
-  { value: "acquirer",  label: "Acquéreur",    context: "ma_sell"         },
-  { value: "other",     label: "Autre",        context: "*"                },
+  { value: "target",    label: "Cible",                context: "ma_sell,ma_buy" },
+  { value: "acquirer",  label: "Acquéreur",            context: "ma_sell"         },
+  { value: "investor",  label: "Fonds",                context: "ma_sell"         },
+  { value: "candidate", label: "Candidat",             context: "*"                },
+  { value: "partner",   label: "Partenaire",           context: "*"                },
+  { value: "other",     label: "Autre",                context: "*"                },
 ] as const;
 
 export type SuggestionRole = (typeof SUGGESTION_ROLES)[number]["value"];
