@@ -6,6 +6,7 @@ import {
   type AcquirerMatchView,
 } from "@/actions/ma-matching";
 import { approveSuggestion, rejectSuggestion, markSuggestionContacted } from "@/actions/suggestions";
+import { updateDealField } from "@/actions/deals";
 import type { MaMatchResult } from "@/lib/crm/ma-scoring";
 import { OPERATION_TYPES, DEAL_STANCES, DEAL_CONTEXTS } from "@/lib/crm/matching-maps";
 import { organizationTypeLabels } from "@/lib/crm/labels";
@@ -202,6 +203,7 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [aiRunning, setAiRunning] = useState(false);
+  const [savingContext, setSavingContext] = useState(false);
   const aiBusyRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -254,30 +256,66 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
     fontFamily: "inherit", outline: "none", boxSizing: "border-box",
   };
 
+  // Éditeur inline du contexte d'opération : le renseigner ici recalcule
+  // immédiatement les 20 points « type d'opération » (même champ que le
+  // bloc specs du dossier, via updateDealField).
+  async function handleSetContext(value: string) {
+    if (!value) return;
+    setSavingContext(true);
+    const res = await updateDealField(dealId, "deal_context", value);
+    setSavingContext(false);
+    if (!res.success) { setError(res.error); return; }
+    setDealContext(value);
+    await load();
+  }
+  const contextBanner = !dealContext ? (
+    <div style={{ marginBottom: 14, padding: "10px 13px", borderRadius: 10, background: "#FEF3C7", color: "#92400E", fontSize: 12.5, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <span>Contexte d&apos;opération non renseigné : les 20 points « type d&apos;opération » ne sont pas évalués.</span>
+      <select disabled={savingContext} value="" onChange={e => handleSetContext(e.target.value)}
+        style={{ padding: "5px 9px", borderRadius: 7, border: "1px solid #F59E0B", background: "#FFFBEB", color: "#92400E", fontSize: 12.5, fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
+        <option value="">Renseigner…</option>
+        {DEAL_CONTEXTS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+      </select>
+      {savingContext && <Loader2 size={13} className="animate-spin" />}
+    </div>
+  ) : null;
+
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--text-5)" }}>Classement des acquéreurs…</div>;
   if (error) return <div style={{ padding: 24, color: "#991B1B", fontSize: 13 }}>Erreur : {error}</div>;
 
   if (matches.length === 0) return (
-    <div style={{ padding: 40, textAlign: "center" }}>
-      <div style={{ fontSize: 32, marginBottom: 12 }}>🎯</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 6 }}>
-        Aucun acquéreur dans la base
-      </div>
-      <div style={{ fontSize: 13, color: "var(--text-5)", maxWidth: 420, margin: "0 auto" }}>
-        Créez des organisations de type Acheteur, Corporate, Investisseur ou Family Office
-        et remplissez leur profil acquéreur (fourchettes, opérations pratiquées, secteurs).
+    <div style={{ padding: "20px 0" }}>
+      {contextBanner}
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🎯</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 6 }}>
+          Aucun acquéreur dans la base
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-5)", maxWidth: 460, margin: "0 auto 16px" }}>
+          Le matching score les organisations des familles acquéreurs (Acquéreur, Corporate,
+          Fonds, Repreneur individuel, Family Office). Il n&apos;y en a encore aucune : la liste
+          se remplira à mesure que la base se nourrit.
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link href="/protected/acquereurs"
+            style={{ padding: "8px 16px", borderRadius: 9, background: "#3730A3", color: "#fff", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>
+            Ouvrir la base acquéreurs
+          </Link>
+          <Link href="/protected/organisations/nouveau"
+            style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
+            Créer un acquéreur
+          </Link>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-5)", marginTop: 14 }}>
+          Depuis la prospection, le bouton « Marquer acquéreur » d&apos;une fiche alimente aussi cette base.
+        </div>
       </div>
     </div>
   );
 
   return (
     <div style={{ padding: "20px 0" }}>
-      {!dealContext && (
-        <div style={{ marginBottom: 14, padding: "9px 13px", borderRadius: 10, background: "#FEF3C7", color: "#92400E", fontSize: 12.5 }}>
-          Contexte d&apos;opération non renseigné sur le dossier (succession, MBO, build-up...) :
-          les 20 points « type d&apos;opération » ne sont pas évalués. À régler dans l&apos;onglet Dossier, bloc specs.
-        </div>
-      )}
+      {contextBanner}
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {[
