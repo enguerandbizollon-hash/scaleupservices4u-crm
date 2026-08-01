@@ -142,32 +142,6 @@ export const priorityTaskStatusLabels: Record<string, string> = {
   cancelled: "Annulée",
 };
 
-export const checklistStatusLabels: Record<string, string> = {
-  open: "À faire",
-  done: "Finalisé",
-  cancelled: "Annulé",
-};
-
-export const documentTypeLabels: Record<string, string> = {
-  pitch_deck: "Pitch deck",
-  financial_model: "Modèle financier",
-  im: "Information Memorandum",
-  teaser: "Teaser",
-  nda: "NDA",
-  legal: "Juridique",
-  finance: "Finance",
-  deck: "Deck",
-  other: "Autre",
-};
-
-export const documentStatusLabels: Record<string, string> = {
-  requested: "Demandé",
-  received: "Reçu",
-  modeled: "Modélisé",
-  finalized: "Finalisé",
-  archived: "Archivé",
-};
-
 export const agendaTypeLabels: Record<string, string> = {
   deadline: "Deadline",
   follow_up: "Relance",

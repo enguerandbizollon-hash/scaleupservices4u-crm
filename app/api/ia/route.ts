@@ -69,20 +69,6 @@ const tools: Anthropic.Tool[] = [
       required: ["deal_id", "activity_type", "title"]
     }
   },
-  {
-    name: "update_contact_status",
-    description: "Met à jour le statut d'un contact sur un dossier (pipeline).",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        deal_contact_id: { type: "string", description: "ID de la relation deal_contacts." },
-        status_in_deal: { type: "string", description: "Nouveau statut: to_contact, contacted, to_follow_up, in_discussion, meeting_done, strong_interest, waiting, no_go, partner_active." },
-        next_follow_up_at: { type: "string", description: "Date de prochaine relance YYYY-MM-DD." },
-        notes: { type: "string", description: "Notes sur ce contact." }
-      },
-      required: ["deal_contact_id", "status_in_deal"]
-    }
-  }
 ];
 
 async function executeTool(name: string, input: Record<string, string>, userId: string) {
@@ -120,9 +106,12 @@ async function executeTool(name: string, input: Record<string, string>, userId: 
   }
 
   if (name === "get_deal_detail") {
-    const [{ data: deal }, { data: contacts }, { data: openTasks }, { data: recentActs }, { data: docs }] = await Promise.all([
+    // deal_contacts et deal_documents n'existent plus (purge R0) : les
+    // contacts viennent des organisations liées au dossier, les documents
+    // de ma_documents (la table vivante depuis v49).
+    const [{ data: deal }, { data: dealOrgs }, { data: openTasks }, { data: recentActs }, { data: docs }] = await Promise.all([
       supabase.from("deals").select("id, name, deal_type, deal_status, deal_stage, description").eq("id", input.deal_id).maybeSingle(),
-      supabase.from("deal_contacts").select("id, role_in_deal, status_in_deal, next_follow_up_at, notes, contact:contacts(full_name, first_name, last_name, email, title)").eq("deal_id", input.deal_id),
+      supabase.from("deal_organizations").select("organization_id").eq("deal_id", input.deal_id),
       supabase.from("actions")
         .select("id, title, status, priority, due_date")
         .eq("deal_id", input.deal_id)
@@ -134,8 +123,22 @@ async function executeTool(name: string, input: Record<string, string>, userId: 
         .neq("type", "task")
         .order("start_datetime", { ascending: false, nullsFirst: false })
         .limit(10),
-      supabase.from("deal_documents").select("id, name, document_type, document_url").eq("deal_id", input.deal_id),
+      supabase.from("ma_documents").select("id, file_name, document_type, file_url").eq("deal_id", input.deal_id),
     ]);
+    const orgIds = (dealOrgs ?? []).map(o => o.organization_id).filter(Boolean);
+    let contacts: Array<Record<string, unknown>> = [];
+    if (orgIds.length > 0) {
+      const { data: ocs } = await supabase
+        .from("organization_contacts")
+        .select("role_label, organizations(name), contacts(full_name, first_name, last_name, email, title)")
+        .in("organization_id", orgIds);
+      contacts = (ocs ?? []).flatMap(oc => {
+        const c = Array.isArray(oc.contacts) ? oc.contacts[0] : oc.contacts;
+        const o = Array.isArray(oc.organizations) ? oc.organizations[0] : oc.organizations;
+        if (!c) return [];
+        return [{ ...c, role_label: oc.role_label, organisation: (o as { name?: string } | null)?.name ?? null }];
+      });
+    }
     // Préserver la forme historique attendue par les prompts IA :
     const tasks = (openTasks ?? []).map(t => ({
       id: t.id, title: t.title, task_status: t.status, priority_level: t.priority, due_date: t.due_date,
@@ -143,7 +146,7 @@ async function executeTool(name: string, input: Record<string, string>, userId: 
     const activities = (recentActs ?? []).map(a => ({
       id: a.id, activity_type: a.type, title: a.title, summary: a.description, activity_date: a.start_datetime ?? a.due_date,
     }));
-    return { deal, contacts: contacts ?? [], tasks, activities, docs: docs ?? [] };
+    return { deal, contacts, tasks, activities, docs: docs ?? [] };
   }
 
   if (name === "create_task") {
@@ -185,16 +188,6 @@ async function executeTool(name: string, input: Record<string, string>, userId: 
     }).select("id, title").single();
     if (error) return { error: error.message };
     return { success: true, activity: data, message: `Activité "${data.title}" enregistrée.` };
-  }
-
-  if (name === "update_contact_status") {
-    const { error } = await supabase.from("deal_contacts").update({
-      status_in_deal: input.status_in_deal,
-      next_follow_up_at: input.next_follow_up_at ?? null,
-      notes: input.notes ?? null,
-    }).eq("id", input.deal_contact_id);
-    if (error) return { error: error.message };
-    return { success: true, message: `Statut mis à jour: ${input.status_in_deal}.` };
   }
 
   return { error: "Outil inconnu." };

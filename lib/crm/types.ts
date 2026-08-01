@@ -162,40 +162,7 @@ export type OrganizationWithContacts = {
   }>;
 };
 
-export type DocumentView = {
-  id: string;
-  dealName: string;
-  name: string;
-  documentTypeLabel: string;
-  documentStatusLabel: string;
-  documentUrl: string | null;
-  versionLabel: string;
-  addedAt: string;
-  note: string;
-};
-
-export type PriorityView = {
-  id: string;
-  dealName: string;
-  title: string;
-  description: string;
-  priorityLabel: string;
-  taskStatusLabel: string;
-  dueDate: string;
-};
-
-export type ChecklistItemView = {
-  id: string;
-  label: string;
-  itemStatusLabel: string;
-  isDone: boolean;
-  dueDate: string;
-  note: string;
-};
-
-export type ChecklistGroupView = {
-  dealId: string;
-  dealName: string;
-  dealTypeLabel: string;
-  items: ChecklistItemView[];
-};
+// Les vues Documents/Checklist de l'ancien cluster /protected/documents ont
+// été supprimées avec lui (purge R0, 2026-08-01) : elles lisaient
+// deal_documents (droppée v49) et deal_checklist_items (jamais créée).
+// La checklist de pièces renaîtra proprement au chantier dataroom (plan R4).
