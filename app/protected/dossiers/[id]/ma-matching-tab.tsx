@@ -7,13 +7,14 @@ import {
 } from "@/actions/ma-matching";
 import { approveSuggestion, rejectSuggestion, markSuggestionContacted } from "@/actions/suggestions";
 import { markFunnelStep, undoFunnelStep } from "@/actions/funnel";
+import { createOutreachDraftForSuggestion, createFollowupDraftForSuggestion } from "@/actions/outreach";
 import type { FunnelStepKey } from "@/lib/crm/funnel";
 import { updateDealField } from "@/actions/deals";
 import type { MaMatchResult } from "@/lib/crm/ma-scoring";
 import { OPERATION_TYPES, DEAL_STANCES, DEAL_CONTEXTS } from "@/lib/crm/matching-maps";
 import { organizationTypeLabels } from "@/lib/crm/labels";
 import Link from "next/link";
-import { ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { ExternalLink, Sparkles, Loader2, Mail } from "lucide-react";
 
 // ── Helpers partagés ─────────────────────────────────────────────────────────
 
@@ -92,6 +93,38 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
     offer_received_at: suggestion?.offer_received_at ?? null,
     next_followup_at: suggestion?.next_followup_at ?? null,
   });
+
+  // Brouillon Gmail : initial (depuis le brief IA) tant que rien n'est
+  // parti, relance type accrochée au fil ensuite. Déposer un brouillon ne
+  // marque JAMAIS une étape : l'utilisateur envoie depuis Gmail puis clique.
+  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [draftReconnect, setDraftReconnect] = useState(false);
+  const noStepYet = !funnel.teaser_sent_at && !funnel.nda_signed_at && !funnel.im_sent_at && !funnel.offer_received_at;
+
+  async function handleDraft() {
+    if (acting) return;
+    setActing(true);
+    setActionError(null);
+    setDraftNote(null);
+    setDraftReconnect(false);
+    let sid = funnel.id;
+    if (!sid) {
+      const ensured = await ensureAcquirerSuggestion(dealId, org.id, result.score);
+      if (!ensured.success) { setActionError(ensured.error); setActing(false); return; }
+      sid = ensured.id;
+      setFunnel(f => ({ ...f, id: sid }));
+    }
+    const res = noStepYet
+      ? await createOutreachDraftForSuggestion(sid)
+      : await createFollowupDraftForSuggestion(sid);
+    setActing(false);
+    if (!res.success) {
+      setActionError(res.error);
+      setDraftReconnect(!!res.reconnect);
+      return;
+    }
+    setDraftNote("Brouillon déposé dans Gmail. Relisez, envoyez, puis marquez l'étape ici.");
+  }
 
   async function toggleStep(step: FunnelStepKey, field: "teaser_sent_at" | "nda_signed_at" | "im_sent_at" | "offer_received_at") {
     if (acting) return;
@@ -216,6 +249,13 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
         <button onClick={() => setStatus("approved")} disabled={acting} style={statusBtn("approved", "Approuver")}>Approuver</button>
         <button onClick={() => setStatus("contacted")} disabled={acting} style={statusBtn("contacted", "Contacté")}>Contacté</button>
         <button onClick={() => setStatus("rejected")} disabled={acting} style={statusBtn("rejected", "Écarter")}>Écarter</button>
+        <button onClick={handleDraft} disabled={acting}
+          title={noStepYet
+            ? "Dépose dans Gmail un brouillon d'approche pré-rempli depuis le brief IA"
+            : "Dépose dans Gmail un brouillon de relance adapté à l'étape, accroché au fil d'origine"}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", border: "1px solid #C7D2FE", background: "#EEF2FF", color: "#3730A3", opacity: acting ? 0.6 : 1 }}>
+          <Mail size={11} /> {noStepYet ? "Brouillon Gmail" : "Brouillon relance"}
+        </button>
         {acting && <Loader2 size={12} className="animate-spin" color="var(--text-5)" />}
         <button onClick={() => setExpanded(p => !p)}
           style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-4)", padding: 0, fontFamily: "inherit" }}>
@@ -251,7 +291,21 @@ function AcquirerCard({ dealId, match, onStatusChange }: {
         </div>
       )}
 
-      {actionError && <div style={{ fontSize: 11.5, color: "#991B1B" }}>{actionError}</div>}
+      {actionError && (
+        <div style={{ fontSize: 11.5, color: "#991B1B" }}>
+          {actionError}
+          {draftReconnect && (
+            <Link href="/protected/connecteurs" style={{ marginLeft: 6, color: "#1a56db", fontWeight: 700 }}>
+              Ouvrir Connecteurs
+            </Link>
+          )}
+        </div>
+      )}
+      {draftNote && (
+        <div style={{ fontSize: 11.5, color: "#065F46", background: "#ECFDF5", borderRadius: 8, padding: "5px 10px" }}>
+          {draftNote}
+        </div>
+      )}
 
       {expanded && (
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>

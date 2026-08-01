@@ -642,14 +642,24 @@ export async function generateOutreachBriefForSuggestion(
 
   if (!draft) return { success: false, error: "L'IA n'a pas pu générer de brief" };
 
-  // Sauvegarde concaténée dans outreach_brief
+  // Double écriture (v73) : le TEXT concaténé reste l'affichage
+  // copier-coller du SourcingWizard, le JSONB structuré alimente le
+  // brouillon Gmail (actions/outreach.ts) sans parsing fragile.
   const combined = `OBJET : ${draft.email_subject}\n\nEMAIL :\n${draft.email_body}\n\nLINKEDIN :\n${draft.linkedin_message}${draft.reasoning ? `\n\nAngle : ${draft.reasoning}` : ""}`;
+  const generatedAt = new Date().toISOString();
 
   await supabase
     .from("deal_target_suggestions")
     .update({
       outreach_brief: combined,
-      outreach_brief_generated_at: new Date().toISOString(),
+      outreach_brief_json: {
+        email_subject: draft.email_subject,
+        email_body: draft.email_body,
+        linkedin_message: draft.linkedin_message,
+        reasoning: draft.reasoning ?? null,
+        generated_at: generatedAt,
+      },
+      outreach_brief_generated_at: generatedAt,
     })
     .eq("id", suggestionId)
     .eq("user_id", user.id);

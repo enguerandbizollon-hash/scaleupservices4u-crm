@@ -82,38 +82,106 @@ export async function getGmailThreadPreview(
 }
 
 /**
- * Crée un brouillon Gmail.
+ * Brouillons Gmail (funnel acquéreur, plan R1 lot 3). L'outil ne POSTE
+ * jamais : il dépose un brouillon, l'utilisateur relit et envoie depuis
+ * Gmail. threadId + In-Reply-To permettent d'accrocher une relance au fil
+ * d'origine. Résultat discriminé : l'UI doit distinguer « Google non
+ * connecté » de « droits insuffisants » (reconnexion à faire depuis
+ * Connecteurs) et d'une erreur API.
  */
+export interface GmailDraftInput {
+  to: string[];
+  subject: string;
+  body: string;
+  threadId?: string | null;
+  /** Message-ID RFC822 du message auquel on répond (via getThreadLastMessageMeta). */
+  inReplyTo?: string | null;
+  references?: string | null;
+}
+
+export type GmailDraftResult =
+  | { ok: true; draftId: string; threadId: string | null }
+  | { ok: false; reason: "no_token" | "insufficient_scope" | "api_error"; detail?: string };
+
+/** Encodage RFC 2047 des en-têtes non ASCII (sujets accentués). */
+function encodeHeaderUtf8(value: string): string {
+  return /[^\x20-\x7E]/.test(value)
+    ? `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`
+    : value;
+}
+
+/** Message MIME brut (exporté pur pour les tests). text/plain volontaire. */
+export function buildRawMessage(input: GmailDraftInput): string {
+  const headers = [
+    `To: ${input.to.join(", ")}`,
+    `Subject: ${encodeHeaderUtf8(input.subject)}`,
+  ];
+  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) headers.push(`References: ${input.references}`);
+  headers.push("MIME-Version: 1.0");
+  headers.push("Content-Type: text/plain; charset=utf-8");
+  return [...headers, "", input.body].join("\r\n");
+}
+
 export async function createGmailDraft(
   userId: string,
-  draft: { to: string[]; subject: string; body: string },
+  draft: GmailDraftInput,
   client?: SupabaseClient
-): Promise<string | null> {
+): Promise<GmailDraftResult> {
   const token = await getValidToken(userId, client);
-  if (!token) return null;
+  if (!token) return { ok: false, reason: "no_token" };
 
-  const message = [
-    `To: ${draft.to.join(", ")}`,
-    `Subject: ${draft.subject}`,
-    "Content-Type: text/plain; charset=utf-8",
-    "",
-    draft.body,
-  ].join("\n");
-
-  const encoded = Buffer.from(message).toString("base64url");
+  const encoded = Buffer.from(buildRawMessage(draft), "utf8").toString("base64url");
+  const payload: { message: { raw: string; threadId?: string } } = { message: { raw: encoded } };
+  if (draft.threadId) payload.message.threadId = draft.threadId;
 
   const res = await fetch(
     "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: { raw: encoded } }),
+      body: JSON.stringify(payload),
     }
   );
 
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    return {
+      ok: false,
+      reason: res.status === 403 ? "insufficient_scope" : "api_error",
+      detail: detail.slice(0, 300),
+    };
+  }
+  const json = (await res.json()) as { id?: string; message?: { threadId?: string } };
+  if (!json.id) return { ok: false, reason: "api_error", detail: "Réponse Gmail sans id de brouillon" };
+  return { ok: true, draftId: json.id, threadId: json.message?.threadId ?? null };
+}
+
+/**
+ * Métadonnées du dernier message d'un fil (pour accrocher une relance :
+ * In-Reply-To/References + sujet d'origine). Couvert par gmail.readonly.
+ */
+export async function getThreadLastMessageMeta(
+  userId: string,
+  threadId: string,
+  client?: SupabaseClient
+): Promise<{ messageId: string; rfcMessageId: string | null; subject: string | null } | null> {
+  const token = await getValidToken(userId, client);
+  if (!token) return null;
+
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=Subject`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
   if (!res.ok) return null;
-  const json = await res.json();
-  return json.id ?? null;
+  const json = (await res.json()) as {
+    messages?: { id: string; payload?: { headers?: { name: string; value: string }[] } }[];
+  };
+  const last = json.messages?.[json.messages.length - 1];
+  if (!last) return null;
+  const header = (name: string) =>
+    last.payload?.headers?.find((x) => x.name.toLowerCase() === name.toLowerCase())?.value ?? null;
+  return { messageId: last.id, rfcMessageId: header("Message-ID"), subject: header("Subject") };
 }
 
 // =============================================================================
