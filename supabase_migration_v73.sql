@@ -32,41 +32,11 @@ CREATE INDEX IF NOT EXISTS idx_dts_next_followup
   ON deal_target_suggestions(next_followup_at)
   WHERE next_followup_at IS NOT NULL;
 
--- ── 2. « contacted » n'est plus terminal ────────────────────────────────
--- L'ancien index unique (deal_id, organization_id) WHERE status NOT IN
--- ('rejected','contacted') permettait des doublons dès qu'une approche
--- passait « contacted ». Dédup préalable SANS destruction (revue
--- adversariale 2026-08-01) : les doublons plus anciens passent en
--- « rejected » (hors index partiel) au lieu d'être supprimés, l'historique
--- d'approches reste lisible. On garde la ligne la plus récente par couple.
-WITH ranked AS (
-  SELECT id,
-         ROW_NUMBER() OVER (PARTITION BY deal_id, organization_id
-                            ORDER BY created_at DESC) AS rn
-  FROM deal_target_suggestions
-  WHERE status <> 'rejected'
-)
-UPDATE deal_target_suggestions
-   SET status = 'rejected',
-       reviewed_notes = COALESCE(reviewed_notes || ' · ', '') || 'Doublon archivé par v73 (dédup index unique)'
- WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
-
-DROP INDEX IF EXISTS dts_unique_active;
-CREATE UNIQUE INDEX IF NOT EXISTS dts_unique_active
-  ON deal_target_suggestions(deal_id, organization_id)
-  WHERE status <> 'rejected';
-
--- ── 3. Source « matching » autorisée ────────────────────────────────────
--- ensureAcquirerSuggestion (onglet Acquéreurs) retrouve sa provenance
--- honnête (hotfix R0 : la valeur violait le CHECK et cassait les boutons).
-ALTER TABLE deal_target_suggestions DROP CONSTRAINT IF EXISTS dts_source_check;
-ALTER TABLE deal_target_suggestions ADD CONSTRAINT dts_source_check
-  CHECK (source_connector IN ('apollo','harmonic','vibe','pappers','insee','manual','ai','portal','matching'));
-
--- ── 4. Journal d'événements append-only ─────────────────────────────────
+-- ── 2. Journal d'événements append-only ─────────────────────────────────
 -- reviewed_* est écrasé à chaque transition : cette table est le seul
 -- historique durable du funnel. Écrite par les Server Actions, jamais
--- mise à jour ni supprimée.
+-- mise à jour ni supprimée. Créée AVANT la dédup : elle recueille le
+-- contenu des doublons fusionnés (section 3).
 CREATE TABLE IF NOT EXISTS deal_suggestion_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -94,6 +64,64 @@ DO $$ BEGIN
     FOR ALL USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ── 3. « contacted » n'est plus terminal ────────────────────────────────
+-- L'ancien index unique (deal_id, organization_id) WHERE status NOT IN
+-- ('rejected','contacted') laissait coexister une ligne « contacted » et
+-- une re-suggestion plus récente. Le nouvel index n'exclut que
+-- « rejected » : il faut donc dédoublonner d'abord.
+--
+-- Deux précautions (revue adversariale 2026-08-01) :
+--  a) on garde la ligne PORTEUSE D'HISTORIQUE (contacted d'abord, puis la
+--     plus récemment revue), pas simplement la plus récente : c'est elle
+--     qui détient reviewed_*, outreach_brief et les dates d'approche.
+--  b) le contenu intégral des lignes fusionnées est archivé en JSON dans
+--     le journal AVANT suppression, rattaché à la ligne survivante.
+-- On ne bascule PAS les doublons en « rejected » : ils compteraient à tort
+-- comme des refus dans le malus « rejets similaires » du scoring
+-- (actions/ma-matching.ts, préférences révélées).
+WITH ranked AS (
+  SELECT id, deal_id, organization_id, user_id,
+         ROW_NUMBER() OVER (
+           PARTITION BY deal_id, organization_id
+           ORDER BY (status = 'contacted') DESC, reviewed_at DESC NULLS LAST, created_at DESC
+         ) AS rn
+  FROM deal_target_suggestions
+  WHERE status <> 'rejected'
+),
+winners AS (SELECT deal_id, organization_id, id FROM ranked WHERE rn = 1),
+losers  AS (SELECT id, deal_id, organization_id, user_id FROM ranked WHERE rn > 1)
+INSERT INTO deal_suggestion_events (user_id, suggestion_id, deal_id, organization_id, event_type, notes, metadata)
+SELECT l.user_id, w.id, l.deal_id, l.organization_id, 'note',
+       'Dédup v73 : doublon fusionné dans la suggestion survivante',
+       to_jsonb(d.*)
+FROM losers l
+JOIN winners w ON w.deal_id = l.deal_id AND w.organization_id = l.organization_id
+JOIN deal_target_suggestions d ON d.id = l.id;
+
+WITH ranked AS (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY deal_id, organization_id
+           ORDER BY (status = 'contacted') DESC, reviewed_at DESC NULLS LAST, created_at DESC
+         ) AS rn
+  FROM deal_target_suggestions
+  WHERE status <> 'rejected'
+)
+DELETE FROM deal_target_suggestions
+ WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
+
+DROP INDEX IF EXISTS dts_unique_active;
+CREATE UNIQUE INDEX IF NOT EXISTS dts_unique_active
+  ON deal_target_suggestions(deal_id, organization_id)
+  WHERE status <> 'rejected';
+
+-- ── 4. Source « matching » autorisée ────────────────────────────────────
+-- ensureAcquirerSuggestion (onglet Acquéreurs) retrouve sa provenance
+-- honnête (hotfix R0 : la valeur violait le CHECK et cassait les boutons).
+ALTER TABLE deal_target_suggestions DROP CONSTRAINT IF EXISTS dts_source_check;
+ALTER TABLE deal_target_suggestions ADD CONSTRAINT dts_source_check
+  CHECK (source_connector IN ('apollo','harmonic','vibe','pappers','insee','manual','ai','portal','matching'));
 
 COMMIT;
 
