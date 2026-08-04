@@ -56,7 +56,9 @@ export default async function CeMatinPage() {
   const supabase = await createClient();
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  // Date CIVILE Paris, pas UTC : entre minuit et 2 h, toISOString() rendait
+  // encore la veille et « la journée » affichait celle d'hier (revue).
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(now);
   const yesterdayIso = new Date(Date.now() - 86_400_000).toISOString();
   const sevenDaysIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const cutoff15 = new Date(Date.now() - 15 * 86_400_000).toISOString().slice(0, 10);
@@ -106,7 +108,10 @@ export default async function CeMatinPage() {
     supabase.from("fee_milestones").select("id", { count: "exact", head: true })
       .eq("status", "pending").lt("due_date", cutoff30Fees),
     supabase.from("deals").select("id,name,created_at").eq("deal_status", "open"),
-    supabase.from("cron_runs").select("job,started_at,finished_at,ok").order("started_at", { ascending: false }).limit(30),
+    // Filtré sur les DEUX jobs affichés : le cron notifications (horaire)
+    // évincait sinon les veilles quotidiennes de la fenêtre et le bandeau
+    // affichait « jamais passée » le week-end (revue adversariale).
+    supabase.from("cron_runs").select("job,started_at,finished_at,ok").in("job", ["bodacc-ingest", "veille-profils"]).order("started_at", { ascending: false }).limit(30),
     getFeesKpis(),
   ]);
 
