@@ -27,7 +27,7 @@ function fmt(v:string|null) {
 }
 function daysSince(v:string) { return Math.floor((Date.now()-new Date(v).getTime())/86400000); }
 
-async function Content() {
+async function Content({ sansActivite = false }: { sansActivite?: boolean }) {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
 
@@ -132,11 +132,18 @@ async function Content() {
     orgCountByDeal[o.deal_id] = (orgCountByDeal[o.deal_id] ?? 0) + 1;
   }
 
-  const open    = deals.filter(d => d.deal_status === "open");
-  const paused  = deals.filter(d => d.deal_status === "paused");
-  const won     = deals.filter(d => d.deal_status === "won");
-  const lost    = deals.filter(d => d.deal_status === "lost");
-  const dormantCount = open.filter(d => isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status, d.created_at)).length;
+  const estSansActivite = (d: { id: string; deal_status: string; created_at: string | null }) =>
+    isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status, d.created_at);
+
+  const openTous = deals.filter(d => d.deal_status === "open");
+  const dormantCount = openTous.filter(estSansActivite).length;
+
+  // ?filtre=sans_activite : la tuile « Mandats sans activité » de la revue
+  // du matin doit montrer EXACTEMENT la population qu'elle compte.
+  const open    = sansActivite ? openTous.filter(estSansActivite) : openTous;
+  const paused  = sansActivite ? [] : deals.filter(d => d.deal_status === "paused");
+  const won     = sansActivite ? [] : deals.filter(d => d.deal_status === "won");
+  const lost    = sansActivite ? [] : deals.filter(d => d.deal_status === "lost");
   const closed  = [...won, ...lost]; // affichés ensemble en grisé
   const types   = ["ma_sell","ma_buy"];
   const groups  = types.map(t => ({
@@ -153,13 +160,24 @@ async function Content() {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
         <div>
           <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>Mandats</h1>
-          <div style={{ display:"flex", gap:8, marginTop:6 }}>
+          <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center", flexWrap:"wrap" }}>
+            {sansActivite ? (
+              <>
+                <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#FEE2E2", color:"#991B1B", fontWeight:700 }}>
+                  {open.length} sans activité depuis {DORMANT_THRESHOLD_DAYS} jours
+                </span>
+                <Link href="/protected/dossiers" style={{ fontSize:12, color:"var(--text-4)", textDecoration:"none" }}>✕ voir tous les mandats</Link>
+              </>
+            ) : (
+              <>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{deals.length} total</span>
             <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--fund-bg)", color:"var(--fund-tx)", fontWeight:600 }}>{open.length} en cours</span>
             {dormantCount > 0 && <span title={`Dossiers ouverts sans aucune activité enregistrée depuis ${DORMANT_THRESHOLD_DAYS} jours ou plus. Enregistrez une action (appel, note, tâche) pour les réveiller.`} style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#FEE2E2", color:"#991B1B", fontWeight:700 }}>⚠ {dormantCount} sans activité</span>}
             {paused.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-4)", fontWeight:600 }}>{paused.length} en pause</span>}
             {won.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#D1FAE5", color:"#065F46", fontWeight:600 }}>{won.length} gagné{won.length !== 1 ? "s" : ""}</span>}
             {lost.length > 0 && <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-5)", fontWeight:600 }}>{lost.length} perdu{lost.length !== 1 ? "s" : ""}</span>}
+              </>
+            )}
           </div>
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
@@ -430,14 +448,14 @@ async function KanbanContent() {
 }
 
 export default async function DossiersPage({ searchParams }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; filtre?: string }>;
 }) {
-  const { view } = await searchParams;
+  const { view, filtre } = await searchParams;
   const isKanban = view === "kanban";
 
   return (
     <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
-      {isKanban ? <KanbanContent/> : <Content/>}
+      {isKanban ? <KanbanContent/> : <Content sansActivite={filtre === "sans_activite"}/>}
     </Suspense>
   );
 }

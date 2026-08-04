@@ -161,7 +161,7 @@ export default async function CeMatinPage() {
     { n: entrees7j.count ?? 0, label: "Entrées 7 j", sub: "nouvelles fiches dans l'univers", href: "/protected/prospection?filtre=entrees7j&tri=recent", color: "#0F766E", icon: <Radar size={13} /> },
     { n: signauxUnread.count ?? 0, label: "Signaux non lus", sub: "BODACC, RGE, recrutements...", href: "/protected/signaux?nonlus=1", color: "#B45309", icon: <Radar size={13} /> },
     { n: overdueTasksRes.count ?? 0, label: "Tâches en retard", sub: "à rattraper ou requalifier", href: "/protected/taches", color: "#DC2626", icon: <AlertTriangle size={13} /> },
-    { n: sansActivite, label: "Mandats sans activité", sub: "ouverts, rien depuis 21 jours", href: "/protected/dossiers", color: "#7E57C2", icon: <FolderOpen size={13} /> },
+    { n: sansActivite, label: "Mandats sans activité", sub: "ouverts, rien depuis 21 jours", href: "/protected/dossiers?filtre=sans_activite", color: "#7E57C2", icon: <FolderOpen size={13} /> },
   ];
 
   return (
