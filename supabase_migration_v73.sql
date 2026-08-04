@@ -35,8 +35,10 @@ CREATE INDEX IF NOT EXISTS idx_dts_next_followup
 -- ── 2. « contacted » n'est plus terminal ────────────────────────────────
 -- L'ancien index unique (deal_id, organization_id) WHERE status NOT IN
 -- ('rejected','contacted') permettait des doublons dès qu'une approche
--- passait « contacted ». Dédup préalable (DB de test : on garde la ligne
--- la plus récente par couple, hors rejected), puis index resserré.
+-- passait « contacted ». Dédup préalable SANS destruction (revue
+-- adversariale 2026-08-01) : les doublons plus anciens passent en
+-- « rejected » (hors index partiel) au lieu d'être supprimés, l'historique
+-- d'approches reste lisible. On garde la ligne la plus récente par couple.
 WITH ranked AS (
   SELECT id,
          ROW_NUMBER() OVER (PARTITION BY deal_id, organization_id
@@ -44,7 +46,9 @@ WITH ranked AS (
   FROM deal_target_suggestions
   WHERE status <> 'rejected'
 )
-DELETE FROM deal_target_suggestions
+UPDATE deal_target_suggestions
+   SET status = 'rejected',
+       reviewed_notes = COALESCE(reviewed_notes || ' · ', '') || 'Doublon archivé par v73 (dédup index unique)'
  WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
 DROP INDEX IF EXISTS dts_unique_active;
