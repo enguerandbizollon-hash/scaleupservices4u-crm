@@ -490,22 +490,19 @@ export async function markUniversAsAcquirer(
   if ("error" in ensured) return { success: false, error: ensured.error };
 
   // Organisation déjà existante : requalifier seulement si elle est restée
-  // en "other", jamais écraser un type métier posé à la main.
+  // en "other", jamais écraser un type métier posé à la main. La condition
+  // est DANS le WHERE (check-and-set atomique) : un type posé entre-temps
+  // par le formulaire ne peut plus être écrasé (revue : TOCTOU).
   let requalifiee = false;
   if (!ensured.created) {
-    const { data: org } = await supabase
+    const { data: upgraded, error: upErr } = await supabase
       .from("organizations")
-      .select("organization_type")
+      .update({ organization_type: "corporate" })
       .eq("id", ensured.orgId)
-      .maybeSingle();
-    if (org && (org.organization_type === "other" || org.organization_type == null)) {
-      const { error: upErr } = await supabase
-        .from("organizations")
-        .update({ organization_type: "corporate" })
-        .eq("id", ensured.orgId);
-      if (upErr) return { success: false, error: upErr.message };
-      requalifiee = true;
-    }
+      .or("organization_type.eq.other,organization_type.is.null")
+      .select("id");
+    if (upErr) return { success: false, error: upErr.message };
+    requalifiee = (upgraded?.length ?? 0) > 0;
   }
 
   const { error: linkErr } = await supabase
