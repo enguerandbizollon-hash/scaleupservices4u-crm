@@ -246,6 +246,12 @@ export async function getAcquirerMatches(
       .in("organization_id", orgIds),
   ]);
 
+  // Un schéma manquant (v73 pas appliquée) doit se voir au CHARGEMENT de
+  // l'onglet, pas au premier geste funnel (revue adversariale).
+  if (suggestionsRes.error) {
+    return { matches: [], deal_context: dealRow.deal_context ?? null, error: suggestionsRes.error.message };
+  }
+
   const contactCount = new Map<string, number>();
   for (const c of contactsRes.data ?? []) {
     contactCount.set(c.organization_id, (contactCount.get(c.organization_id) ?? 0) + 1);

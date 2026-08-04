@@ -383,6 +383,9 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
   const [showAll, setShowAll] = useState(false);
   const [aiRunning, setAiRunning] = useState(false);
   const [savingContext, setSavingContext] = useState(false);
+  // Erreur du geste ponctuel « renseigner le contexte » : locale au bandeau,
+  // jamais via setError global qui remplacerait toute la liste (revue).
+  const [contextError, setContextError] = useState<string | null>(null);
   const aiBusyRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -456,9 +459,10 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
   async function handleSetContext(value: string) {
     if (!value) return;
     setSavingContext(true);
+    setContextError(null);
     const res = await updateDealField(dealId, "deal_context", value);
     setSavingContext(false);
-    if (!res.success) { setError(res.error); return; }
+    if (!res.success) { setContextError(res.error); return; }
     setDealContext(value);
     await load();
   }
@@ -471,6 +475,7 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
         {DEAL_CONTEXTS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
       </select>
       {savingContext && <Loader2 size={13} className="animate-spin" />}
+      {contextError && <span style={{ color: "#991B1B", fontWeight: 600 }}>{contextError}</span>}
     </div>
   ) : null;
 
