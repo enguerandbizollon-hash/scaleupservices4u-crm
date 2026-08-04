@@ -223,15 +223,15 @@ export function DealsKanban({ deals: initialDeals, lastActivityByDeal = {} }: Pr
       {/* Header + actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>Dossiers — Kanban</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>Mandats, vue kanban</h1>
           <div style={{ fontSize: 12.5, color: "var(--text-5)", marginTop: 4 }}>
-            {totalShown} dossier{totalShown > 1 ? "s" : ""} affiché{totalShown > 1 ? "s" : ""}
+            {totalShown} mandat{totalShown > 1 ? "s" : ""} affiché{totalShown > 1 ? "s" : ""}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <ViewToggle current="kanban" />
           <Link href="/protected/dossiers/nouveau" style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, background: "#1a56db", color: "#fff", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}>
-            <Plus size={14}/> Nouveau dossier
+            <Plus size={14}/> Nouveau mandat
           </Link>
         </div>
       </div>

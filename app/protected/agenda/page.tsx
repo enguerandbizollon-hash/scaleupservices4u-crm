@@ -860,7 +860,7 @@ export default function AgendaPage() {
               marginBottom: 12,
             }}
           >
-            <ArrowLeft size={13} /> Dashboard
+            <ArrowLeft size={13} /> Ce matin
           </Link>
 
           <div

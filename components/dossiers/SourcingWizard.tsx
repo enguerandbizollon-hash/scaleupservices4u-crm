@@ -105,7 +105,7 @@ const ACTOR_TYPE_OPTIONS: Array<{ value: ActorType; label: string }> = [
   { value: "growth_equity",       label: "Growth Equity" },
   { value: "venture_capital",     label: "Venture Capital" },
   { value: "family_office",       label: "Family Office" },
-  { value: "business_angel",      label: "Business Angel" },
+  { value: "business_angel",      label: "Repreneur individuel" },
   { value: "search_fund",         label: "Search Fund" },
   { value: "individual_acquirer", label: "Acquéreur individuel" },
   { value: "investment_bank",     label: "Banque d'affaires" },
