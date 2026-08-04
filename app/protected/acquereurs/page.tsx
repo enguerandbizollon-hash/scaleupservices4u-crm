@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Handshake, Plus, ChevronRight, FolderOpen } from "lucide-react";
-import { ACQUIRER_BUYER_TYPES } from "@/lib/crm/acquirer-scoring";
+import { ACQUIRER_BUYER_TYPES, ACQUIRER_ACTIVE_STATUSES } from "@/lib/crm/acquirer-scoring";
 import { organizationTypeLabels } from "@/lib/crm/labels";
 import { OPERATION_TYPES, DEAL_STANCES } from "@/lib/crm/matching-maps";
 
@@ -25,6 +25,7 @@ type AcqRow = {
   target_revenue_max: number | null;
   target_ebitda_min: number | null;
   target_ebitda_max: number | null;
+  target_geographies: string[] | null;
   operation_types: string[] | null;
   deal_stance: string | null;
   acquirer_summary: string | null;
@@ -37,7 +38,9 @@ const fmtM = (v: number | null) => {
   return `${v} €`;
 };
 
-/** Les 4 critères que la grille de scoring sait exploiter. */
+/** Les 5 axes de la grille de scoring qui dépendent du profil saisi. */
+const CRITERES_PROFIL = 5;
+
 function completude(o: AcqRow): { rempli: number; manques: string[] } {
   const manques: string[] = [];
   if (o.target_ebitda_min == null && o.target_ebitda_max == null && o.target_revenue_min == null && o.target_revenue_max == null) {
@@ -46,7 +49,9 @@ function completude(o: AcqRow): { rempli: number; manques: string[] } {
   if (!o.target_sectors || o.target_sectors.length === 0) manques.push("secteurs cibles");
   if (!o.operation_types || o.operation_types.length === 0) manques.push("opérations pratiquées");
   if (!o.deal_stance) manques.push("posture majoritaire/minoritaire");
-  return { rempli: 4 - manques.length, manques };
+  // La géographie vaut 10 points de la grille : sans elle, « complet » mentait.
+  if (!o.target_geographies || o.target_geographies.length === 0) manques.push("géographies cibles");
+  return { rempli: CRITERES_PROFIL - manques.length, manques };
 }
 
 async function Content() {
@@ -55,7 +60,7 @@ async function Content() {
   const [acqRes, dealsRes] = await Promise.all([
     supabase
       .from("organizations")
-      .select("id,name,organization_type,sector,location,base_status,target_sectors,target_revenue_min,target_revenue_max,target_ebitda_min,target_ebitda_max,operation_types,deal_stance,acquirer_summary")
+      .select("id,name,organization_type,sector,location,base_status,target_sectors,target_revenue_min,target_revenue_max,target_ebitda_min,target_ebitda_max,target_geographies,operation_types,deal_stance,acquirer_summary")
       .in("organization_type", ACQUIRER_BUYER_TYPES)
       .order("name", { ascending: true }),
     supabase
@@ -69,8 +74,10 @@ async function Content() {
   const acquereurs = (acqRes.data ?? []) as AcqRow[];
   const mandats = dealsRes.data ?? [];
 
-  const actifs = acquereurs.filter(a => !["inactive", "excluded"].includes(a.base_status ?? ""));
-  const complets = actifs.filter(a => completude(a).rempli === 4).length;
+  // « Actifs » = exactement ce que le matching sélectionne (source unique),
+  // sinon la page annonce des acquéreurs que le classement n'évalue jamais.
+  const actifs = acquereurs.filter(a => ACQUIRER_ACTIVE_STATUSES.includes(a.base_status ?? ""));
+  const complets = actifs.filter(a => completude(a).rempli === CRITERES_PROFIL).length;
   const parFamille = ACQUIRER_BUYER_TYPES
     .map(t => ({ type: t, n: actifs.filter(a => a.organization_type === t).length }))
     .filter(f => f.n > 0);
@@ -94,7 +101,7 @@ async function Content() {
               « Marquer acquéreur » en prospection, approbation d&apos;une suggestion de sourcing, création manuelle.
             </p>
           </div>
-          <Link href="/protected/organisations/nouveau"
+          <Link href="/protected/organisations/nouveau?type=buyer"
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, background: "#3730A3", color: "#fff", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}>
             <Plus size={14} /> Nouvel acquéreur
           </Link>
@@ -109,7 +116,7 @@ async function Content() {
           <div style={{ ...card, padding: "10px 14px" }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: complets > 0 ? "#065F46" : "#B45309" }}>{complets}</div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>Profils complets</div>
-            <div style={{ fontSize: 10.5, color: "var(--text-5)" }}>les 4 critères de la grille remplis</div>
+            <div style={{ fontSize: 10.5, color: "var(--text-5)" }}>les {CRITERES_PROFIL} critères de la grille remplis</div>
           </div>
           {parFamille.map(f => (
             <div key={f.type} style={{ ...card, padding: "10px 14px" }}>
@@ -156,7 +163,7 @@ async function Content() {
               dans l&apos;onglet Sourcing d&apos;un mandat, ou créer l&apos;organisation à la main
               et remplir son profil acquéreur.
             </div>
-            <Link href="/protected/organisations/nouveau"
+            <Link href="/protected/organisations/nouveau?type=buyer"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, background: "#3730A3", color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
               <Plus size={14} /> Créer le premier acquéreur
             </Link>
@@ -180,9 +187,10 @@ async function Content() {
                       <span style={{ fontSize: 10.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20, background: "#EEF2FF", color: "#3730A3" }}>
                         {organizationTypeLabels[o.organization_type] ?? o.organization_type}
                       </span>
-                      {["inactive", "excluded"].includes(o.base_status ?? "") && (
-                        <span style={{ fontSize: 10.5, fontWeight: 600, padding: "1px 8px", borderRadius: 20, background: "var(--surface-3)", color: "var(--text-5)" }}>
-                          Inactif (hors matching)
+                      {!ACQUIRER_ACTIVE_STATUSES.includes(o.base_status ?? "") && (
+                        <span title="Statut hors du périmètre du matching : ce profil n'est jamais scoré contre vos mandats."
+                          style={{ fontSize: 10.5, fontWeight: 600, padding: "1px 8px", borderRadius: 20, background: "var(--surface-3)", color: "var(--text-5)" }}>
+                          Hors matching
                         </span>
                       )}
                     </div>
@@ -201,7 +209,7 @@ async function Content() {
                       {stance && <span>{stance}</span>}
                     </div>
                   </div>
-                  {c.rempli === 4 ? (
+                  {c.rempli === CRITERES_PROFIL ? (
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: "#D1FAE5", color: "#065F46", flexShrink: 0 }}>
                       Profil complet
                     </span>
@@ -209,7 +217,7 @@ async function Content() {
                     <Link href={`/protected/organisations/${o.id}/modifier`}
                       title={`Manque : ${c.manques.join(", ")}`}
                       style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: "#FEF3C7", color: "#92400E", textDecoration: "none", flexShrink: 0 }}>
-                      À compléter ({c.rempli}/4)
+                      À compléter ({c.rempli}/{CRITERES_PROFIL})
                     </Link>
                   )}
                 </div>

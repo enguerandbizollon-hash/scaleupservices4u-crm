@@ -10,6 +10,7 @@ import {
 import {
   scoreAcquirer,
   ACQUIRER_BUYER_TYPES,
+  ACQUIRER_ACTIVE_STATUSES,
   type AcquirerScoreResult,
   type AcquirerOrgInput,
 } from "@/lib/crm/acquirer-scoring";
@@ -96,7 +97,7 @@ export async function getMaBuyerMatches(
     .in("organization_type", BUYER_TYPES);
 
   if (!includeInactive) {
-    query = query.in("base_status", ["active", "to_qualify", "qualified", "priority"]);
+    query = query.in("base_status", ACQUIRER_ACTIVE_STATUSES);
   }
 
   const { data: buyers, error: buyersErr } = await query;
@@ -227,7 +228,7 @@ export async function getAcquirerMatches(
     .eq("user_id", user.id)
     .in("organization_type", ACQUIRER_BUYER_TYPES);
   if (!includeInactive) {
-    query = query.in("base_status", ["active", "to_qualify", "qualified", "priority"]);
+    query = query.in("base_status", ACQUIRER_ACTIVE_STATUSES);
   }
   const { data: buyers, error: buyersErr } = await query;
   if (buyersErr) return { matches: [], deal_context: null, error: buyersErr.message };

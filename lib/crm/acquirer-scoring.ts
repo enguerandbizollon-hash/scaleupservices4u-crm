@@ -101,6 +101,15 @@ export interface AcquirerScoreResult {
 
 export const ACQUIRER_BUYER_TYPES = ["buyer", "corporate", "investor", "business_angel", "family_office"];
 
+/**
+ * Statuts d'organisation retenus par le matching. SOURCE UNIQUE : la page
+ * Acquéreurs doit compter « actifs » exactement comme getAcquirerMatches
+ * sélectionne, sinon le compteur annonce des acquéreurs que le classement
+ * n'évalue jamais (revue adversariale). 'qualified' et 'priority' sont des
+ * valeurs héritées encore présentes en base.
+ */
+export const ACQUIRER_ACTIVE_STATUSES = ["active", "to_qualify", "qualified", "priority"];
+
 /** Facteur d'éliminatoire taille : au-delà de x3 la fourchette déclarée. */
 export const SIZE_BREAKER_FACTOR = 3;
 
