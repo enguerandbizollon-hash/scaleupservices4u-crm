@@ -48,6 +48,19 @@ export const organizationTypeLabels: Record<string, string> = {
   third_party: "Tiers",
 };
 
+// Types qui portent un PROFIL ENTREPRISE (secteur, effectif, ancienneté,
+// tranche de CA). SOURCE UNIQUE : le formulaire écrit ces colonnes et la
+// fiche les affiche pour exactement la même liste. Deux listes divergentes
+// faisaient disparaître de la fiche des données pourtant enregistrées
+// (revue adversariale 2026-08-01). Les valeurs historiques 'prospect' et
+// 'third_party' y figurent : sans elles, leur save remettait tout à null.
+export const COMPANY_PROFILE_TYPES: string[] = [
+  "client", "prospect_client", "target",
+  "buyer", "corporate", "investor", "business_angel", "family_office",
+  "bank", "advisor", "law_firm", "accounting_firm", "consulting_firm",
+  "other", "prospect", "third_party",
+];
+
 // Ordre canonique des types dans les sélecteurs (annuaire d'abord,
 // familles acquéreurs ensuite, tiers de confiance enfin).
 export const ORG_TYPE_SELECT_ORDER: string[] = [

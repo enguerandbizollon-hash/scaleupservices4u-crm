@@ -11,10 +11,9 @@ import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
 import { OrganisationAddressBlock } from "@/components/organisations/OrganisationAddressBlock";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
-import { organizationTypeLabels, dealTypeLabels } from "@/lib/crm/labels";
+import { organizationTypeLabels, dealTypeLabels, COMPANY_PROFILE_TYPES } from "@/lib/crm/labels";
 
 import { ACQUIRER_BUYER_TYPES } from "@/lib/crm/acquirer-scoring";
-const COMPANY_PROFILE_TYPES = ["client","prospect_client","target","buyer","bank","advisor","law_firm","accounting_firm","consulting_firm","other"];
 
 const fmtRevenue = (v: number | null) => {
   if (!v) return null;

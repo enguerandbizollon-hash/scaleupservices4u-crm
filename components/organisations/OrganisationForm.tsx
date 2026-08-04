@@ -10,17 +10,13 @@ import { MaBuyerFields, type MaBuyerData } from "./MaBuyerFields";
 import { AcquirerProfileFields, type AcquirerProfileData } from "./AcquirerProfileFields";
 import { createOrganisationAction, updateOrganisationAction } from "@/actions/organisations";
 import { ACQUIRER_BUYER_TYPES } from "@/lib/crm/acquirer-scoring";
+import { COMPANY_PROFILE_TYPES } from "@/lib/crm/labels";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import { DedupAlert } from "./DedupAlert";
 
-// Types qui affichent le profil entreprise. Les fonds y figurent aussi :
-// le save écrase toute colonne absente du bloc affiché, donc exclure un type
-// revenait à effacer secteur/effectif au premier enregistrement (piège audit).
-const COMPANY_PROFILE_TYPES = [
-  "client", "prospect_client", "target", "buyer", "corporate",
-  "investor", "business_angel", "family_office",
-  "bank", "advisor", "law_firm", "accounting_firm", "consulting_firm", "other",
-];
+// Types qui affichent le profil entreprise : source unique lib/crm/labels.ts,
+// partagée avec la fiche organisation (le save écrase toute colonne absente
+// du bloc affiché, les deux listes doivent être identiques).
 
 // ── Types ─────────────────────────────────────────────────────────────
 
