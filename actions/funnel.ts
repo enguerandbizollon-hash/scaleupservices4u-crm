@@ -140,6 +140,13 @@ export async function markFunnelStep(suggestionId: string, step: FunnelStepKey):
 /**
  * Annule une étape marquée par erreur : efface la date, recale la relance
  * sur l'étape restante (à partir de SA date), journalise l'annulation.
+ *
+ * Un misclick doit être ENTIÈREMENT réversible (revue adversariale
+ * 2026-08-01) : markFunnelStep force status='contacted' et écrase donc
+ * 'approved'. Quand l'annulation ne laisse plus aucune étape, on restaure
+ * le statut d'avant le marquage, lu dans le journal (from_status), sinon
+ * la suggestion resterait « approche partie » alors que rien n'est parti.
+ * Même logique pour last_outreach_at : effacé si plus aucun geste sortant.
  */
 export async function undoFunnelStep(suggestionId: string, step: FunnelStepKey): Promise<FunnelResult> {
   const stepDef = FUNNEL_STEPS.find(x => x.key === step);
@@ -155,16 +162,55 @@ export async function undoFunnelStep(suggestionId: string, step: FunnelStepKey):
   const stageDate = stageDef ? merged[stageDef.field] : null;
   const nextFollowup = stageDate ? defaultNextFollowup(stage, new Date(stageDate)) : null;
 
+  const updates: Record<string, unknown> = {
+    [stepDef.field]: null,
+    next_followup_at: nextFollowup,
+  };
+
+  const plusAucuneEtape = FUNNEL_STEPS.every(x => !merged[x.field]);
+  const plusAucunGesteSortant = FUNNEL_STEPS
+    .filter(x => isOutboundStep(x.key))
+    .every(x => !merged[x.field]);
+
+  if (plusAucunGesteSortant) updates.last_outreach_at = null;
+
+  // Statut d'avant le marquage : journalisé par markFunnelStep (from_status).
+  let statutRestaure: string | null = null;
+  if (plusAucuneEtape && s.status === "contacted") {
+    const { data: ev } = await supabase
+      .from("deal_suggestion_events")
+      .select("from_status")
+      .eq("suggestion_id", suggestionId)
+      .eq("event_type", stepDef.event)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const from = (ev as { from_status?: string | null } | null)?.from_status ?? null;
+    if (from && from !== "contacted") {
+      updates.status = from;
+      statutRestaure = from;
+    }
+  }
+
   const { error } = await supabase
     .from("deal_target_suggestions")
-    .update({ [stepDef.field]: null, next_followup_at: nextFollowup })
+    .update(updates)
     .eq("id", suggestionId)
     .eq("user_id", userId);
   if (error) return { success: false, error: error.message };
 
   await logEvent(supabase, userId, s, "note", {
     notes: `Étape annulée : ${step}`,
+    from_status: s.status,
+    to_status: statutRestaure ?? s.status,
     metadata: { undo: step, next_followup_at: nextFollowup },
+  });
+
+  // L'intention se recalcule sur l'état après annulation.
+  await computeAndPersistIntent(supabase, userId, {
+    ...merged,
+    last_outreach_at: plusAucunGesteSortant ? null : s.last_outreach_at,
+    status: statutRestaure ?? s.status,
   });
 
   revalidateFunnel(s.deal_id);
