@@ -33,6 +33,7 @@ import {
   classifyEmailWithAI,
   type ActiveDealCandidate,
 } from "@/lib/ai/email-classifier";
+import { refreshIntentForThreads } from "@/lib/crm/intent-ingest";
 
 // =============================================================================
 // Types
@@ -44,6 +45,8 @@ export interface GmailIngestResult {
   created_actions: number;
   needs_review: number;
   ignored: number;
+  /** Suggestions dont la chaleur (score d'intention) a été recalculée. */
+  intent_refreshed: number;
   errors: string[];
 }
 
@@ -359,6 +362,7 @@ export async function syncGmailForUser(
     created_actions: 0,
     needs_review: 0,
     ignored: 0,
+    intent_refreshed: 0,
     errors: [],
   };
 
@@ -427,6 +431,7 @@ export async function syncGmailForUser(
   const candidates = await loadActiveDeals(admin, userId);
 
   // 4. Boucle de traitement
+  const touchedThreads = new Set<string>();
   for (const ref of fresh) {
     try {
       const parsed = await getGmailMessage(userId, ref.id, admin);
@@ -462,11 +467,25 @@ export async function syncGmailForUser(
         ignore_reason: outcome.ignore_reason ?? null,
       });
 
-      if (outcome.status === "processed") result.created_actions++;
-      else if (outcome.status === "ignored") result.ignored++;
+      if (outcome.status === "processed") {
+        result.created_actions++;
+        touchedThreads.add(parsed.threadId);
+      } else if (outcome.status === "ignored") result.ignored++;
       if (outcome.needs_review) result.needs_review++;
     } catch (err) {
       result.errors.push(`msg ${ref.id}: ${err instanceof Error ? err.message : "erreur"}`);
+    }
+  }
+
+  // 4b. Rafraîchir l'intention des acquéreurs dont le fil vient de bouger :
+  // une réponse à un teaser fait remonter la chaleur dès l'ingestion, sans
+  // attendre un geste du funnel ou une relance échue. Best-effort : un échec
+  // ici ne perd aucun email déjà ingéré (il bascule juste le run en partiel).
+  if (touchedThreads.size > 0) {
+    try {
+      result.intent_refreshed = await refreshIntentForThreads(admin, userId, [...touchedThreads]);
+    } catch (err) {
+      result.errors.push(`intent refresh: ${err instanceof Error ? err.message : "erreur"}`);
     }
   }
 

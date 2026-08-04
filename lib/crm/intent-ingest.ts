@@ -84,3 +84,38 @@ export async function computeAndPersistIntent(
     .eq("user_id", userId);
   return result;
 }
+
+/**
+ * Rafraîchit le score d'intention de toutes les suggestions (non écartées)
+ * d'un utilisateur rattachées aux fils Gmail donnés, mails de TOUS les fils
+ * chargés en UNE requête (jamais de requête par ligne). Appelé après
+ * l'ingestion Gmail : une réponse d'acquéreur fait monter sa chaleur SANS
+ * attendre un geste du funnel ni une relance échue (organisme vivant, chaque
+ * brique nourrit la suivante : email entrant → intention → revue du matin).
+ * Renvoie le nombre de suggestions recalculées.
+ */
+export async function refreshIntentForThreads(
+  client: SupabaseClient,
+  userId: string,
+  threadIds: string[],
+  now: Date = new Date(),
+): Promise<number> {
+  const uniq = [...new Set(threadIds.filter((t): t is string => !!t))];
+  if (uniq.length === 0) return 0;
+
+  const { data } = await client
+    .from("deal_target_suggestions")
+    .select("id, status, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, last_outreach_at, gmail_thread_id")
+    .eq("user_id", userId)
+    .in("gmail_thread_id", uniq)
+    .neq("status", "rejected");
+
+  const suggestions = (data ?? []) as unknown as SuggestionForIntent[];
+  if (suggestions.length === 0) return 0;
+
+  const mailRows = await fetchMailRowsForThreads(client, uniq);
+  for (const s of suggestions) {
+    await computeAndPersistIntent(client, userId, s, mailRows, now);
+  }
+  return suggestions.length;
+}

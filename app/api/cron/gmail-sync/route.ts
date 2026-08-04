@@ -61,7 +61,7 @@ export async function GET(req: Request) {
 
   const eligible = candidates.filter((c) => !disabledSet.has(c.user_id));
 
-  const results: { user_id: string; fetched: number; created: number; review: number; errors: number }[] = [];
+  const results: { user_id: string; fetched: number; created: number; review: number; intent_refreshed: number; errors: number }[] = [];
   const globalErrors: string[] = [];
 
   for (const c of eligible) {
@@ -72,6 +72,7 @@ export async function GET(req: Request) {
         fetched: r.fetched,
         created: r.created_actions,
         review: r.needs_review,
+        intent_refreshed: r.intent_refreshed,
         errors: r.errors.length,
       });
       if (r.errors.length > 0) {
