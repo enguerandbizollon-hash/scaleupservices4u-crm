@@ -9,7 +9,7 @@
 // ou si l'appel échoue, on poursuit avec les suivantes. Les champs déjà
 // remplis ne sont JAMAIS écrasés (cf. CLAUDE.md "organisme vivant").
 //
-// Auth : session NextAuth utilisateur. RLS appliquée via createClient SSR.
+// Auth : session Supabase SSR (createClient), RLS appliquée (NextAuth retiré).
 // Trace : connector_runs (1 ligne par appel source).
 //
 // Body : { org_id: uuid, org_name?: string }
