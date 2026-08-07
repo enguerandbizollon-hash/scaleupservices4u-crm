@@ -6,7 +6,10 @@ export type SearchHit =
   | { kind: "deal"; id: string; title: string; subtitle: string | null; meta: string | null }
   | { kind: "organization"; id: string; title: string; subtitle: string | null; meta: string | null }
   | { kind: "contact"; id: string; title: string; subtitle: string | null; meta: string | null }
-  | { kind: "action"; id: string; title: string; subtitle: string | null; meta: string | null; deal_id: string | null };
+  | { kind: "action"; id: string; title: string; subtitle: string | null; meta: string | null; deal_id: string | null }
+  // Cédant de l'univers de prospection. id = SIREN (pivot + param du deep-link
+  // /protected/prospection?fiche=SIREN). Table PARTAGÉE, sans user_id.
+  | { kind: "univers"; id: string; title: string; subtitle: string | null; meta: string | null };
 
 export async function searchGlobal(query: string): Promise<SearchHit[]> {
   const q = query.trim();
@@ -19,7 +22,7 @@ export async function searchGlobal(query: string): Promise<SearchHit[]> {
   const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
   const limit = 5;
 
-  const [dealsRes, orgsRes, contactsRes, actionsRes] = await Promise.all([
+  const [dealsRes, orgsRes, universRes, contactsRes, actionsRes] = await Promise.all([
     supabase
       .from("deals")
       .select("id,name,deal_type,deal_status,deal_stage,sector")
@@ -31,6 +34,14 @@ export async function searchGlobal(query: string): Promise<SearchHit[]> {
       .select("id,name,organization_type,sector,location")
       .ilike("name", like)
       .eq("user_id", user.id)
+      .limit(limit),
+    // Univers de prospection : table PARTAGÉE (pas de user_id). Nom OU SIREN,
+    // les cibles les plus chaudes (radar de cédabilité) d'abord.
+    supabase
+      .from("univers_entreprises")
+      .select("siren,nom,secteur,ville,statut,cedabilite_score")
+      .or(`nom.ilike.${like},siren.ilike.${like}`)
+      .order("cedabilite_score", { ascending: false, nullsFirst: false })
       .limit(limit),
     supabase
       .from("contacts")
@@ -64,6 +75,16 @@ export async function searchGlobal(query: string): Promise<SearchHit[]> {
       title: o.name,
       subtitle: o.organization_type,
       meta: [o.sector, o.location].filter(Boolean).join(" · ") || null,
+    });
+  }
+  for (const u of universRes.data ?? []) {
+    const radar = typeof u.cedabilite_score === "number" ? `radar ${u.cedabilite_score}` : null;
+    hits.push({
+      kind: "univers",
+      id: u.siren,
+      title: u.nom,
+      subtitle: u.secteur,
+      meta: [u.ville, radar].filter(Boolean).join(" · ") || null,
     });
   }
   for (const c of contactsRes.data ?? []) {

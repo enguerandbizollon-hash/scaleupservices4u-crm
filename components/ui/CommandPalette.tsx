@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, FolderOpen, Building2, User, Activity, ArrowRight, Plus, Inbox, BarChart2, CheckSquare } from "lucide-react";
+import { Search, FolderOpen, Building2, User, Activity, ArrowRight, Plus, Inbox, BarChart2, CheckSquare, Crosshair } from "lucide-react";
 import { searchGlobal, type SearchHit } from "@/actions/search";
 
 const KIND_META: Record<SearchHit["kind"], { label: string; icon: typeof FolderOpen; color: string }> = {
   deal:         { label: "Dossier",      icon: FolderOpen,  color: "var(--fund-tx)" },
   organization: { label: "Organisation", icon: Building2,   color: "var(--sell-tx)" },
+  univers:      { label: "Cédant",       icon: Crosshair,   color: "#0F766E"        },
   contact:      { label: "Contact",      icon: User,        color: "var(--buy-tx)"  },
   action:       { label: "Action",       icon: Activity,    color: "var(--rec-tx)"  },
 };
@@ -37,6 +38,7 @@ function hrefFor(hit: SearchHit): string {
   switch (hit.kind) {
     case "deal":         return `/protected/dossiers/${hit.id}`;
     case "organization": return `/protected/organisations/${hit.id}`;
+    case "univers":      return `/protected/prospection?fiche=${hit.id}`;
     case "contact":      return `/protected/contacts/${hit.id}`;
     case "action":       return hit.deal_id ? `/protected/dossiers/${hit.deal_id}` : "/protected/dossiers";
   }
