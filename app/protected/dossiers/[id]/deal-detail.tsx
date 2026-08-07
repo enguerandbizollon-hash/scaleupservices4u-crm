@@ -8,6 +8,8 @@ import ActionModal from "@/components/actions/ActionModal";
 // MaMatchingTab : remonté en onglet Acquéreurs (phase 3, scoring V2).
 import { MaMatchingTab } from "./ma-matching-tab";
 import { BuyMandateTargets } from "@/components/dossiers/BuyMandateTargets";
+import { CadragePanel } from "@/components/dossiers/CadragePanel";
+import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 import { CockpitSynthese } from "./cockpit-synthese";
 import type { ActionnaireNormalise } from "@/lib/connectors/pappers";
 import { FinancialTab, type FinancialRow } from "./financial-tab";
@@ -596,6 +598,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
         {/* Onglet Sourcing — stratégie IA + CRM + Apollo unifiés (S4) */}
         {activeTab === "sourcing" && (
           <>
+            {deal.deal_type === "ma_buy" && <CadragePanel dealId={deal.id} initialCadrage={(deal.cadrage_content ?? null) as CadrageContent | null} />}
             {deal.deal_type === "ma_buy" && <BuyMandateTargets dealId={deal.id} />}
             <SourcingWizard
               dealId={deal.id}
