@@ -247,8 +247,11 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
               { key:"Description", label:"Description" },
             ]}
           />
-          <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-            <Plus size={14}/> Nouveau mandat
+          <Link href="/protected/dossiers/nouveau?type=ma_sell" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background:"var(--sell-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+            <Plus size={14}/> Cession
+          </Link>
+          <Link href="/protected/dossiers/nouveau?type=ma_buy" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background:"var(--buy-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+            <Plus size={14}/> Acquisition
           </Link>
         </div>
       </div>

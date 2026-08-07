@@ -170,7 +170,10 @@ export async function createDealWizardAction(
   const name = payload.name.trim();
   if (!name) return { success: false, error: "Nom du dossier obligatoire" };
   if (!payload.deal_type) return { success: false, error: "Type de mission obligatoire" };
-  if (!payload.client_organization_id) {
+  // Un mandat d'acquisition (buy-side) peut n'avoir qu'un repreneur (contact) :
+  // l'organisation cliente est OPTIONNELLE. Une cession reste rattachée à sa
+  // société cliente (sujet du dossier).
+  if (payload.deal_type !== "ma_buy" && !payload.client_organization_id) {
     return { success: false, error: "Organisation cliente obligatoire (sujet du dossier)" };
   }
 
@@ -178,7 +181,7 @@ export async function createDealWizardAction(
 
   // V54 : mise à jour de la taille d'entreprise de l'organisation cliente
   // si renseignée depuis le wizard. Non bloquant.
-  if (payload.client_organization_stage) {
+  if (payload.client_organization_stage && payload.client_organization_id) {
     const { error: stageErr } = await supabase
       .from("organizations")
       .update({ company_stage: payload.client_organization_stage })

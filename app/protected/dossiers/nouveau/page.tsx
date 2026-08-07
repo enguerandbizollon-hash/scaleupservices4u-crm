@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { DealWizard } from "./_components/deal-wizard";
 
-export default async function NouveauDossierPage() {
+export default async function NouveauDossierPage({ searchParams }: {
+  searchParams: Promise<{ type?: string }>;
+}) {
+  const { type } = await searchParams;
+  const initialType = type === "ma_buy" ? "ma_buy" : type === "ma_sell" ? "ma_sell" : undefined;
   const supabase = await createClient();
 
   const [orgsRes, contactsRes] = await Promise.all([
@@ -19,6 +23,7 @@ export default async function NouveauDossierPage() {
     <DealWizard
       organisations={orgsRes.data ?? []}
       contacts={contactsRes.data ?? []}
+      initialType={initialType}
     />
   );
 }

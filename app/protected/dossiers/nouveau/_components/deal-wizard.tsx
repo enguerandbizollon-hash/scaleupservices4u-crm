@@ -31,6 +31,8 @@ interface ContactOption { id: string; first_name: string; last_name: string; ema
 interface Props {
   organisations: OrgOption[];
   contacts: ContactOption[];
+  /** Pré-règle le type (?type=ma_buy pour un mandat d'acquisition). */
+  initialType?: DealType;
 }
 
 const DEAL_TYPE_LABELS: Record<string, string> = {
@@ -165,7 +167,7 @@ function MultiSelect({ values, onChange, options, placeholder }: {
 
 // ── Wizard principal ─────────────────────────────────────────────────────────
 
-export function DealWizard({ organisations, contacts }: Props) {
+export function DealWizard({ organisations, contacts, initialType }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [saving, setSaving] = useState(false);
@@ -173,7 +175,7 @@ export function DealWizard({ organisations, contacts }: Props) {
 
   // Step 1 — identité
   const [name, setName] = useState("");
-  const [dealType, setDealType] = useState<DealType>("ma_sell");
+  const [dealType, setDealType] = useState<DealType>(initialType ?? "ma_sell");
   const [dealStatus, setDealStatus] = useState("open");
   const [dealStage, setDealStage] = useState("kickoff");
   const [priority, setPriority] = useState("medium");
@@ -249,11 +251,14 @@ export function DealWizard({ organisations, contacts }: Props) {
 
   // ── Validation Step 1 ──
   const step1Valid = name.trim().length > 0 && !!dealType;
-  // V54 : organisation cliente obligatoire (sujet du dossier).
-  // Mode existing : il faut une org sélectionnée. Mode new : nom requis.
-  const step1ClientOk = clientOrgMode === "new"
-    ? clientOrgName.trim().length > 0
-    : !!clientOrgId;
+  // Organisation cliente obligatoire pour une cession (sujet du dossier),
+  // OPTIONNELLE pour un mandat d'acquisition (le client peut n'être qu'un
+  // repreneur individuel, capturé comme contact).
+  const step1ClientOk = dealType === "ma_buy"
+    ? true
+    : clientOrgMode === "new"
+      ? clientOrgName.trim().length > 0
+      : !!clientOrgId;
   // Création dirigeant libre : si mode = new, prénom + nom requis
   const step1DirigeantOk = dirigeantMode !== "new" || (
     dirigeantFirstName.trim().length > 0 && dirigeantLastName.trim().length > 0
@@ -303,8 +308,9 @@ export function DealWizard({ organisations, contacts }: Props) {
       resolvedClientOrgId = res.id;
     }
 
-    // V54 : sécurité supplémentaire — ne pas avancer sans org cliente résolue.
-    if (!resolvedClientOrgId) {
+    // Org cliente requise pour une cession, optionnelle pour une acquisition
+    // (le repreneur peut n'être qu'un contact).
+    if (!resolvedClientOrgId && dealType !== "ma_buy") {
       setSaving(false);
       setError("Organisation cliente obligatoire");
       return;
@@ -333,11 +339,15 @@ export function DealWizard({ organisations, contacts }: Props) {
         });
         if (cRes.success) {
           resolvedDirigeantId = cRes.id;
-          await linkContactToOrganisation(
-            cRes.id,
-            resolvedClientOrgId,
-            dirigeantTitle.trim() || "Dirigeant",
-          );
+          // Liaison seulement si une org cliente existe (null en acquisition
+          // sans société repreneuse).
+          if (resolvedClientOrgId) {
+            await linkContactToOrganisation(
+              cRes.id,
+              resolvedClientOrgId,
+              dirigeantTitle.trim() || "Dirigeant",
+            );
+          }
         }
         // Si la création échoue (ex: doublon par email), on laisse le
         // dossier se créer avec les champs texte dénormalisés. Pas bloquant.
@@ -432,7 +442,9 @@ export function DealWizard({ organisations, contacts }: Props) {
       // Affichage non bloquant
       console.warn("Wizard warnings:", res.warnings);
     }
-    router.push(`/protected/dossiers/${res.id}`);
+    // Acquisition : on atterrit sur le sourcing (fiche de cadrage + cibles),
+    // le cœur du mandat buy-side. Cession : la fiche dossier standard.
+    router.push(`/protected/dossiers/${res.id}${dealType === "ma_buy" ? "?tab=sourcing" : ""}`);
   }
 
   // ── Progress bar ────────────────────────────────────────────────────────
