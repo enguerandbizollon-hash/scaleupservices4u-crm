@@ -209,6 +209,73 @@ export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]>
   return targets;
 }
 
+/**
+ * Promeut une cible dans le funnel buy-side : la fiche univers devient une
+ * organisation (dédup SIREN v64) et une suggestion role='target' est créée
+ * sur le mandat. Miroir de ensureAcquirerSuggestion (sell-side). Idempotent :
+ * une cible déjà suivie renvoie sa suggestion existante.
+ */
+export async function promoteTargetToFunnel(
+  dealId: string,
+  siren: string,
+  scoreAlgo?: number | null,
+): Promise<ProspectionActionResult<{ suggestion_id: string; organization_id: string }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: fiche } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, naf, secteur, ville, departement, date_creation, dirigeants, finances")
+    .eq("siren", siren)
+    .maybeSingle();
+  if (!fiche) return { success: false, error: "Fiche univers introuvable" };
+
+  const ensured = await ensureOrganizationFromFiche(supabase, user.id, fiche);
+  if ("error" in ensured) return { success: false, error: ensured.error };
+  const orgId = ensured.orgId;
+
+  // Lien fiche → org (sans toucher au statut cédant : une cible buy-side n'est
+  // pas dans le funnel cédant).
+  await supabase
+    .from("univers_entreprises")
+    .update({ organization_id: orgId, updated_at: new Date().toISOString() })
+    .eq("siren", siren);
+
+  // Dédup : une suggestion pour (deal, org) existe déjà.
+  const { data: existing } = await supabase
+    .from("deal_target_suggestions")
+    .select("id")
+    .eq("deal_id", dealId)
+    .eq("organization_id", orgId)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    revalidatePath(`/protected/dossiers/${dealId}`);
+    return { success: true, data: { suggestion_id: existing.id as string, organization_id: orgId } };
+  }
+
+  const { data: created, error } = await supabase
+    .from("deal_target_suggestions")
+    .insert({
+      user_id: user.id,
+      deal_id: dealId,
+      organization_id: orgId,
+      role_suggested: "target",
+      source_connector: "matching",
+      status: "suggested",
+      score_algo: scoreAlgo ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true, data: { suggestion_id: created.id as string, organization_id: orgId } };
+}
+
 export async function saveScreeningProfile(input: {
   id?: string | null;
   name: string;
