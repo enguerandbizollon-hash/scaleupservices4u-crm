@@ -54,12 +54,18 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
 
   // Bandeau de flux (audit 2026-07-30 : « il me faut des KPI, du flux ») :
   // l'écran dit ce qui entre, ce qui chauffe, ce qui attend une décision.
-  const [universRes, profilesRes, nouveau, aApprocher, approche, echange, dormant, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
+  const [universRes, profilesRes, buyMandatesRes, nouveau, aApprocher, approche, echange, dormant, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
     universQuery,
     supabase
       .from("screening_profiles")
-      .select("id, name, filters, last_run_at, last_total_results, watch_enabled")
+      .select("id, name, filters, last_run_at, last_total_results, watch_enabled, deal_id")
       .order("created_at", { ascending: true }),
+    // Mandats d'acquisition (buy-side) : rattacher une chasse à l'un d'eux.
+    supabase
+      .from("deals")
+      .select("id, name")
+      .eq("deal_type", "ma_buy")
+      .order("created_at", { ascending: false }),
     countByStatut("nouveau"),
     countByStatut("a_approcher"),
     countByStatut("approche"),
@@ -118,6 +124,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
   return (
     <ProspectionClient
       profiles={(profilesRes.data ?? []) as ProfileRow[]}
+      buyMandates={(buyMandatesRes.data ?? []) as { id: string; name: string }[]}
       univers={(universRes.data ?? []) as UniversRow[]}
       universTotal={universRes.count ?? 0}
       statCounts={statCounts}

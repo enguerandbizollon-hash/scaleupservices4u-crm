@@ -66,6 +66,7 @@ export type ProfileRow = {
   last_run_at: string | null;
   last_total_results: number | null;
   watch_enabled: boolean;
+  deal_id: string | null;
 };
 
 /** Bandeau de flux : l'écran dit ce qui entre, ce qui chauffe, ce qui attend. */
@@ -147,8 +148,9 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, univers, universTotal, statCounts, flux, activeStatut, activeFiltre, sortRadar, searchQ, initialFiche, page, pageSize }: {
+export function ProspectionClient({ profiles, buyMandates, univers, universTotal, statCounts, flux, activeStatut, activeFiltre, sortRadar, searchQ, initialFiche, page, pageSize }: {
   profiles: ProfileRow[];
+  buyMandates: { id: string; name: string }[];
   univers: UniversRow[];
   universTotal: number;
   statCounts: Record<string, number>;
@@ -166,6 +168,8 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   const [ui, setUi] = useState<UiState>(EMPTY_UI);
   const [profileName, setProfileName] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  // Mandat ma_buy servi par la chasse (buy-side v75) ; null = veille cédants.
+  const [profileDealId, setProfileDealId] = useState<string | null>(null);
 
   const [total, setTotal] = useState<number | null>(null);
   const [counting, setCounting] = useState(false);
@@ -223,6 +227,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   function loadProfile(p: ProfileRow) {
     setSelectedProfileId(p.id);
     setProfileName(p.name);
+    setProfileDealId(p.deal_id ?? null);
     if (p.filters._ui) {
       setUi({ ...EMPTY_UI, ...p.filters._ui });
     } else {
@@ -248,6 +253,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
       id: selectedProfileId,
       name: profileName,
       filters: { ...apiFilters, _ui: ui } as ScreeningFilters,
+      dealId: profileDealId,
     });
     setBanner(res.success
       ? { kind: "ok", text: `Profil « ${profileName} » enregistré.` }
@@ -258,7 +264,7 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
   async function handleDeleteProfile(id: string) {
     if (!confirm("Supprimer ce profil de chasse ?")) return;
     await deleteScreeningProfile(id);
-    if (selectedProfileId === id) { setSelectedProfileId(null); setProfileName(""); }
+    if (selectedProfileId === id) { setSelectedProfileId(null); setProfileName(""); setProfileDealId(null); }
   }
 
   async function handleRun() {
@@ -573,6 +579,18 @@ export function ProspectionClient({ profiles, univers, universTotal, statCounts,
 
             <input style={{ ...inp, width: 220 }} placeholder="Nom du profil (ex : BTP AURA cédants)"
               value={profileName} onChange={e => setProfileName(e.target.value)} />
+            {buyMandates.length > 0 && (
+              <select
+                value={profileDealId ?? ""}
+                onChange={e => setProfileDealId(e.target.value || null)}
+                title="Rattacher cette chasse à un mandat d'acquisition (buy-side) : elle cherche alors des cibles pour ce client. Par défaut, veille cédants globale."
+                style={{ ...inp, width: 210, cursor: "pointer" }}>
+                <option value="">Veille cédants (défaut)</option>
+                {buyMandates.map(m => (
+                  <option key={m.id} value={m.id}>Pour mandat : {m.name}</option>
+                ))}
+              </select>
+            )}
             <button onClick={handleSaveProfile} disabled={!profileName.trim()}
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: profileName.trim() ? 1 : 0.5 }}>
               <Save size={13} /> {selectedProfileId ? "Mettre à jour" : "Sauvegarder"}

@@ -55,6 +55,8 @@ export interface ScreeningProfileRow {
   last_run_at: string | null;
   last_total_results: number | null;
   watch_enabled: boolean;
+  // Mandat ma_buy servi par la chasse (buy-side v75). NULL = veille cédants.
+  deal_id: string | null;
 }
 
 export async function listScreeningProfiles(): Promise<ScreeningProfileRow[]> {
@@ -63,15 +65,36 @@ export async function listScreeningProfiles(): Promise<ScreeningProfileRow[]> {
   if (!user) return [];
   const { data } = await supabase
     .from("screening_profiles")
-    .select("id, name, filters, last_run_at, last_total_results, watch_enabled")
+    .select("id, name, filters, last_run_at, last_total_results, watch_enabled, deal_id")
     .order("created_at", { ascending: true });
   return (data ?? []) as ScreeningProfileRow[];
+}
+
+/**
+ * Mandats d'acquisition (ma_buy) pour rattacher une chasse buy-side.
+ * Une chasse liée à un de ces mandats cherche des CIBLES pour un client
+ * acquéreur, au lieu d'alimenter la veille cédants globale.
+ */
+export async function listBuyMandates(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase
+    .from("deals")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .eq("deal_type", "ma_buy")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as { id: string; name: string }[];
 }
 
 export async function saveScreeningProfile(input: {
   id?: string | null;
   name: string;
   filters: ScreeningFilters;
+  // Rattache la chasse à un mandat ma_buy (buy-side). Absent = inchangé ;
+  // null = détache ; valeur = rattache. NULL par défaut à la création.
+  dealId?: string | null;
 }): Promise<ProspectionActionResult<{ id: string }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -79,10 +102,13 @@ export async function saveScreeningProfile(input: {
   const name = input.name.trim();
   if (!name) return { success: false, error: "Nom du profil requis" };
 
+  // deal_id n'est écrit QUE si le champ est fourni (undefined = ne pas toucher).
+  const dealPatch = input.dealId !== undefined ? { deal_id: input.dealId } : {};
+
   if (input.id) {
     const { error } = await supabase
       .from("screening_profiles")
-      .update({ name, filters: input.filters, updated_at: new Date().toISOString() })
+      .update({ name, filters: input.filters, ...dealPatch, updated_at: new Date().toISOString() })
       .eq("id", input.id);
     if (error) return { success: false, error: error.message };
     revalidatePath("/protected/prospection");
@@ -91,7 +117,7 @@ export async function saveScreeningProfile(input: {
 
   const { data, error } = await supabase
     .from("screening_profiles")
-    .insert({ user_id: user.id, name, filters: input.filters })
+    .insert({ user_id: user.id, name, filters: input.filters, ...dealPatch })
     .select("id")
     .single();
   if (error) return { success: false, error: error.message };
