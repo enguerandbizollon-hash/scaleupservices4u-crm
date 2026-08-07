@@ -13,7 +13,7 @@ import { FinancialTab, type FinancialRow } from "./financial-tab";
 import {
   linkOrganisationToDeal, unlinkOrganisationFromDeal, updateDealOrgRole,
   updateDealOrganizationStage, setDealClientOrganization,
-  updateDealField, deleteDeal,
+  updateDealField, deleteDeal, markMandateSigned, unmarkMandateSigned,
 } from "@/actions/deals";
 import { EditableField } from "@/components/ui/EditableField";
 import { DocumentsTab } from "./documents-tab";
@@ -185,6 +185,51 @@ function DealStatusSelect({ dealId, initial, onChanged }: { dealId: string; init
       style={{ padding:"8px 12px", borderRadius:9, border:"1px solid var(--border)", background:meta.bg, color:meta.tx, fontSize:13, fontWeight:700, fontFamily:"inherit", cursor:"pointer", outline:"none", opacity: saving ? 0.6 : 1 }}>
       {DEAL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
+  );
+}
+
+// Porte de signature (v75) : un dossier naît « en préparation » (pré-mandat).
+// Ce contrôle le fait passer en « signé » (et inversement, misclick réversible).
+// Distinct de deal_status (ouvert/pause/gagné/perdu) : on peut être signé ET
+// en cours, ou en préparation ET perdu (mandat non décroché).
+function MandateSignatureControl({ dealId, initial, onChanged }: { dealId: string; initial: string | null; onChanged: () => void }) {
+  const [signedAt, setSignedAt] = useState<string | null>(initial);
+  const [saving, setSaving] = useState(false);
+
+  async function sign() {
+    setSaving(true);
+    const res = await markMandateSigned(dealId);
+    setSaving(false);
+    if (!res.success) { alert(`Non enregistré : ${res.error}`); return; }
+    setSignedAt(new Date().toISOString());
+    onChanged();
+  }
+  async function unsign() {
+    if (!confirm("Repasser ce mandat en « préparation » (non signé) ?")) return;
+    setSaving(true);
+    const res = await unmarkMandateSigned(dealId);
+    setSaving(false);
+    if (!res.success) { alert(`Non enregistré : ${res.error}`); return; }
+    setSignedAt(null);
+    onChanged();
+  }
+
+  if (signedAt) {
+    const d = new Intl.DateTimeFormat("fr-FR", { day:"numeric", month:"short", year:"numeric" }).format(new Date(signedAt));
+    return (
+      <button type="button" onClick={unsign} disabled={saving}
+        title="Mandat signé. Cliquer pour le repasser en préparation."
+        style={{ padding:"8px 14px", borderRadius:9, background:"#D1FAE5", border:"1px solid #065F46", color:"#065F46", fontSize:13, fontWeight:700, fontFamily:"inherit", cursor:"pointer", whiteSpace:"nowrap", opacity: saving ? 0.6 : 1 }}>
+        ✓ Mandat signé le {d}
+      </button>
+    );
+  }
+  return (
+    <button type="button" onClick={sign} disabled={saving}
+      title="Ce dossier est en préparation (pré-mandat). Le marquer signé le fait entrer dans les mandats signés."
+      style={{ padding:"8px 14px", borderRadius:9, background:"var(--surface-2)", border:"1px dashed var(--text-4)", color:"var(--text-3)", fontSize:13, fontWeight:700, fontFamily:"inherit", cursor:"pointer", whiteSpace:"nowrap", opacity: saving ? 0.6 : 1 }}>
+      Marquer le mandat signé
+    </button>
   );
 }
 
@@ -371,6 +416,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
             </div>
             <div style={{ display:"flex", gap:8, flexShrink:0, flexWrap:"wrap" }}>
               <DealStatusSelect dealId={deal.id} initial={deal.deal_status ?? "open"} onChanged={() => router.refresh()} />
+              <MandateSignatureControl dealId={deal.id} initial={deal.mandate_signed_at ?? null} onChanged={() => router.refresh()} />
               {deal.deal_type === "ma_sell" && (
                 <>
                   <a

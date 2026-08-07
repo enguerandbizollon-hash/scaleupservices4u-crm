@@ -27,14 +27,14 @@ function fmt(v:string|null) {
 }
 function daysSince(v:string) { return Math.floor((Date.now()-new Date(v).getTime())/86400000); }
 
-async function Content({ sansActivite = false }: { sansActivite?: boolean }) {
+async function Content({ sansActivite = false, phase = "signes" }: { sansActivite?: boolean; phase?: "signes" | "preparation" }) {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
 
   // Deals avec stats agrégées
   const { data: deals } = await supabase
     .from("deals")
-    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score,created_at,organization_id,dirigeant_id,dirigeant_nom,next_action_date,estimated_fee_amount,success_fee_percent")
+    .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score,created_at,organization_id,dirigeant_id,dirigeant_nom,next_action_date,estimated_fee_amount,success_fee_percent,mandate_signed_at")
     .order("priority_level");
 
   if (!deals?.length) {
@@ -135,15 +135,25 @@ async function Content({ sansActivite = false }: { sansActivite?: boolean }) {
   const estSansActivite = (d: { id: string; deal_status: string; created_at: string | null }) =>
     isDormant((actsByDeal[d.id] ?? [])[0]?.activity_date ?? null, d.deal_status, d.created_at);
 
-  const openTous = deals.filter(d => d.deal_status === "open");
-  const dormantCount = openTous.filter(estSansActivite).length;
+  // Porte de signature (v75) : un deal ouvert est SIGNÉ (mandate_signed_at
+  // renseigné) ou EN PRÉPARATION (pré-mandat, screening/pitch avant signature).
+  // L'onglet Mandats montre le signé par défaut ; « En préparation » est un
+  // filtre. Un pré-mandat n'est PAS un mandat, il ne pollue plus la liste.
+  const openTous        = deals.filter(d => d.deal_status === "open");
+  const openSignes      = openTous.filter(d => d.mandate_signed_at != null);
+  const openPreparation = openTous.filter(d => d.mandate_signed_at == null);
+  const openPhase       = phase === "preparation" ? openPreparation : openSignes;
+  const dormantCount    = openPhase.filter(estSansActivite).length;
 
-  // ?filtre=sans_activite : la tuile « Mandats sans activité » de la revue
-  // du matin doit montrer EXACTEMENT la population qu'elle compte.
-  const open    = sansActivite ? openTous.filter(estSansActivite) : openTous;
-  const paused  = sansActivite ? [] : deals.filter(d => d.deal_status === "paused");
-  const won     = sansActivite ? [] : deals.filter(d => d.deal_status === "won");
-  const lost    = sansActivite ? [] : deals.filter(d => d.deal_status === "lost");
+  // ?filtre=sans_activite : la tuile « Mandats sans activité » de la revue du
+  // matin compte TOUT l'ouvert (signé + préparation), la vue montre donc la
+  // même population qu'elle compte. Les états terminaux ne s'affichent qu'en
+  // vue Signés (un pré-mandat n'a pas de « gagné/perdu/pause »).
+  const open       = sansActivite ? openTous.filter(estSansActivite) : openPhase;
+  const showClosed = !sansActivite && phase !== "preparation";
+  const paused  = showClosed ? deals.filter(d => d.deal_status === "paused") : [];
+  const won     = showClosed ? deals.filter(d => d.deal_status === "won") : [];
+  const lost    = showClosed ? deals.filter(d => d.deal_status === "lost") : [];
   const closed  = [...won, ...lost]; // affichés ensemble en grisé
   const types   = ["ma_sell","ma_buy"];
   const groups  = types.map(t => ({
@@ -179,6 +189,26 @@ async function Content({ sansActivite = false }: { sansActivite?: boolean }) {
               </>
             )}
           </div>
+          {!sansActivite && (
+            <div style={{ display:"flex", gap:6, marginTop:12 }}>
+              <Link href="/protected/dossiers" style={{
+                fontSize:12.5, fontWeight:700, padding:"5px 12px", borderRadius:8, textDecoration:"none",
+                background: phase !== "preparation" ? "var(--fund-bg)" : "var(--surface-2)",
+                color:      phase !== "preparation" ? "var(--fund-tx)" : "var(--text-4)",
+                border:`1px solid ${phase !== "preparation" ? "var(--fund-tx)" : "var(--border)"}`,
+              }}>
+                Signés{openSignes.length > 0 ? ` · ${openSignes.length}` : ""}
+              </Link>
+              <Link href="/protected/dossiers?phase=preparation" style={{
+                fontSize:12.5, fontWeight:700, padding:"5px 12px", borderRadius:8, textDecoration:"none",
+                background: phase === "preparation" ? "var(--sell-bg)" : "var(--surface-2)",
+                color:      phase === "preparation" ? "var(--sell-tx)" : "var(--text-4)",
+                border:`1px solid ${phase === "preparation" ? "var(--sell-tx)" : "var(--border)"}`,
+              }}>
+                En préparation{openPreparation.length > 0 ? ` · ${openPreparation.length}` : ""}
+              </Link>
+            </div>
+          )}
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           <ViewToggle current="list" />
@@ -276,6 +306,17 @@ async function Content({ sansActivite = false }: { sansActivite?: boolean }) {
             )}
           </div>
         ))}
+        {groups.length === 0 && (
+          <div style={{ textAlign:"center", padding:"48px 24px", color:"var(--text-5)", fontSize:14 }}>
+            {phase === "preparation"
+              ? "Aucun dossier en préparation."
+              : sansActivite
+                ? "Aucun mandat sans activité."
+                : openPreparation.length > 0
+                  ? <>Aucun mandat signé pour l&apos;instant. <Link href="/protected/dossiers?phase=preparation" style={{ color:"#1a56db", fontWeight:600 }}>{openPreparation.length} dossier{openPreparation.length > 1 ? "s" : ""} en préparation</Link> à faire signer.</>
+                  : "Aucun mandat."}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -448,14 +489,14 @@ async function KanbanContent() {
 }
 
 export default async function DossiersPage({ searchParams }: {
-  searchParams: Promise<{ view?: string; filtre?: string }>;
+  searchParams: Promise<{ view?: string; filtre?: string; phase?: string }>;
 }) {
-  const { view, filtre } = await searchParams;
+  const { view, filtre, phase } = await searchParams;
   const isKanban = view === "kanban";
 
   return (
     <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
-      {isKanban ? <KanbanContent/> : <Content sansActivite={filtre === "sans_activite"}/>}
+      {isKanban ? <KanbanContent/> : <Content sansActivite={filtre === "sans_activite"} phase={phase === "preparation" ? "preparation" : "signes"}/>}
     </Suspense>
   );
 }

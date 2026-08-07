@@ -127,6 +127,53 @@ export async function updateDealOrganizationStage(
   return { success: true };
 }
 
+/**
+ * Porte de signature (v75) : marque le mandat SIGNÉ. Un pré-mandat (créé au
+ * screening d'un cédant, en préparation) devient un vrai mandat et quitte
+ * « En préparation » pour « Signés » dans l'onglet Mandats. Propose/dispose :
+ * geste explicite, jamais automatique. Idempotent (re-signer redate).
+ * `signedAt` permet d'antidater (ISO), sinon maintenant.
+ */
+export async function markMandateSigned(dealId: string, signedAt?: string): Promise<DealActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  if (signedAt != null && Number.isNaN(Date.parse(signedAt))) {
+    return { success: false, error: "Date de signature invalide" };
+  }
+  const when = signedAt ?? new Date().toISOString();
+
+  const { error } = await supabase
+    .from("deals")
+    .update({ mandate_signed_at: when })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/protected/dossiers");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true, id: dealId };
+}
+
+/** Annule la signature : le mandat repasse « En préparation » (misclick réversible). */
+export async function unmarkMandateSigned(dealId: string): Promise<DealActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({ mandate_signed_at: null })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/protected/dossiers");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true, id: dealId };
+}
+
 export async function getAllDealsSimple(): Promise<{ id: string; name: string }[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
