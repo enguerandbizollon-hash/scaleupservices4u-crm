@@ -20,6 +20,7 @@ import {
 import { computeCedabilite } from "@/lib/crm/cedabilite";
 import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { universRowFromHit, mergeFinancesReingest } from "@/lib/crm/univers-ingest";
+import { computeMaStrategicScore, type MaDealProfile, type MaOrganisationProfile } from "@/lib/crm/ma-scoring";
 import { autofillScreeningDraft } from "@/lib/crm/screening-autofill";
 import { enqueueNotification } from "@/lib/crm/notifications";
 import { upsertContact, linkContactToOrganisation } from "./contacts";
@@ -96,18 +97,42 @@ export interface BuyTarget {
   cedabilite_score: number | null;
   statut: string;
   chasse_name: string | null;
+  /** Fit stratégique à la fiche de cadrage (0-100), null si dossier sans critères. */
+  fit_score: number | null;
+}
+
+/** CA le plus récent depuis le JSONB finances {"2024":{"ca":...}} de l'univers. */
+function latestRevenueFromFinances(finances: unknown): number | null {
+  if (!finances || typeof finances !== "object") return null;
+  const rec = finances as Record<string, unknown>;
+  const years = Object.keys(rec).filter((k) => /^\d{4}$/.test(k)).sort().reverse();
+  for (const y of years) {
+    const row = rec[y];
+    const ca = row && typeof row === "object" ? (row as Record<string, unknown>).ca : null;
+    if (typeof ca === "number" && Number.isFinite(ca)) return ca;
+  }
+  return null;
 }
 
 /**
  * Cibles d'un mandat d'acquisition : les fiches univers trouvées par les
- * chasses rattachées à ce mandat (screening_profiles.deal_id = dealId), les
- * plus chaudes au radar de cédabilité d'abord. Le lien passe par
+ * chasses rattachées (screening_profiles.deal_id = dealId), SCORÉES par fit à
+ * la fiche de cadrage (score stratégique buy_to_target de ma-scoring : secteur,
+ * taille, géo), tri par fit décroissant puis cédabilité. Lien via
  * source_profile_id, aucune colonne dédiée sur l'univers.
  */
 export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+
+  // Critères du mandat pour le scoring (renseignés par la fiche de cadrage).
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("id, name, sector, location, target_sectors, target_geographies, target_revenue_min, target_revenue_max, target_ev_min, target_ev_max, full_acquisition_required, excluded_sectors, target_stage")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
   const { data: chasses } = await supabase
     .from("screening_profiles")
@@ -119,20 +144,69 @@ export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]>
 
   const { data: fiches } = await supabase
     .from("univers_entreprises")
-    .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id")
+    .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id, finances")
     .in("source_profile_id", chasseIds)
-    .order("cedabilite_score", { ascending: false, nullsFirst: false })
     .limit(200);
 
-  return (fiches ?? []).map((f) => ({
-    siren: f.siren as string,
-    nom: f.nom as string,
-    secteur: (f.secteur as string | null) ?? null,
-    ville: (f.ville as string | null) ?? null,
-    cedabilite_score: (f.cedabilite_score as number | null) ?? null,
-    statut: f.statut as string,
-    chasse_name: chasseName.get(f.source_profile_id as string) ?? null,
-  }));
+  const dealProfile: MaDealProfile | null = deal
+    ? {
+        id: deal.id as string,
+        name: deal.name as string,
+        deal_type: "ma_buy",
+        sector: deal.sector as string | null,
+        location: deal.location as string | null,
+        target_sectors: deal.target_sectors as string[] | null,
+        target_geographies: deal.target_geographies as string[] | null,
+        target_revenue_min: deal.target_revenue_min as number | null,
+        target_revenue_max: deal.target_revenue_max as number | null,
+        target_ev_min: deal.target_ev_min as number | null,
+        target_ev_max: deal.target_ev_max as number | null,
+        full_acquisition_required: deal.full_acquisition_required as boolean | null,
+        excluded_sectors: deal.excluded_sectors as string[] | null,
+        target_stage: deal.target_stage as string | null,
+      }
+    : null;
+  // Sans aucun critère cible, le score stratégique n'est pas informatif.
+  const canScore = !!dealProfile && !!(
+    (dealProfile.target_sectors?.length) ||
+    (dealProfile.target_geographies?.length) ||
+    dealProfile.target_revenue_min != null ||
+    dealProfile.target_revenue_max != null
+  );
+
+  const targets: BuyTarget[] = (fiches ?? []).map((f) => {
+    let fit: number | null = null;
+    if (canScore && dealProfile) {
+      const revenue = latestRevenueFromFinances(f.finances);
+      const org: MaOrganisationProfile = {
+        id: f.siren as string,
+        name: f.nom as string,
+        organization_type: "target",
+        sector: (f.secteur as string | null) ?? null,
+        location: (f.ville as string | null) ?? null,
+        financial: revenue != null ? { revenue } : null,
+      };
+      fit = computeMaStrategicScore(dealProfile, org).score;
+    }
+    return {
+      siren: f.siren as string,
+      nom: f.nom as string,
+      secteur: (f.secteur as string | null) ?? null,
+      ville: (f.ville as string | null) ?? null,
+      cedabilite_score: (f.cedabilite_score as number | null) ?? null,
+      statut: f.statut as string,
+      chasse_name: chasseName.get(f.source_profile_id as string) ?? null,
+      fit_score: fit,
+    };
+  });
+
+  // Tri : fit décroissant (les mieux alignés à la fiche d'abord), puis radar.
+  targets.sort(
+    (a, b) =>
+      (b.fit_score ?? -1) - (a.fit_score ?? -1) ||
+      (b.cedabilite_score ?? -1) - (a.cedabilite_score ?? -1),
+  );
+  return targets;
 }
 
 export async function saveScreeningProfile(input: {

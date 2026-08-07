@@ -39,7 +39,7 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
 
       {targets.length === 0 ? (
         <p style={{ fontSize: 12.5, color: "var(--text-4)", margin: 0, lineHeight: 1.6 }}>
-          Aucune cible pour l&apos;instant. Depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link>, rattachez une chasse à ce mandat (sélecteur « Pour mandat : … »), puis lancez-la : ses résultats apparaîtront ici, les plus chauds au radar d&apos;abord.
+          Aucune cible pour l&apos;instant. Analysez la fiche de cadrage ci-dessus (elle prépare la chasse), ou depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link> rattachez une chasse à ce mandat, puis lancez-la : ses résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord.
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -52,6 +52,11 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
                   {[t.secteur, t.ville, t.chasse_name && `via ${t.chasse_name}`].filter(Boolean).join(" · ")}
                 </div>
               </div>
+              {t.fit_score != null && (
+                <span title="Fit à la fiche de cadrage (secteur, taille, géographie)" style={{ fontSize: 11, fontWeight: 800, color: "#4338CA", background: "rgba(99,102,241,.12)", borderRadius: 6, padding: "3px 8px", flexShrink: 0 }}>
+                  fit {t.fit_score}
+                </span>
+              )}
               {t.cedabilite_score != null && (
                 <span title="Score de cédabilité (radar)" style={{ fontSize: 11, fontWeight: 800, color: "#0F766E", background: "rgba(15,118,110,.12)", borderRadius: 6, padding: "3px 8px", flexShrink: 0 }}>
                   radar {Math.round(t.cedabilite_score)}
