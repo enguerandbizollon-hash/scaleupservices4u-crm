@@ -88,6 +88,53 @@ export async function listBuyMandates(): Promise<{ id: string; name: string }[]>
   return (data ?? []) as { id: string; name: string }[];
 }
 
+export interface BuyTarget {
+  siren: string;
+  nom: string;
+  secteur: string | null;
+  ville: string | null;
+  cedabilite_score: number | null;
+  statut: string;
+  chasse_name: string | null;
+}
+
+/**
+ * Cibles d'un mandat d'acquisition : les fiches univers trouvées par les
+ * chasses rattachées à ce mandat (screening_profiles.deal_id = dealId), les
+ * plus chaudes au radar de cédabilité d'abord. Le lien passe par
+ * source_profile_id, aucune colonne dédiée sur l'univers.
+ */
+export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: chasses } = await supabase
+    .from("screening_profiles")
+    .select("id, name")
+    .eq("deal_id", dealId);
+  const chasseIds = (chasses ?? []).map((c) => c.id as string);
+  if (chasseIds.length === 0) return [];
+  const chasseName = new Map((chasses ?? []).map((c) => [c.id as string, c.name as string]));
+
+  const { data: fiches } = await supabase
+    .from("univers_entreprises")
+    .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id")
+    .in("source_profile_id", chasseIds)
+    .order("cedabilite_score", { ascending: false, nullsFirst: false })
+    .limit(200);
+
+  return (fiches ?? []).map((f) => ({
+    siren: f.siren as string,
+    nom: f.nom as string,
+    secteur: (f.secteur as string | null) ?? null,
+    ville: (f.ville as string | null) ?? null,
+    cedabilite_score: (f.cedabilite_score as number | null) ?? null,
+    statut: f.statut as string,
+    chasse_name: chasseName.get(f.source_profile_id as string) ?? null,
+  }));
+}
+
 export async function saveScreeningProfile(input: {
   id?: string | null;
   name: string;

@@ -7,6 +7,7 @@ import ActionModal from "@/components/actions/ActionModal";
 // MatchingTab (investisseurs) : supprimé, logique intégrée au SourcingWizard (S4).
 // MaMatchingTab : remonté en onglet Acquéreurs (phase 3, scoring V2).
 import { MaMatchingTab } from "./ma-matching-tab";
+import { BuyMandateTargets } from "@/components/dossiers/BuyMandateTargets";
 import { CockpitSynthese } from "./cockpit-synthese";
 import type { ActionnaireNormalise } from "@/lib/connectors/pappers";
 import { FinancialTab, type FinancialRow } from "./financial-tab";
@@ -594,15 +595,18 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
 
         {/* Onglet Sourcing — stratégie IA + CRM + Apollo unifiés (S4) */}
         {activeTab === "sourcing" && (
-          <SourcingWizard
-            dealId={deal.id}
-            screeningReady={isScreeningReady(deal.screening_status)}
-            initialSuggestions={initialSuggestions}
-            initialPlan={(deal.sourcing_plan_json ?? null) as Parameters<typeof SourcingWizard>[0]["initialPlan"]}
-            initialPlanGeneratedAt={deal.sourcing_plan_generated_at ?? null}
-            initialPlanSource={deal.sourcing_plan_source ?? null}
-            initialUrlsToConsult={deal.sourcing_urls_to_consult ?? []}
-          />
+          <>
+            {deal.deal_type === "ma_buy" && <BuyMandateTargets dealId={deal.id} />}
+            <SourcingWizard
+              dealId={deal.id}
+              screeningReady={isScreeningReady(deal.screening_status)}
+              initialSuggestions={initialSuggestions}
+              initialPlan={(deal.sourcing_plan_json ?? null) as Parameters<typeof SourcingWizard>[0]["initialPlan"]}
+              initialPlanGeneratedAt={deal.sourcing_plan_generated_at ?? null}
+              initialPlanSource={deal.sourcing_plan_source ?? null}
+              initialUrlsToConsult={deal.sourcing_urls_to_consult ?? []}
+            />
+          </>
         )}
 
         {/* Onglet Honoraires — économie du dossier (fusion mandats, temps 5) */}
