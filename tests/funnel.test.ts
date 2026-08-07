@@ -5,6 +5,8 @@ import {
   FOLLOWUP_RULES,
   FUNNEL_STEPS,
   isOutboundStep,
+  funnelStageLabel,
+  funnelStepLabel,
 } from "@/lib/crm/funnel";
 
 const base = {
@@ -67,5 +69,30 @@ describe("isOutboundStep", () => {
     expect(isOutboundStep("im_envoye")).toBe(true);
     expect(isOutboundStep("nda_signe")).toBe(false);
     expect(isOutboundStep("offre_recue")).toBe(false);
+  });
+});
+
+describe("libellés role-aware", () => {
+  it("les mêmes dates ont des sens miroirs selon le rôle", () => {
+    // Côté acquéreur : on pousse un dossier.
+    expect(funnelStageLabel("teaser_envoye", "acquirer")).toBe("Teaser envoyé");
+    expect(funnelStageLabel("im_envoye", "acquirer")).toBe("IM envoyé");
+    expect(funnelStageLabel("offre_recue", "acquirer")).toBe("Offre reçue");
+    // Côté cible : on approche pour un repreneur.
+    expect(funnelStageLabel("teaser_envoye", "target")).toBe("Approchée");
+    expect(funnelStageLabel("im_envoye", "target")).toBe("Infos reçues");
+    expect(funnelStageLabel("offre_recue", "target")).toBe("Offre envoyée (LOI)");
+  });
+
+  it("le NDA reste le NDA dans les deux sens", () => {
+    expect(funnelStageLabel("nda_signe", "acquirer")).toBe("NDA signé");
+    expect(funnelStageLabel("nda_signe", "target")).toBe("NDA signé");
+  });
+
+  it("funnelStepLabel coïncide avec le libellé d'étape", () => {
+    for (const s of FUNNEL_STEPS) {
+      expect(funnelStepLabel(s.key, "target")).toBe(funnelStageLabel(s.key, "target"));
+      expect(funnelStepLabel(s.key, "acquirer")).toBe(funnelStageLabel(s.key, "acquirer"));
+    }
   });
 });

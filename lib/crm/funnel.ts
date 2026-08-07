@@ -85,3 +85,42 @@ export function defaultNextFollowup(stage: FunnelStage, from: Date): string | nu
 export function isOutboundStep(step: FunnelStepKey): boolean {
   return step === "teaser_envoye" || step === "im_envoye";
 }
+
+// ── Libellés role-aware ──────────────────────────────────────────────────────
+// Le funnel est le MÊME moteur pour les deux sens (colonnes datées v73,
+// deal_target_suggestions.role_suggested), seuls les libellés changent :
+//  - acquirer (sell-side) : on POUSSE un dossier vers un acquéreur.
+//  - target   (buy-side)  : on APPROCHE une cible pour un repreneur.
+// Les 4 dates portent donc des sens miroirs (im_sent_at = « IM envoyé » côté
+// acquéreur, « infos reçues » côté cible ; offer = reçue vs envoyée en LOI).
+
+export type SuggestionRole = "acquirer" | "target";
+
+const STAGE_LABELS: Record<SuggestionRole, Record<FunnelStage, string>> = {
+  acquirer: {
+    pre_approche: "Pré-approche",
+    approuve: "Approuvé",
+    teaser_envoye: "Teaser envoyé",
+    nda_signe: "NDA signé",
+    im_envoye: "IM envoyé",
+    offre_recue: "Offre reçue",
+  },
+  target: {
+    pre_approche: "Repérée",
+    approuve: "Repérée",
+    teaser_envoye: "Approchée",
+    nda_signe: "NDA signé",
+    im_envoye: "Infos reçues",
+    offre_recue: "Offre envoyée (LOI)",
+  },
+};
+
+/** Libellé d'une étape du funnel selon le rôle (acquirer / target). */
+export function funnelStageLabel(stage: FunnelStage, role: SuggestionRole): string {
+  return STAGE_LABELS[role][stage];
+}
+
+/** Libellé d'un geste marquable selon le rôle (les clés d'étape et de geste coïncident). */
+export function funnelStepLabel(step: FunnelStepKey, role: SuggestionRole): string {
+  return STAGE_LABELS[role][step];
+}
