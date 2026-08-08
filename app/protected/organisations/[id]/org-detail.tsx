@@ -6,7 +6,8 @@ import { FinancialTab, type FinancialRow } from "../../dossiers/[id]/financial-t
 import { StatusDropdown } from "../../components/status-dropdown";
 import { EnrichButton } from "../../components/enrich-button";
 import { EnrichFromInseeButton } from "@/components/organisations/EnrichFromInseeButton";
-import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, GEOGRAPHIES, OPERATION_TYPES, DEAL_STANCES } from "@/lib/crm/matching-maps";
+import { ORG_COMPANY_STAGES, REVENUE_RANGES, SALE_READINESS_OPTIONS, OPERATION_TYPES, DEAL_STANCES } from "@/lib/crm/matching-maps";
+import { geoLabel } from "@/lib/crm/geo-match";
 import ActionTimeline from "@/components/actions/ActionTimeline";
 import { TagInput } from "@/components/tags/TagInput";
 import { OrganisationAddressBlock } from "@/components/organisations/OrganisationAddressBlock";
@@ -379,7 +380,7 @@ export function OrgDetail({ org, contacts, deals, clientDeals, financialData, ac
                     <div style={{ fontSize:11, fontWeight:600, color:"var(--text-4)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>Géographies cibles</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
                       {org.target_geographies.map((g: string) => {
-                        const label = GEOGRAPHIES.find(x => x.value === g)?.label ?? g;
+                        const label = geoLabel(g);
                         return <span key={g} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"#ECFEFF", color:"#0E7490", fontWeight:600 }}>{label}</span>;
                       })}
                     </div>

@@ -3,11 +3,20 @@
 // la rend testable. Utilisée par le scoring géo (lib/crm/ma-scoring.ts) : une
 // cible « 44 » matche un acquéreur ciblant « pays_de_la_loire » ou « france ».
 
-import { GEO_REGIONS_FRANCE } from "@/lib/crm/matching-maps";
-import { DEPT_TO_REGION, REGION_TO_DEPTS, isDepartementCode } from "@/lib/crm/departements";
+import { GEO_REGIONS_FRANCE, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { DEPT_TO_REGION, REGION_TO_DEPTS, isDepartementCode, DEPARTEMENT_LABELS } from "@/lib/crm/departements";
 
 const ALL_REGIONS: string[] = [...GEO_REGIONS_FRANCE];
 const ALL_DEPTS: string[] = Object.keys(DEPT_TO_REGION);
+
+/**
+ * Libellé lisible d'une valeur géo, quel que soit son niveau : France et
+ * régions via GEO_LABELS, départements via DEPARTEMENT_LABELS (« 44
+ * Loire-Atlantique »). Source unique pour tous les affichages de géo.
+ */
+export function geoLabel(value: string): string {
+  return GEO_LABELS[value] ?? DEPARTEMENT_LABELS[value] ?? value;
+}
 
 /** Sous-arbre de compatibilité d'une valeur : elle-même + parents + enfants. */
 export function expandGeo(v: string): string[] {

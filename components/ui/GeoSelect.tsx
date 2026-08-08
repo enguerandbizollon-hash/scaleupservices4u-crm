@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
 import { GEO_ZONES, GEO_REGIONS_FRANCE, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { GEO_DEPT_OPTIONS } from "@/lib/crm/departements";
+import { FacetMultiSelect } from "@/components/ui/FacetMultiSelect";
+import { GEO_FACET_GROUPS } from "@/components/ui/referential-facets";
 
 interface GeoSelectSingleProps {
   mode: "single";
@@ -37,81 +39,29 @@ function GeoSelectSingle({ value, onChange, placeholder }: GeoSelectSingleProps)
       onChange={e => onChange(e.target.value || null)}
     >
       <option value="">{placeholder ?? "— Non renseigné —"}</option>
-      <optgroup label="Zones">
+      <optgroup label="France">
         {GEO_ZONES.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
       </optgroup>
-      <optgroup label="Régions France">
+      <optgroup label="Régions">
         {GEO_REGIONS_FRANCE.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
+      </optgroup>
+      <optgroup label="Départements">
+        {GEO_DEPT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </optgroup>
     </select>
   );
 }
 
+// Géographies cibles (multi) : même sélecteur recherchable et groupé que le
+// wizard de mandat (France / régions / départements).
 function GeoSelectMulti({ value, onChange, placeholder }: GeoSelectMultiProps) {
-  const [showRegionsFR, setShowRegionsFR] = useState(
-    value.some(v => (GEO_REGIONS_FRANCE as readonly string[]).includes(v))
-  );
-
-  function toggle(geo: string) {
-    onChange(value.includes(geo) ? value.filter(v => v !== geo) : [...value, geo]);
-  }
-
   return (
-    <div>
-      {/* France */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {GEO_ZONES.map(g => {
-          const active = value.includes(g);
-          return (
-            <button key={g} type="button" onClick={() => toggle(g)}
-              style={{
-                padding: "5px 11px", borderRadius: 20,
-                border: `1.5px solid ${active ? "#1a56db" : "#e5e7eb"}`,
-                background: active ? "#EFF6FF" : "#fff",
-                color: active ? "#1a56db" : "#374151",
-                fontSize: 12.5, fontWeight: active ? 600 : 400,
-                cursor: "pointer", fontFamily: "inherit",
-              }}>
-              {active && "✓ "}{GEO_LABELS[g] ?? g}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Régions France (dépliable) */}
-      <button type="button" onClick={() => setShowRegionsFR(p => !p)}
-        style={{ fontSize: 11.5, color: "#6b7280", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", marginBottom: showRegionsFR ? 6 : 0, textDecoration: "underline" }}>
-        {showRegionsFR ? "▾ Régions France" : "▸ Régions France"}
-      </button>
-      {showRegionsFR && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
-          {GEO_REGIONS_FRANCE.map(g => {
-            const active = value.includes(g);
-            return (
-              <button key={g} type="button" onClick={() => toggle(g)}
-                style={{
-                  padding: "4px 9px", borderRadius: 20,
-                  border: `1.5px solid ${active ? "#1a56db" : "#e5e7eb"}`,
-                  background: active ? "#EFF6FF" : "#fff",
-                  color: active ? "#1a56db" : "#374151",
-                  fontSize: 11.5, fontWeight: active ? 600 : 400,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}>
-                {active && "✓ "}{GEO_LABELS[g] ?? g}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {value.length > 0 && (
-        <div style={{ marginTop: 6, fontSize: 11.5, color: "#6b7280" }}>
-          {value.length} zone{value.length > 1 ? "s" : ""} sélectionnée{value.length > 1 ? "s" : ""}
-        </div>
-      )}
-      {value.length === 0 && placeholder && (
-        <div style={{ marginTop: 4, fontSize: 11.5, color: "#9ca3af" }}>{placeholder}</div>
-      )}
-    </div>
+    <FacetMultiSelect
+      groups={GEO_FACET_GROUPS}
+      selected={value}
+      onChange={onChange}
+      variant="target"
+      placeholder={placeholder ?? "Rechercher une zone, une région, un département…"}
+    />
   );
 }

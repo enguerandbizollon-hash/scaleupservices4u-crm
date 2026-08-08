@@ -1,5 +1,6 @@
 "use client";
-import { SECTORS } from "@/lib/crm/matching-maps";
+import { FacetMultiSelect } from "@/components/ui/FacetMultiSelect";
+import { SECTOR_FACET_GROUPS } from "@/components/ui/referential-facets";
 
 export interface MaBuyerData {
   acquisition_rationale: string;
@@ -20,62 +21,6 @@ const lbl: React.CSSProperties = {
   display: "block", fontSize: 12.5, fontWeight: 600, color: "#374151", marginBottom: 5,
 };
 
-function SectorPills({
-  selected,
-  onChange,
-  label,
-  accent = "#dc2626",
-  accentBg = "#fef2f2",
-}: {
-  selected:  string[];
-  onChange:  (s: string[]) => void;
-  label:     string;
-  accent?:   string;
-  accentBg?: string;
-}) {
-  function toggle(s: string) {
-    selected.includes(s)
-      ? onChange(selected.filter(x => x !== s))
-      : onChange([...selected, s]);
-  }
-  return (
-    <div>
-      <label style={lbl}>{label}</label>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {SECTORS.filter(s => s !== "Généraliste").map(s => {
-          const active = selected.includes(s);
-          return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => toggle(s)}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 20,
-                border: `1.5px solid ${active ? accent : "#e5e7eb"}`,
-                background: active ? accentBg : "#fff",
-                color: active ? accent : "#374151",
-                fontSize: 12,
-                fontWeight: active ? 600 : 400,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                transition: "all .1s",
-              }}
-            >
-              {active && "✓ "}{s}
-            </button>
-          );
-        })}
-      </div>
-      {selected.length > 0 && (
-        <div style={{ marginTop: 4, fontSize: 11.5, color: "#6b7280" }}>
-          {selected.length} secteur{selected.length > 1 ? "s" : ""} sélectionné{selected.length > 1 ? "s" : ""}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function MaBuyerFields({ data, onChange }: Props) {
   function set<K extends keyof MaBuyerData>(key: K, val: MaBuyerData[K]) {
     onChange({ ...data, [key]: val });
@@ -84,7 +29,7 @@ export function MaBuyerFields({ data, onChange }: Props) {
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 14 }}>
-        Critères d'acquisition
+        Critères d&apos;acquisition
       </div>
 
       {/* Rationale */}
@@ -93,7 +38,7 @@ export function MaBuyerFields({ data, onChange }: Props) {
         <textarea
           rows={2}
           style={{ ...inp, resize: "vertical" }}
-          placeholder="ex: Croissance externe dans les logiciels industriels pour renforcer l'offre SaaS..."
+          placeholder="ex : croissance externe dans les logiciels industriels pour renforcer l'offre..."
           value={data.acquisition_rationale}
           onChange={e => set("acquisition_rationale", e.target.value)}
         />
@@ -101,12 +46,13 @@ export function MaBuyerFields({ data, onChange }: Props) {
 
       {/* Secteurs exclus — deal breakers */}
       <div>
-        <SectorPills
-          label="Secteurs exclus (deal breakers)"
+        <label style={lbl}>Secteurs exclus (deal breakers)</label>
+        <FacetMultiSelect
+          groups={SECTOR_FACET_GROUPS}
           selected={data.excluded_sectors}
           onChange={v => set("excluded_sectors", v)}
-          accent="#dc2626"
-          accentBg="#fef2f2"
+          variant="exclude"
+          placeholder="Rechercher un secteur à exclure…"
         />
       </div>
     </div>

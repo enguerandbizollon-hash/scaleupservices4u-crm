@@ -1,5 +1,5 @@
 "use client";
-import { SECTORS, ORG_COMPANY_STAGES, REVENUE_RANGES } from "@/lib/crm/matching-maps";
+import { SECTOR_GROUPS, ORG_COMPANY_STAGES, REVENUE_RANGES } from "@/lib/crm/matching-maps";
 
 export interface CompanyProfileData {
   founded_year:   number | null;
@@ -42,7 +42,15 @@ export function CompanyProfileFields({ data, onChange }: Props) {
           <label style={lbl}>Secteur d'activité</label>
           <select style={sel} value={data.sector} onChange={e => set("sector", e.target.value)}>
             <option value="">— Sélectionner —</option>
-            {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+            {SECTOR_GROUPS.map(g => (
+              <optgroup key={g.family} label={g.family}>
+                <option value={g.family}>{g.family} (tout le secteur)</option>
+                {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+              </optgroup>
+            ))}
+            <optgroup label="Transverse">
+              <option value="Généraliste">Généraliste</option>
+            </optgroup>
           </select>
         </div>
         <div>

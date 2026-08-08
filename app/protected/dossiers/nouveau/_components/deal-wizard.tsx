@@ -9,35 +9,22 @@ import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER } from "@/lib/crm/labels"
 import { EntityPicker } from "@/components/ui/EntityPicker";
 import { Building2 } from "lucide-react";
 import {
-  SECTORS,
   SECTOR_GROUPS,
   ORG_COMPANY_STAGES,
   DEAL_TIMING_OPTIONS,
   CURRENCIES,
   GEO_ALL,
-  GEO_REGIONS_FRANCE,
   GEO_LABELS,
 } from "@/lib/crm/matching-maps";
-import { GEO_DEPT_OPTIONS } from "@/lib/crm/departements";
 import { dealTypeLabels } from "@/lib/crm/labels";
 import { IncludeExcludeMultiSelect } from "@/components/ui/IncludeExcludeMultiSelect";
-import type { FacetGroup } from "@/components/ui/FacetMultiSelect";
+import { SECTOR_FACET_GROUPS, GEO_FACET_GROUPS } from "@/components/ui/referential-facets";
 import { extractCadrageFromUploadAction } from "@/actions/ai/cadrage";
 import { cadrageToWizardPrefill } from "@/lib/crm/cadrage-map";
 import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 
 // Options {value,label} pour les selects de l'étape 1 (France + régions).
 const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
-
-// Facettes groupées du multi-sélecteur : secteurs par famille, géo par niveau.
-const SECTOR_FACET_GROUPS: FacetGroup[] = SECTOR_GROUPS.map(g => ({
-  label: g.family, options: g.options.map(o => ({ value: o, label: o })),
-}));
-const GEO_FACET_GROUPS: FacetGroup[] = [
-  { label: "France", options: [{ value: "france", label: "France entière" }] },
-  { label: "Régions", options: [...GEO_REGIONS_FRANCE].map(r => ({ value: r, label: GEO_LABELS[r] ?? r })) },
-  { label: "Départements", options: GEO_DEPT_OPTIONS },
-];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -528,7 +515,15 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
                   <label style={lbl}>Secteur d&apos;activité</label>
                   <select value={sector} onChange={e => setSector(e.target.value)} style={inp}>
                     <option value="">— Choisir —</option>
-                    {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {SECTOR_GROUPS.map(g => (
+                      <optgroup key={g.family} label={g.family}>
+                        <option value={g.family}>{g.family} (tout le secteur)</option>
+                        {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </optgroup>
+                    ))}
+                    <optgroup label="Transverse">
+                      <option value="Généraliste">Généraliste</option>
+                    </optgroup>
                   </select>
                 </div>
               </div>

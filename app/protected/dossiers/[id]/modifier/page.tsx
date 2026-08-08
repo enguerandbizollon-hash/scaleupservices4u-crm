@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateDealAction } from "@/app/protected/dossiers/nouveau/actions";
-import { SECTORS, COMPANY_STAGES } from "@/lib/crm/matching-maps";
+import { SECTOR_GROUPS, ORG_COMPANY_STAGES, CURRENCIES } from "@/lib/crm/matching-maps";
 import { GeoSelectField } from "@/components/ui/GeoSelectField";
 
 async function Content({ params }: { params: Promise<{ id: string }> }) {
@@ -96,7 +96,15 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                 <label style={{ cssText: lbl } as any}>Secteur</label>
                 <select name="sector" defaultValue={deal.sector ?? ""} style={{ cssText: sel } as any}>
                   <option value="">— Non renseigné —</option>
-                  {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {SECTOR_GROUPS.map(g => (
+                    <optgroup key={g.family} label={g.family}>
+                      <option value={g.family}>{g.family} (tout le secteur)</option>
+                      {g.options.map(o => <option key={o} value={o}>{o}</option>)}
+                    </optgroup>
+                  ))}
+                  <optgroup label="Transverse">
+                    <option value="Généraliste">Généraliste</option>
+                  </optgroup>
                 </select>
               </div>
 
@@ -128,9 +136,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
               <div>
                 <label style={{ cssText: lbl } as any}>Devise</label>
                 <select name="currency" defaultValue={deal.currency ?? "EUR"} style={{ cssText: sel } as any}>
-                  <option value="EUR">EUR</option>
-                  <option value="CHF">CHF</option>
-                  <option value="USD">USD</option>
+                  {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
 
@@ -141,7 +147,7 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
                     <label style={{ cssText: lbl } as any}>Stade de l&apos;entreprise</label>
                     <select name="company_stage" defaultValue={(deal as any).company_stage ?? ""} style={{ cssText: sel } as any}>
                       <option value="">— Non renseigné —</option>
-                      {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      {ORG_COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                   </div>
                   <div>

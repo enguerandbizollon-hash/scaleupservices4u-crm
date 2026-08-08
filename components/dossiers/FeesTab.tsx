@@ -15,6 +15,7 @@ import {
   sumMilestonesByStatus,
   filterOverdueMilestones,
 } from "@/lib/crm/fee-calculator";
+import { CURRENCIES } from "@/lib/crm/matching-maps";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,6 @@ const FEE_STATUS_COLORS: Record<string, { bg: string; tx: string }> = {
   paid:      { bg: "#D1FAE5", tx: "#065F46" },
   cancelled: { bg: "var(--surface-3)", tx: "var(--text-5)" },
 };
-const CURRENCIES = ["EUR", "CHF", "USD", "GBP"];
 
 // Bases de calcul explicites — clés alignées sur FeeBaseSource (fee-calculator).
 const BASE_OPTIONS: { value: string; label: string }[] = [
@@ -431,7 +431,7 @@ export function FeesTab({ deal, initialFees }: { deal: DealForFeesTab; initialFe
                 <div>
                   <label style={lbl}>Devise</label>
                   <select style={sel} value={feeForm.currency ?? "EUR"} onChange={setF("currency")}>
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.value}</option>)}
                   </select>
                 </div>
               </div>

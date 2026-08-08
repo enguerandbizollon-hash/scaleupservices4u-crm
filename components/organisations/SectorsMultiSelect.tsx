@@ -1,68 +1,23 @@
 "use client";
-import { SECTORS } from "@/lib/crm/matching-maps";
-
-// Alias pour la compatibilité des imports existants
-export const SECTOR_OPTIONS = [...SECTORS];
+import { FacetMultiSelect } from "@/components/ui/FacetMultiSelect";
+import { SECTOR_FACET_GROUPS } from "@/components/ui/referential-facets";
 
 interface SectorsMultiSelectProps {
   value: string[];
   onChange: (sectors: string[]) => void;
 }
 
+// Secteurs cibles (multi), recherchables et groupés par famille. Tolère une
+// valeur héritée hors référentiel (ex. « Généraliste » stocké autrefois) :
+// FacetMultiSelect l'affiche par son libellé et permet de la retirer.
 export function SectorsMultiSelect({ value, onChange }: SectorsMultiSelectProps) {
-  const isGeneraliste = value.includes("Généraliste");
-
-  function toggle(sector: string) {
-    if (sector === "Généraliste") {
-      onChange(isGeneraliste ? [] : ["Généraliste"]);
-      return;
-    }
-    const base = value.filter(s => s !== "Généraliste");
-    if (base.includes(sector)) {
-      onChange(base.filter(s => s !== sector));
-    } else {
-      onChange([...base, sector]);
-    }
-  }
-
   return (
-    <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {SECTOR_OPTIONS.map(sector => {
-          const active = value.includes(sector);
-          const disabled =
-            (sector === "Généraliste" && value.length > 0 && !isGeneraliste) ||
-            (sector !== "Généraliste" && isGeneraliste);
-          return (
-            <button
-              key={sector}
-              type="button"
-              disabled={disabled}
-              onClick={() => toggle(sector)}
-              style={{
-                padding: "5px 11px",
-                borderRadius: 20,
-                border: `1.5px solid ${active ? "#1a56db" : "#e5e7eb"}`,
-                background: active ? "#eff6ff" : "#fff",
-                color: active ? "#1a56db" : disabled ? "#9ca3af" : "#374151",
-                fontSize: 12.5,
-                fontWeight: active ? 600 : 400,
-                cursor: disabled ? "not-allowed" : "pointer",
-                fontFamily: "inherit",
-                opacity: disabled ? 0.55 : 1,
-                transition: "all .1s",
-              }}
-            >
-              {active && "✓ "}{sector}
-            </button>
-          );
-        })}
-      </div>
-      {value.length > 0 && (
-        <div style={{ marginTop: 6, fontSize: 11.5, color: "#6b7280" }}>
-          {value.length} secteur{value.length > 1 ? "s" : ""} sélectionné{value.length > 1 ? "s" : ""}
-        </div>
-      )}
-    </div>
+    <FacetMultiSelect
+      groups={SECTOR_FACET_GROUPS}
+      selected={value}
+      onChange={onChange}
+      variant="target"
+      placeholder="Rechercher un secteur…"
+    />
   );
 }

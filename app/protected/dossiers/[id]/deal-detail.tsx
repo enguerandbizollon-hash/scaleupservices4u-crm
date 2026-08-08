@@ -34,7 +34,8 @@ import { isScreeningReady } from "@/lib/crm/matching-maps";
 import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
-import { COMPANY_STAGES, ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, DEAL_CONTEXTS, GEO_LABELS, stageLabel } from "@/lib/crm/matching-maps";
+import { ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, DEAL_CONTEXTS, stageLabel } from "@/lib/crm/matching-maps";
+import { geoLabel } from "@/lib/crm/geo-match";
 import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER, dealTypeLabels, roleInDossierLabels } from "@/lib/crm/labels";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
@@ -1097,7 +1098,7 @@ function GeoChips({ values }: { values: string[] }) {
     <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
       {values.map(v => (
         <span key={v} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-2)", fontWeight:500 }}>
-          {GEO_LABELS[v] ?? v}
+          {geoLabel(v)}
         </span>
       ))}
     </div>
@@ -1190,10 +1191,10 @@ function MaBuySpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
       {deal.excluded_geographies && deal.excluded_geographies.length > 0 && (
         <SpecRow label="Géos exclues"><GeoChips values={deal.excluded_geographies} /></SpecRow>
       )}
-      <SpecRow label="Revenue cible min">
+      <SpecRow label="CA cible min">
         <EditableSpec dealId={dealId} field="target_revenue_min" initialValue={deal.target_revenue_min} type="number" formatter={fmMoney} placeholder="Min" />
       </SpecRow>
-      <SpecRow label="Revenue cible max">
+      <SpecRow label="CA cible max">
         <EditableSpec dealId={dealId} field="target_revenue_max" initialValue={deal.target_revenue_max} type="number" formatter={fmMoney} placeholder="Max" />
       </SpecRow>
       <SpecRow label="EV cible min">
@@ -1211,8 +1212,8 @@ function MaBuySpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
       <SpecRow label="Stade cible">
         <EditableSpec
           dealId={dealId} field="target_stage" initialValue={deal.target_stage ?? null}
-          selectOptions={COMPANY_STAGES.map(s => ({ value: s.value, label: s.label }))}
-          formatter={(v) => v ? (COMPANY_STAGES.find(s => s.value === v)?.label ?? String(v)) : ""}
+          selectOptions={ORG_COMPANY_STAGES.map(s => ({ value: s.value, label: s.label }))}
+          formatter={(v) => v ? (ORG_COMPANY_STAGES.find(s => s.value === v)?.label ?? String(v)) : ""}
           placeholder="Choisir un stade"
         />
       </SpecRow>
