@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { createClient } from "@/lib/supabase/server";
@@ -62,8 +63,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           </div>
         </div>
 
-        {/* Nav — Client Component */}
-        <SidebarNav taskCounts={taskCounts} inboxCount={inboxCount} />
+        {/* Nav — Client Component (useSearchParams => Suspense requis) */}
+        <Suspense fallback={null}>
+          <SidebarNav taskCounts={taskCounts} inboxCount={inboxCount} />
+        </Suspense>
       </aside>
 
       <main style={{ marginLeft:250, flex:1, minWidth:0 }}>

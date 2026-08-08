@@ -2,46 +2,50 @@
 import { GlobalSearch } from "./components/global-search";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Sunrise, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, BarChart2, CalendarDays, CheckSquare, Inbox, Radar, Crosshair, Handshake } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Sunrise, FolderOpen, Users, Building2, LogOut, Upload, Sparkles, Plug, BarChart2, CalendarDays, CheckSquare, Inbox, Radar, Crosshair, Handshake, Target } from "lucide-react";
 
-// Navigation en moments du métier (refonte 2026-08-01, validée avec la carte
-// des 7 maillons) : Ce matin (la revue), Cédants (trouver et qualifier),
-// Mandats (exécuter et matcher les acquéreurs), Exécution (le quotidien),
-// Annuaire (le référentiel), Outillage (l'occasionnel).
+// Navigation par OPÉRATION (réorg 2026-08-08, audit IA) : la sidebar sépare
+// les deux mandats symétriques. Règle : « Acquéreur » = la contrepartie qu'on
+// démarche en cession, jamais un type de mandat. Donc « Acquéreurs à
+// démarcher » vit SOUS Cession (le réservoir qui la sert), et « Acquisitions »
+// est une entrée à part entière (le buy-side, client = repreneur). Un item
+// avec `type` cible /dossiers filtré et ne s'allume que pour ce type.
 const NAV_GROUPS: Array<{
   title: string | null;
-  items: Array<{ href: string; label: string; dot: string; bg: string; icon: typeof Sunrise }>;
+  items: Array<{ href: string; label: string; dot: string; bg: string; icon: typeof Sunrise; type?: string }>;
 }> = [
   { title: null, items: [
-    { href:"/protected",               label:"Ce matin",      dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Sunrise },
+    { href:"/protected",               label:"Ce matin",             dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Sunrise },
   ]},
-  { title: "Cédants", items: [
-    { href:"/protected/prospection",   label:"Prospection",   dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:Crosshair },
-    { href:"/protected/signaux",       label:"Signaux",       dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Radar },
+  { title: "Cession", items: [
+    { href:"/protected/dossiers?type=ma_sell", type:"ma_sell", label:"Cessions",             dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
+    { href:"/protected/prospection",   label:"Prospection cédants",  dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:Crosshair },
+    { href:"/protected/signaux",       label:"Signaux",              dot:"#B45309", bg:"rgba(180,83,9,.18)",    icon:Radar },
+    { href:"/protected/acquereurs",    label:"Acquéreurs à démarcher", dot:"#6366F1", bg:"rgba(99,102,241,.18)", icon:Handshake },
   ]},
-  { title: "Mandats", items: [
-    { href:"/protected/dossiers",      label:"Mandats",       dot:"#15A348", bg:"rgba(21,163,72,.18)",   icon:FolderOpen },
-    { href:"/protected/acquereurs",    label:"Acquéreurs",    dot:"#6366F1", bg:"rgba(99,102,241,.18)",  icon:Handshake },
-  ]},
-  { title: "Exécution", items: [
-    { href:"/protected/taches",        label:"Tâches",        dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },
-    { href:"/protected/agenda",        label:"Agenda",        dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:CalendarDays },
-    { href:"/protected/inbox",         label:"Boîte emails",  dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
+  { title: "Acquisition", items: [
+    { href:"/protected/dossiers?type=ma_buy", type:"ma_buy", label:"Acquisitions",          dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:Target },
   ]},
   { title: "Annuaire", items: [
-    { href:"/protected/organisations", label:"Organisations", dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
-    { href:"/protected/contacts",      label:"Contacts",      dot:"#A8306A", bg:"rgba(168,48,106,.18)",  icon:Users },
+    { href:"/protected/organisations", label:"Organisations",        dot:"#D97706", bg:"rgba(217,119,6,.18)",   icon:Building2 },
+    { href:"/protected/contacts",      label:"Contacts",             dot:"#A8306A", bg:"rgba(168,48,106,.18)",  icon:Users },
+  ]},
+  { title: "Exécution", items: [
+    { href:"/protected/taches",        label:"Tâches",               dot:"#7E57C2", bg:"rgba(126,87,194,.18)",  icon:CheckSquare },
+    { href:"/protected/agenda",        label:"Agenda",               dot:"#2563EB", bg:"rgba(37,99,235,.18)",   icon:CalendarDays },
+    { href:"/protected/inbox",         label:"Boîte de tri",         dot:"#E11D48", bg:"rgba(225,29,72,.18)",   icon:Inbox },
   ]},
   { title: "Outillage", items: [
-    { href:"/protected/statistiques",  label:"Statistiques",  dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:BarChart2 },
-    { href:"/protected/import",        label:"Import",        dot:"#1E7A4A", bg:"rgba(30,122,74,.18)",   icon:Upload },
-    { href:"/protected/connecteurs",   label:"Connecteurs",   dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
+    { href:"/protected/statistiques",  label:"Statistiques",         dot:"#0F766E", bg:"rgba(15,118,110,.18)",  icon:BarChart2 },
+    { href:"/protected/import",        label:"Import",               dot:"#1E7A4A", bg:"rgba(30,122,74,.18)",   icon:Upload },
+    { href:"/protected/connecteurs",   label:"Connecteurs",          dot:"#6D28D9", bg:"rgba(109,40,217,.18)",  icon:Plug },
   ]},
 ];
 
 export function SidebarNav({ taskCounts, inboxCount }: { taskCounts?: { overdue: number; today: number }; inboxCount?: number }) {
   const path = usePathname();
+  const currentType = useSearchParams().get("type");
   const taskBadge = taskCounts && (taskCounts.overdue > 0 || taskCounts.today > 0);
   const inboxBadge = (inboxCount ?? 0) > 0;
 
@@ -63,7 +67,12 @@ export function SidebarNav({ taskCounts, inboxCount }: { taskCounts?: { overdue:
         )}
         {group.items.map(item => {
           const Icon = item.icon;
-          const active = path === item.href || (item.href !== "/protected" && path.startsWith(item.href));
+          const base = item.href.split("?")[0];
+          // Un item typé (Cessions/Acquisitions) ne s'allume que sur /dossiers
+          // ET pour son type ; les autres, par préfixe de chemin classique.
+          const active = item.type
+            ? path === base && currentType === item.type
+            : path === base || (base !== "/protected" && path.startsWith(base));
           const isTaches = item.href === "/protected/taches";
           const isInbox = item.href === "/protected/inbox";
           return (

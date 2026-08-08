@@ -27,27 +27,39 @@ function fmt(v:string|null) {
 }
 function daysSince(v:string) { return Math.floor((Date.now()-new Date(v).getTime())/86400000); }
 
-async function Content({ sansActivite = false, phase = "signes" }: { sansActivite?: boolean; phase?: "signes" | "preparation" }) {
+async function Content({ sansActivite = false, phase = "signes", dealTypeFilter }: { sansActivite?: boolean; phase?: "signes" | "preparation"; dealTypeFilter?: "ma_sell" | "ma_buy" }) {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];
 
-  // Deals avec stats agrégées
-  const { data: deals } = await supabase
+  // Réorg 2026-08-08 : la page est filtrée par opération (Cessions /
+  // Acquisitions) via ?type=. Titre, liens internes et bouton de création
+  // s'adaptent, et le filtre de type est PRÉSERVÉ dans tous les liens (phase,
+  // « voir tous »), sinon on retomberait sur la liste mêlée.
+  const pageTitle = dealTypeFilter === "ma_sell" ? "Cessions" : dealTypeFilter === "ma_buy" ? "Acquisitions" : "Mandats";
+  const nounSing = dealTypeFilter === "ma_sell" ? "mandat de cession" : dealTypeFilter === "ma_buy" ? "mandat d'acquisition" : "mandat";
+  const listHref = `/protected/dossiers${dealTypeFilter ? `?type=${dealTypeFilter}` : ""}`;
+  const prepaHref = `/protected/dossiers?${dealTypeFilter ? `type=${dealTypeFilter}&` : ""}phase=preparation`;
+  const nouveauHref = `/protected/dossiers/nouveau${dealTypeFilter ? `?type=${dealTypeFilter}` : ""}`;
+
+  // Deals avec stats agrégées, scopés au type d'opération si demandé.
+  let dealsQuery = supabase
     .from("deals")
     .select("id,code,name,deal_type,deal_status,deal_stage,priority_level,sector,location,target_date,target_amount,currency,description,screening_status,screening_score,created_at,organization_id,dirigeant_id,dirigeant_nom,next_action_date,estimated_fee_amount,success_fee_percent,mandate_signed_at")
     .order("priority_level");
+  if (dealTypeFilter) dealsQuery = dealsQuery.eq("deal_type", dealTypeFilter);
+  const { data: deals } = await dealsQuery;
 
   if (!deals?.length) {
     return (
       <div style={{ padding:32, minHeight:"100vh", background:"var(--bg)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
-          <h1 style={{ margin:0, fontSize:24, fontWeight:700 }}>Mandats</h1>
-          <Link href="/protected/dossiers/nouveau" style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-            <Plus size={14}/> Nouveau mandat
+          <h1 style={{ margin:0, fontSize:24, fontWeight:700 }}>{pageTitle}</h1>
+          <Link href={nouveauHref} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:9, background:"#1a56db", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+            <Plus size={14}/> Nouveau {nounSing}
           </Link>
         </div>
         <div style={{ textAlign:"center", padding:"60px 24px", color:"var(--text-5)", fontSize:14 }}>
-          Aucun mandat, <Link href="/protected/dossiers/nouveau" style={{ color:"#1a56db" }}>créer le premier</Link>
+          Aucun {nounSing}, <Link href={nouveauHref} style={{ color:"#1a56db" }}>créer le premier</Link>
         </div>
       </div>
     );
@@ -155,7 +167,7 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
   const won     = showClosed ? deals.filter(d => d.deal_status === "won") : [];
   const lost    = showClosed ? deals.filter(d => d.deal_status === "lost") : [];
   const closed  = [...won, ...lost]; // affichés ensemble en grisé
-  const types   = ["ma_sell","ma_buy"];
+  const types   = dealTypeFilter ? [dealTypeFilter] : ["ma_sell", "ma_buy"];
   const groups  = types.map(t => ({
     t, dt: DT[t],
     open:   open.filter(d => d.deal_type === t),
@@ -169,14 +181,14 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
         <div>
-          <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>Mandats</h1>
+          <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--text-1)" }}>{pageTitle}</h1>
           <div style={{ display:"flex", gap:8, marginTop:6, alignItems:"center", flexWrap:"wrap" }}>
             {sansActivite ? (
               <>
                 <span style={{ fontSize:12, padding:"2px 9px", borderRadius:20, background:"#FEE2E2", color:"#991B1B", fontWeight:700 }}>
                   {open.length} sans activité depuis {DORMANT_THRESHOLD_DAYS} jours
                 </span>
-                <Link href="/protected/dossiers" style={{ fontSize:12, color:"var(--text-4)", textDecoration:"none" }}>✕ voir tous les mandats</Link>
+                <Link href={listHref} style={{ fontSize:12, color:"var(--text-4)", textDecoration:"none" }}>✕ voir toute la liste</Link>
               </>
             ) : (
               <>
@@ -191,7 +203,7 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
           </div>
           {!sansActivite && (
             <div style={{ display:"flex", gap:6, marginTop:12 }}>
-              <Link href="/protected/dossiers" style={{
+              <Link href={listHref} style={{
                 fontSize:12.5, fontWeight:700, padding:"5px 12px", borderRadius:8, textDecoration:"none",
                 background: phase !== "preparation" ? "var(--fund-bg)" : "var(--surface-2)",
                 color:      phase !== "preparation" ? "var(--fund-tx)" : "var(--text-4)",
@@ -199,7 +211,7 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
               }}>
                 Signés{openSignes.length > 0 ? ` · ${openSignes.length}` : ""}
               </Link>
-              <Link href="/protected/dossiers?phase=preparation" style={{
+              <Link href={prepaHref} style={{
                 fontSize:12.5, fontWeight:700, padding:"5px 12px", borderRadius:8, textDecoration:"none",
                 background: phase === "preparation" ? "var(--sell-bg)" : "var(--surface-2)",
                 color:      phase === "preparation" ? "var(--sell-tx)" : "var(--text-4)",
@@ -247,12 +259,20 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
               { key:"Description", label:"Description" },
             ]}
           />
-          <Link href="/protected/dossiers/nouveau?type=ma_sell" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background:"var(--sell-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-            <Plus size={14}/> Cession
-          </Link>
-          <Link href="/protected/dossiers/nouveau?type=ma_buy" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background:"var(--buy-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
-            <Plus size={14}/> Acquisition
-          </Link>
+          {dealTypeFilter ? (
+            <Link href={nouveauHref} style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background: dealTypeFilter === "ma_buy" ? "var(--buy-tx)" : "var(--sell-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+              <Plus size={14}/> Nouveau {nounSing}
+            </Link>
+          ) : (
+            <>
+              <Link href="/protected/dossiers/nouveau?type=ma_sell" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background:"var(--sell-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+                <Plus size={14}/> Cession
+              </Link>
+              <Link href="/protected/dossiers/nouveau?type=ma_buy" style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px", borderRadius:9, background:"var(--buy-tx)", color:"#fff", textDecoration:"none", fontSize:13.5, fontWeight:600 }}>
+                <Plus size={14}/> Acquisition
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -312,12 +332,12 @@ async function Content({ sansActivite = false, phase = "signes" }: { sansActivit
         {groups.length === 0 && (
           <div style={{ textAlign:"center", padding:"48px 24px", color:"var(--text-5)", fontSize:14 }}>
             {phase === "preparation"
-              ? "Aucun dossier en préparation."
+              ? "Aucun mandat en préparation."
               : sansActivite
                 ? "Aucun mandat sans activité."
                 : openPreparation.length > 0
-                  ? <>Aucun mandat signé pour l&apos;instant. <Link href="/protected/dossiers?phase=preparation" style={{ color:"#1a56db", fontWeight:600 }}>{openPreparation.length} dossier{openPreparation.length > 1 ? "s" : ""} en préparation</Link> à faire signer.</>
-                  : "Aucun mandat."}
+                  ? <>Aucun {nounSing} signé pour l&apos;instant. <Link href={prepaHref} style={{ color:"#1a56db", fontWeight:600 }}>{openPreparation.length} en préparation</Link> à faire signer.</>
+                  : `Aucun ${nounSing}.`}
           </div>
         )}
       </div>
@@ -492,14 +512,15 @@ async function KanbanContent() {
 }
 
 export default async function DossiersPage({ searchParams }: {
-  searchParams: Promise<{ view?: string; filtre?: string; phase?: string }>;
+  searchParams: Promise<{ view?: string; filtre?: string; phase?: string; type?: string }>;
 }) {
-  const { view, filtre, phase } = await searchParams;
+  const { view, filtre, phase, type } = await searchParams;
   const isKanban = view === "kanban";
+  const dealTypeFilter = type === "ma_sell" || type === "ma_buy" ? type : undefined;
 
   return (
     <Suspense fallback={<div style={{ padding:32 }}><div style={{ height:400, borderRadius:14, background:"var(--surface-2)" }}/></div>}>
-      {isKanban ? <KanbanContent/> : <Content sansActivite={filtre === "sans_activite"} phase={phase === "preparation" ? "preparation" : "signes"}/>}
+      {isKanban ? <KanbanContent/> : <Content sansActivite={filtre === "sans_activite"} phase={phase === "preparation" ? "preparation" : "signes"} dealTypeFilter={dealTypeFilter}/>}
     </Suspense>
   );
 }
