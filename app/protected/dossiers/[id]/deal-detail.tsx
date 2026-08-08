@@ -494,7 +494,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           type PaneKey = typeof activeTab;
           const espaces: { key: string; label: string; panes: { key: PaneKey; label: string }[] }[] = [
             {
-              key: "cible", label: "Cible", panes: [
+              key: "cible", label: "L'affaire", panes: [
                 { key: "financier", label: "Financier" },
                 { key: "screening", label: "Screening" },
                 { key: "documents", label: "Documents" },
@@ -503,7 +503,8 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
             ...(isMa ? [{
               key: "marche", label: "Marché", panes: [
                 ...(deal.deal_type === "ma_sell" ? [{ key: "acquereurs" as PaneKey, label: "Acquéreurs" }] : []),
-                { key: "sourcing" as PaneKey, label: "Sourcing" },
+                // Buy-side : le "sourcing" EST la recherche de cibles.
+                { key: "sourcing" as PaneKey, label: deal.deal_type === "ma_buy" ? "Cibles" : "Sourcing" },
               ],
             }] : []),
             {

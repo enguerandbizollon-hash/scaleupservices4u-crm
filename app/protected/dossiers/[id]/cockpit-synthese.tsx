@@ -96,7 +96,7 @@ export function CockpitSynthese({ deal, financialData, suggestions, clientOrg, o
 
       {/* LA CIBLE */}
       <div style={card}>
-        <div style={cardTitle}><TrendingUp size={11} /> La cible</div>
+        <div style={cardTitle}><TrendingUp size={11} /> L&apos;affaire</div>
         {reels.length > 0 ? (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
@@ -124,7 +124,7 @@ export function CockpitSynthese({ deal, financialData, suggestions, clientOrg, o
             </tbody>
           </table>
         ) : (
-          <div style={{ fontSize: 12, color: "var(--text-5)" }}>Aucun exercice saisi (onglet Cible, Financier).</div>
+          <div style={{ fontSize: 12, color: "var(--text-5)" }}>Aucun exercice saisi (onglet L&apos;affaire, Financier).</div>
         )}
         {(deal.asking_price_min != null || deal.asking_price_max != null) && (
           <div style={kv}><span style={kLabel}>Prix demandé</span>
@@ -158,7 +158,7 @@ export function CockpitSynthese({ deal, financialData, suggestions, clientOrg, o
           <div style={kv}><span style={kLabel}>Contexte</span><span style={{ ...kValue, fontWeight: 600 }}>{contexteLabel}</span></div>
         )}
         <div style={kv}>
-          <span style={kLabel}>Closing cible</span>
+          <span style={kLabel}>Closing visé</span>
           <span style={{ ...kValue, color: daysToTarget != null && daysToTarget < 0 ? "#991B1B" : "var(--text-1)" }}>
             {deal.target_date ? `${fmtDateFr(deal.target_date)}${daysToTarget != null ? ` (${daysToTarget >= 0 ? "J-" + daysToTarget : daysToTarget + " j"})` : ""}` : "—"}
           </span>
