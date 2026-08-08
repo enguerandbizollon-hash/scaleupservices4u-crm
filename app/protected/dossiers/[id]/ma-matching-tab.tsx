@@ -500,7 +500,7 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
             style={{ padding: "8px 16px", borderRadius: 9, background: "#3730A3", color: "#fff", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>
             Ouvrir la base acquéreurs
           </Link>
-          <Link href="/protected/organisations/nouveau"
+          <Link href="/protected/organisations/nouveau?type=buyer"
             style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
             Créer un acquéreur
           </Link>
