@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateCadrageContent, type CadrageContent } from "@/lib/ai/cadrage-engine";
-import { cadrageToChasseFilters, cadrageToDealPatch, cadrageChasseName } from "@/lib/crm/cadrage-map";
+import { cadrageToChasseFilters, cadrageToDealPatch, cadrageChasseName, cadrageToWizardPrefill } from "@/lib/crm/cadrage-map";
 
 // Fiche de cadrage type ROUSSON (buy-side) une fois extraite par l'IA.
 const ROUSSON: CadrageContent = {
@@ -113,5 +113,34 @@ describe("cadrageChasseName", () => {
   });
   it("retombe sur le nom du mandat sans repreneur", () => {
     expect(cadrageChasseName({ ...ROUSSON, repreneur_nom: null }, "Mandat X")).toBe("Cibles : Mandat X");
+  });
+});
+
+describe("cadrageToWizardPrefill", () => {
+  it("rabat les secteurs sur le référentiel (sinon tag libre), normalise la géo", () => {
+    const p = cadrageToWizardPrefill(ROUSSON);
+    expect(p.targetSectors).toContain("Génie climatique / CVC");
+    expect(p.targetSectors).toContain("Déménagement"); // non référentiel, conservé
+    expect(p.targetGeographies).toEqual(["38", "69"]); // codes départements conservés
+    expect(p.targetRevenueMin).toBe("500000");
+    expect(p.targetRevenueMax).toBe("1500000");
+    expect(p.acquisitionBudgetMin).toBe("300000");
+    expect(p.fullAcquisitionRequired).toBe(true);
+    expect(p.managementRetention).toBe(true);
+    expect(p.strategicRationale).toContain("Reprendre");
+  });
+
+  it("normalise les régions extraites en slugs et fusionne avec les départements", () => {
+    const p = cadrageToWizardPrefill({ ...ROUSSON, departements: ["38"], regions: ["Auvergne-Rhône-Alpes"] });
+    expect(p.targetGeographies).toEqual(["38", "auvergne_rhone_alpes"]);
+  });
+
+  it("champs absents -> valeurs vides / défauts", () => {
+    const p = cadrageToWizardPrefill(validateCadrageContent({ confidence: 10 }));
+    expect(p.targetSectors).toEqual([]);
+    expect(p.targetGeographies).toEqual([]);
+    expect(p.targetRevenueMin).toBe("");
+    expect(p.fullAcquisitionRequired).toBe(false);
+    expect(p.managementRetention).toBe(true);
   });
 });

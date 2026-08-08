@@ -82,6 +82,31 @@ export async function extractCadrageAction(documentId: string): Promise<ExtractC
   return { success: true, content: res.data };
 }
 
+/**
+ * Extraction STATELESS depuis un fichier uploadé, AVANT que le mandat existe
+ * (wizard de création). Ne touche ni Storage, ni ma_documents, ni deals :
+ * renvoie juste le CadrageContent pour pré-remplir le wizard. Le PDF pourra
+ * être re-uploadé proprement en document après création si besoin.
+ */
+export async function extractCadrageFromUploadAction(formData: FormData): Promise<ExtractCadrageResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non authentifié" };
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { success: false, error: "Aucun fichier fourni." };
+  if (file.type && file.type !== "application/pdf") return { success: false, error: "Seuls les PDF sont analysés." };
+  if (file.size > 30 * 1024 * 1024) return { success: false, error: "PDF trop volumineux (> 30 Mo)." };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const res = await extractCadrageFromPdf({
+    pdfBuffer: buffer,
+    contextHint: `Fiche de cadrage d'un repreneur (buy-side). Fichier : ${file.name}.`,
+  });
+  if (!res.ok || !res.data) return { success: false, error: res.error ?? "Extraction IA échouée." };
+  return { success: true, content: res.data };
+}
+
 export interface ApplyCadrageResponse {
   success: boolean;
   chasse_id?: string;

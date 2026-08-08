@@ -13,6 +13,7 @@
 
 import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 import type { ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
+import { normalizeSectorText, normalizeGeoText } from "@/lib/crm/investor-parsers";
 
 /** Filtres de chasse dérivés de la fiche (NAF, CA, géo, âge dirigeant). */
 export function cadrageToChasseFilters(c: CadrageContent): ScreeningFilters {
@@ -49,4 +50,42 @@ export function cadrageToDealPatch(c: CadrageContent): Record<string, unknown> {
 export function cadrageChasseName(c: CadrageContent, fallback: string): string {
   const who = c.repreneur_nom?.trim();
   return who ? `Cibles pour ${who}` : `Cibles : ${fallback}`;
+}
+
+export interface CadrageWizardPrefill {
+  targetSectors: string[];
+  targetGeographies: string[];
+  targetRevenueMin: string;
+  targetRevenueMax: string;
+  acquisitionBudgetMin: string;
+  fullAcquisitionRequired: boolean;
+  managementRetention: boolean;
+  strategicRationale: string;
+}
+
+/**
+ * Pré-remplit les états du wizard ma_buy à partir d'une fiche de cadrage.
+ * Corrige le mélange codes/labels de cadrageToDealPatch pour l'UI : les
+ * secteurs texte libre sont rabattus sur le référentiel (sinon conservés comme
+ * tag libre à corriger), les régions sont normalisées en slugs, les codes
+ * départements conservés tels quels. Pur, testable.
+ */
+export function cadrageToWizardPrefill(c: CadrageContent): CadrageWizardPrefill {
+  const targetSectors = [
+    ...new Set(c.secteurs.map((s) => normalizeSectorText(s) ?? s.trim()).filter((s) => s.length > 0)),
+  ];
+  const geoFromRegions = c.regions
+    .map((r) => normalizeGeoText(r))
+    .filter((x): x is string => !!x);
+  const targetGeographies = [...new Set([...c.departements, ...geoFromRegions])];
+  return {
+    targetSectors,
+    targetGeographies,
+    targetRevenueMin: c.ca_min != null ? String(c.ca_min) : "",
+    targetRevenueMax: c.ca_max != null ? String(c.ca_max) : "",
+    acquisitionBudgetMin: c.apport != null ? String(c.apport) : "",
+    fullAcquisitionRequired: c.full_acquisition ?? false,
+    managementRetention: c.management_retention ?? true,
+    strategicRationale: c.projet ?? "",
+  };
 }

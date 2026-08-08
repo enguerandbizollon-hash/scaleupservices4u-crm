@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { upsertFinancialData } from "@/actions/financial-data";
+import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 
 function ns(v: FormDataEntryValue | null): string | null {
   const s = String(v ?? "").trim();
@@ -140,6 +141,10 @@ export interface WizardDealPayload {
   acquisition_budget_max: number | null;
   full_acquisition_required: boolean | null;
   strategic_rationale: string | null;
+  // Fiche de cadrage extraite à la création (ma_buy) : persistée à l'INSERT
+  // pour permettre la génération de la chasse rattachée ensuite (v76). Optionnel
+  // (renseigné par le wizard cadrage-first, lot 5).
+  cadrage_content?: CadrageContent | null;
 
   // Step 3 — données financières (optionnel)
   financial: {
@@ -243,6 +248,10 @@ export async function createDealWizardAction(
       dealInsert.full_acquisition_required = payload.full_acquisition_required;
       dealInsert.strategic_rationale = payload.strategic_rationale;
       dealInsert.deal_timing = payload.deal_timing;
+      if (payload.cadrage_content) {
+        dealInsert.cadrage_content = payload.cadrage_content;
+        dealInsert.cadrage_generated_at = new Date().toISOString();
+      }
       break;
   }
 
