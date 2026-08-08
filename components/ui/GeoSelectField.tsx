@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { GEO_ZONES, GEO_REGIONS_FRANCE, GEO_REGIONS_SUISSE, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { GEO_ZONES, GEO_REGIONS_FRANCE, GEO_LABELS } from "@/lib/crm/matching-maps";
 
 /**
  * GeoSelect wrapper for native <form> submissions.
@@ -35,14 +35,11 @@ export function GeoSelectField({ name, defaultValue, placeholder, style, classNa
         onChange={e => setValue(e.target.value)}
       >
         <option value="">{placeholder ?? "— Non renseignée —"}</option>
-        <optgroup label="Zones">
+        <optgroup label="France">
           {GEO_ZONES.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
         </optgroup>
-        <optgroup label="Régions France">
+        <optgroup label="Régions">
           {GEO_REGIONS_FRANCE.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
-        </optgroup>
-        <optgroup label="Régions Suisse">
-          {GEO_REGIONS_SUISSE.map(v => <option key={v} value={v}>{GEO_LABELS[v] ?? v}</option>)}
         </optgroup>
       </select>
     </>

@@ -11,7 +11,8 @@
 //                              Si financial absent → combined = strategic
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { normalizeDealSector, sectorsCompatible, GEO_LABELS, GEO_COMPATIBILITY } from "@/lib/crm/matching-maps";
+import { normalizeDealSector, sectorsCompatible, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { geoIsCompatible } from "@/lib/crm/geo-match";
 import { normalizeGeoText } from "@/lib/crm/investor-parsers";
 
 // ── Types d'entrée ────────────────────────────────────────────────────────────
@@ -264,8 +265,7 @@ function scoreGeography(deal: MaDealProfile, org: MaOrganisationProfile): { earn
   if (deal.deal_type === "ma_sell") {
     if (!dealGeo) return { earned: 8, reason: "Localisation deal non renseignée — neutre" };
     if (!org.target_geographies?.length) return { earned: 8, reason: "Géographies buyer non définies — neutre" };
-    const compatible = GEO_COMPATIBILITY[dealGeo] ?? [dealGeo];
-    const match = org.target_geographies.some(g => compatible.includes(g) || g === "global");
+    const match = geoIsCompatible(dealGeo, org.target_geographies);
     const label = GEO_LABELS[dealGeo] ?? dealGeo;
     return match
       ? { earned: 15, reason: `${label} dans les géographies cibles du buyer` }
@@ -276,8 +276,7 @@ function scoreGeography(deal: MaDealProfile, org: MaOrganisationProfile): { earn
   const orgGeo = normalizeGeo(org.location);
   if (!orgGeo) return { earned: 8, reason: "Localisation cible inconnue — neutre" };
   if (!deal.target_geographies?.length) return { earned: 8, reason: "Géographies d'acquisition non définies — neutre" };
-  const compatibleOrg = GEO_COMPATIBILITY[orgGeo] ?? [orgGeo];
-  const match = deal.target_geographies.some(g => compatibleOrg.includes(g) || g === "global");
+  const match = geoIsCompatible(orgGeo, deal.target_geographies);
   const label = GEO_LABELS[orgGeo] ?? orgGeo;
   return match
     ? { earned: 15, reason: `${label} dans les géographies d'acquisition` }

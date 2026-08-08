@@ -168,20 +168,22 @@ describe("normalizeGeoText", () => {
     expect(normalizeGeoText("France")).toBe("france");
   });
 
-  it("normalise les régions suisses avant la Suisse générique (rattachée à dach)", () => {
-    expect(normalizeGeoText("Genève")).toBe("suisse_romande");
-    expect(normalizeGeoText("Lausanne")).toBe("suisse_romande");
-    expect(normalizeGeoText("Zurich")).toBe("suisse_alemanique");
-    expect(normalizeGeoText("Suisse")).toBe("dach");
+  it("extrait un code de DÉPARTEMENT en priorité (le plus précis)", () => {
+    expect(normalizeGeoText("38")).toBe("38");
+    expect(normalizeGeoText("Isère (38)")).toBe("38");
+    expect(normalizeGeoText("2A")).toBe("2A");
+    expect(normalizeGeoText("974")).toBe("974");
   });
 
-  it("normalise les zones européennes et mondiales", () => {
-    expect(normalizeGeoText("Belgique")).toBe("benelux");
-    expect(normalizeGeoText("Royaume-Uni")).toBe("uk_ireland");
-    expect(normalizeGeoText("Europe")).toBe("europe");
-    expect(normalizeGeoText("USA")).toBe("amerique_nord");
-    expect(normalizeGeoText("états-unis")).toBe("amerique_nord");
-    expect(normalizeGeoText("Worldwide")).toBe("global");
+  it("ne prend pas un nombre non-département pour un code", () => {
+    expect(normalizeGeoText("chiffre 2024")).toBeNull();     // pas de code isolé
+    expect(normalizeGeoText("99")).toBeNull();               // 99 n'est pas un département
+  });
+
+  it("l'international et la Suisse ne sont plus reconnus (périmètre national)", () => {
+    expect(normalizeGeoText("Suisse")).toBeNull();
+    expect(normalizeGeoText("USA")).toBeNull();
+    expect(normalizeGeoText("Worldwide")).toBeNull();
   });
 
   it("est insensible à la casse", () => {

@@ -405,46 +405,24 @@ export const STAGE_MAP: Record<string, string[]> = {
 
 // ── Géographies — référentiel unique CRM ─────────────────────────────────────
 
-export const GEO_ZONES = [
-  "france", "benelux", "dach", "europe_sud", "nordics",
-  "europe_est", "uk_ireland", "ue", "europe",
-  "amerique_nord", "amerique_sud", "asie",
-  "moyen_orient", "afrique", "global",
-] as const;
+// Périmètre national France (international + Suisse retirés, hérités du
+// fundraising). La seule « zone » est la France ; régions et départements
+// (lib/crm/departements.ts) portent la granularité.
+export const GEO_ZONES = ["france"] as const;
 
 export const GEO_REGIONS_FRANCE = [
   "ile_de_france", "auvergne_rhone_alpes", "paca",
   "occitanie", "nouvelle_aquitaine", "bretagne",
   "grand_est", "hauts_de_france", "normandie",
   "pays_de_la_loire", "centre_val_de_loire",
-  "bourgogne_franche_comte", "dom_tom",
+  "bourgogne_franche_comte", "corse", "dom_tom",
 ] as const;
 
-export const GEO_REGIONS_SUISSE = [
-  "suisse_romande",
-  "suisse_alemanique",
-  "suisse_italienne",
-] as const;
-
-export const GEO_ALL = [...GEO_ZONES, ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE] as const;
+export const GEO_ALL = [...GEO_ZONES, ...GEO_REGIONS_FRANCE] as const;
 export type GeoValue = (typeof GEO_ALL)[number];
 
 export const GEO_LABELS: Record<string, string> = {
   france:                  "France",
-  benelux:                 "Benelux (BE, NL, LU)",
-  dach:                    "DACH (DE, AT, CH)",
-  europe_sud:              "Europe du Sud",
-  nordics:                 "Nordics",
-  europe_est:              "Europe de l'Est",
-  uk_ireland:              "UK / Irlande",
-  ue:                      "Union Européenne",
-  europe:                  "Europe (hors UE)",
-  amerique_nord:           "Amérique du Nord",
-  amerique_sud:            "Amérique du Sud",
-  asie:                    "Asie",
-  moyen_orient:            "Moyen-Orient",
-  afrique:                 "Afrique",
-  global:                  "Global / Worldwide",
   ile_de_france:           "Île-de-France",
   auvergne_rhone_alpes:    "Auvergne-Rhône-Alpes",
   paca:                    "PACA",
@@ -457,32 +435,19 @@ export const GEO_LABELS: Record<string, string> = {
   pays_de_la_loire:        "Pays de la Loire",
   centre_val_de_loire:     "Centre-Val de Loire",
   bourgogne_franche_comte: "Bourgogne-Franche-Comté",
+  corse:                   "Corse",
   dom_tom:                 "DOM-TOM",
-  suisse_romande:          "Suisse romande (GE, VD, VS, FR, NE, JU)",
-  suisse_alemanique:       "Suisse alémanique (ZH, BS, BE, SG, LU)",
-  suisse_italienne:        "Suisse italienne (Tessin / Ticino)",
 };
 
-// Backward compat : ancien format { value, label } pour composants existants
-export const GEOGRAPHIES = GEO_ZONES.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
-export type Geography = (typeof GEO_ZONES)[number];
+// Options { value, label } France + régions (les départements viennent de
+// lib/crm/departements.ts::GEO_DEPT_OPTIONS).
+export const GEOGRAPHIES = GEO_ALL.map((v) => ({ value: v, label: GEO_LABELS[v] ?? v }));
+export type Geography = (typeof GEO_ALL)[number];
 
+// Compatibilité au niveau zone/région (France). Le pont département <-> région
+// est géré par lib/crm/geo-match.ts (geoIsCompatible), utilisé par le scoring.
 export const GEO_COMPATIBILITY: Record<string, string[]> = {
-  global: [...GEO_ZONES, ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE],
-  europe: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "uk_ireland", "ue", "europe", ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE],
-  ue: ["france", "benelux", "dach", "europe_sud", "nordics", "europe_est", "ue", ...GEO_REGIONS_FRANCE, ...GEO_REGIONS_SUISSE],
   france:                  ["france", ...GEO_REGIONS_FRANCE],
-  benelux:                 ["benelux"],
-  dach:                    ["dach", "suisse_romande", "suisse_alemanique", "suisse_italienne"],
-  europe_sud:              ["europe_sud"],
-  nordics:                 ["nordics"],
-  europe_est:              ["europe_est"],
-  uk_ireland:              ["uk_ireland"],
-  amerique_nord:           ["amerique_nord"],
-  amerique_sud:            ["amerique_sud"],
-  asie:                    ["asie"],
-  moyen_orient:            ["moyen_orient"],
-  afrique:                 ["afrique"],
   ile_de_france:           ["ile_de_france", "france"],
   auvergne_rhone_alpes:    ["auvergne_rhone_alpes", "france"],
   paca:                    ["paca", "france"],
@@ -495,10 +460,8 @@ export const GEO_COMPATIBILITY: Record<string, string[]> = {
   pays_de_la_loire:        ["pays_de_la_loire", "france"],
   centre_val_de_loire:     ["centre_val_de_loire", "france"],
   bourgogne_franche_comte: ["bourgogne_franche_comte", "france"],
+  corse:                   ["corse", "france"],
   dom_tom:                 ["dom_tom", "france"],
-  suisse_romande:          ["suisse_romande", "dach", "france"],
-  suisse_alemanique:       ["suisse_alemanique", "dach"],
-  suisse_italienne:        ["suisse_italienne", "dach"],
 };
 
 /** Score géographique (plus utilisé directement — le scoring est dans matching.ts) */
