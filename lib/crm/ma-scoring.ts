@@ -11,7 +11,7 @@
 //                              Si financial absent → combined = strategic
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { normalizeDealSector, GEO_LABELS, GEO_COMPATIBILITY } from "@/lib/crm/matching-maps";
+import { normalizeDealSector, sectorsCompatible, GEO_LABELS, GEO_COMPATIBILITY } from "@/lib/crm/matching-maps";
 import { normalizeGeoText } from "@/lib/crm/investor-parsers";
 
 // ── Types d'entrée ────────────────────────────────────────────────────────────
@@ -212,10 +212,7 @@ function scoreSector(deal: MaDealProfile, org: MaOrganisationProfile): { earned:
     // Buyer généraliste
     if (!org.target_sectors?.length) return { earned: 20, reason: "Buyer généraliste — match neutre" };
 
-    const match = org.target_sectors.some(s =>
-      s.toLowerCase() === normalized.toLowerCase() ||
-      s.toLowerCase() === "généraliste"
-    );
+    const match = org.target_sectors.some(s => sectorsCompatible(s, normalized));
     return match
       ? { earned: 30, reason: `Secteur ${normalized} dans la thèse du buyer` }
       : { earned: 0,  reason: `Secteur ${normalized} hors thèse buyer (${org.target_sectors.slice(0,2).join(", ")})` };
@@ -227,10 +224,7 @@ function scoreSector(deal: MaDealProfile, org: MaOrganisationProfile): { earned:
 
   if (!deal.target_sectors?.length) return { earned: 20, reason: "Secteurs cibles non définis — neutre" };
 
-  const match = deal.target_sectors.some(s =>
-    s.toLowerCase() === normalizedOrg.toLowerCase() ||
-    s.toLowerCase() === "généraliste"
-  );
+  const match = deal.target_sectors.some(s => sectorsCompatible(s, normalizedOrg));
   return match
     ? { earned: 30, reason: `Secteur ${normalizedOrg} dans les critères d'acquisition` }
     : { earned: 5,  reason: `Secteur ${normalizedOrg} hors critères (${deal.target_sectors.slice(0,2).join(", ")})` };

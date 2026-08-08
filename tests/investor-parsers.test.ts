@@ -91,31 +91,30 @@ describe("normalizeSectorText", () => {
     expect(normalizeSectorText("zzz")).toBeNull();
   });
 
-  it("normalise les alias FR courants", () => {
+  it("normalise les alias FR courants vers le référentiel small cap", () => {
     expect(normalizeSectorText("Généraliste")).toBe("Généraliste");
-    expect(normalizeSectorText("Logiciel SaaS B2B")).toBe("SaaS");
-    expect(normalizeSectorText("software")).toBe("SaaS");
-    expect(normalizeSectorText("Fintech")).toBe("Fintech");
-    expect(normalizeSectorText("santé")).toBe("MedTech");
+    expect(normalizeSectorText("Logiciel SaaS B2B")).toBe("Éditeurs de logiciels / SaaS");
+    expect(normalizeSectorText("software")).toBe("Éditeurs de logiciels / SaaS");
+    expect(normalizeSectorText("Fintech")).toBe("Fintech / Assurtech");
+    expect(normalizeSectorText("santé")).toBe("Santé & Médico-social");
     expect(normalizeSectorText("cybersécurité")).toBe("Cybersécurité");
-    expect(normalizeSectorText("e-commerce")).toBe("Retail");
-    expect(normalizeSectorText("énergie")).toBe("Energie");
-    expect(normalizeSectorText("agroalimentaire")).toBe("Food");
-    expect(normalizeSectorText("juridique")).toBe("Conseil");
-    expect(normalizeSectorText("finance")).toBe("Fintech");
+    expect(normalizeSectorText("e-commerce")).toBe("E-commerce");
+    expect(normalizeSectorText("énergie")).toBe("Immobilier & Énergie");
+    expect(normalizeSectorText("agroalimentaire")).toBe("Industrie agroalimentaire");
+    expect(normalizeSectorText("juridique")).toBe("Conseil / Ingénierie");
+    expect(normalizeSectorText("finance")).toBe("Services financiers");
   });
 
-  it("documente le faux positif du test 'ia' : tout mot contenant 'ia' devient Deeptech", () => {
-    // Bug signalé dans le rapport : t.includes("ia") matche des sous-chaînes
-    // de mots sans rapport ("média", "industrial", "aérospatial"...).
-    expect(normalizeSectorText("média")).toBe("Deeptech");        // attendu : Média
-    expect(normalizeSectorText("industrial")).toBe("Deeptech");   // attendu : Industrie
+  it("fin du faux positif 'ia' : les mots contenant 'ia' ne deviennent plus Deeptech", () => {
+    expect(normalizeSectorText("média")).toBe("Marketing / Communication / Média");
+    expect(normalizeSectorText("industrial")).toBe("Industrie & Production");
+    expect(normalizeSectorText("BTP gros œuvre")).toBe("Gros œuvre");
+    expect(normalizeSectorText("génie climatique")).toBe("Génie climatique / CVC");
   });
 
-  it("documente la branche Healthtech inatteignable : 'healthtech' contient 'health' → MedTech", () => {
-    // Bug signalé dans le rapport : la règle MedTech (t.includes("health"))
-    // précède la règle Healthtech, qui ne peut donc jamais matcher.
-    expect(normalizeSectorText("healthtech")).toBe("MedTech");
+  it("les libellés santé se rabattent sur la famille Santé & Médico-social", () => {
+    expect(normalizeSectorText("healthtech")).toBe("Santé & Médico-social");
+    expect(normalizeSectorText("EHPAD")).toBe("EHPAD / Médico-social");
   });
 });
 
@@ -126,17 +125,20 @@ describe("parseMultiText", () => {
     expect(parseMultiText(null, normalizeSectorText)).toEqual([]);
   });
 
-  it("découpe sur virgule, point-virgule et slash puis normalise", () => {
-    expect(parseMultiText("SaaS, Fintech; santé", normalizeSectorText)).toEqual(["SaaS", "Fintech", "MedTech"]);
-    expect(parseMultiText("SaaS / Fintech", normalizeSectorText)).toEqual(["SaaS", "Fintech"]);
+  it("découpe sur virgule et point-virgule puis normalise", () => {
+    expect(parseMultiText("SaaS, cybersécurité; santé", normalizeSectorText)).toEqual([
+      "Éditeurs de logiciels / SaaS", "Cybersécurité", "Santé & Médico-social",
+    ]);
   });
 
   it("filtre les valeurs non normalisables", () => {
-    expect(parseMultiText("SaaS, zzz", normalizeSectorText)).toEqual(["SaaS"]);
+    expect(parseMultiText("SaaS, zzz", normalizeSectorText)).toEqual(["Éditeurs de logiciels / SaaS"]);
   });
 
   it("ne déduplique pas les valeurs normalisées identiques", () => {
-    expect(parseMultiText("logiciel, software", normalizeSectorText)).toEqual(["SaaS", "SaaS"]);
+    expect(parseMultiText("logiciel, software", normalizeSectorText)).toEqual([
+      "Éditeurs de logiciels / SaaS", "Éditeurs de logiciels / SaaS",
+    ]);
   });
 
   it("fonctionne avec normalizeStageText", () => {

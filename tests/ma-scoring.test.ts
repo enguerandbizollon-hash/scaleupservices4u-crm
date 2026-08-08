@@ -41,8 +41,8 @@ describe("checkMaDealBreakers — ma_sell", () => {
   });
 
   it("déclenche un breaker si le secteur normalisé du deal est exclu par le buyer", () => {
-    const deal = makeDeal({ sector: "Technologie / SaaS" }); // normalisé → SaaS
-    const org = makeOrg({ excluded_sectors: ["saas"] });     // comparaison insensible à la casse
+    const deal = makeDeal({ sector: "Technologie / SaaS" }); // normalisé → Éditeurs de logiciels / SaaS
+    const org = makeOrg({ excluded_sectors: ["éditeurs de logiciels / saas"] }); // insensible à la casse
     const result = checkMaDealBreakers(deal, org);
     expect(result).not.toBeNull();
     expect(result).toContain("SaaS");
@@ -123,8 +123,8 @@ describe("checkMaDealBreakers — ma_buy", () => {
   });
 
   it("déclenche un breaker si le secteur de la cible est exclu par le deal", () => {
-    const deal = makeDeal({ deal_type: "ma_buy", excluded_sectors: ["fintech"] });
-    const org = makeOrg({ organization_type: "target", sector: "Fintech / Insurtech" }); // normalisé → Fintech
+    const deal = makeDeal({ deal_type: "ma_buy", excluded_sectors: ["Fintech / Assurtech"] });
+    const org = makeOrg({ organization_type: "target", sector: "Fintech / Insurtech" }); // normalisé → Fintech / Assurtech
     expect(checkMaDealBreakers(deal, org)).toContain("exclu");
   });
 

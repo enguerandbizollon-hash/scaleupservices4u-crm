@@ -106,50 +106,24 @@ export const CONTEXT_OPERATION_COMPAT: Record<DealContext, {
   retournement: { exact: ["retournement"],                   incompatible: ["minoritaire_croissance"] },
 };
 
-/**
- * Adjacences sectorielles (référentiel SECTORS) pour le score secteur du
- * matching acquéreurs : exact 20, adjacent 12. Relation symétrique : le
- * scorer teste les deux sens, chaque paire n'est déclarée qu'une fois.
- */
-export const SECTOR_ADJACENCY: Record<string, string[]> = {
-  "Industrie":       ["Métallurgie", "Plasturgie", "Chimie", "Emballage", "Automobile", "Aéronautique", "Hardware", "Bois & Ameublement", "Textile", "Imprimerie"],
-  "Métallurgie":     ["Automobile", "Aéronautique"],
-  "Plasturgie":      ["Emballage", "Chimie"],
-  "Chimie":          ["Pharma", "CleanTech"],
-  "Textile":         ["Luxe"],
-  "Bois & Ameublement": ["BTP"],
-  "Emballage":       ["Imprimerie"],
-  "Imprimerie":      ["Média"],
-  "Pharma":          ["BioTech", "MedTech", "Healthtech"],
-  "Aéronautique":    ["Défense"],
-  "Défense":         ["Cybersécurité", "Sécurité privée"],
-  "Automobile":      ["Transport"],
-  "BTP":             ["Immobilier", "Infrastructure"],
-  "Immobilier":      ["Infrastructure", "PropTech"],
-  "Infrastructure":  ["Energie"],
-  "Négoce":          ["Retail", "Logistique", "Services B2B"],
-  "Retail":          ["Food", "Luxe", "Marketplace"],
-  "Food":            ["Agroalimentaire", "Hôtellerie-Restauration"],
-  "Agroalimentaire": ["Agriculture"],
-  "Transport":       ["Logistique"],
-  "Services B2B":    ["Conseil", "Propreté & Facility", "Sécurité privée", "Formation", "HRtech"],
-  "Conseil":         ["Formation"],
-  "Propreté & Facility": ["Sécurité privée"],
-  "Formation":       ["Edtech"],
-  "Santé & Médico-social": ["Healthtech", "MedTech"],
-  "Hôtellerie-Restauration": ["Sport"],
-  "Energie":         ["CleanTech"],
-  "SaaS":            ["Marketplace", "Fintech", "HRtech", "Edtech", "RegTech", "InsurTech", "Cybersécurité", "PropTech"],
-  "Fintech":         ["InsurTech", "RegTech"],
-  "Healthtech":      ["MedTech", "BioTech"],
-  "Deeptech":        ["Hardware", "BioTech", "CleanTech"],
-  "Média":           ["Sport"],
-};
+// ── Secteurs : compatibilité par FAMILLE (réforme small cap FR 2026-08) ───────
+// Le référentiel a deux niveaux (voir SECTOR_GROUPS / SECTORS plus bas) :
+// familles (grossier, produit par le NAF) et feuilles (précis, choix manuel).
+// Deux secteurs sont compatibles/adjacents s'ils partagent la même famille :
+// une feuille « Génie climatique / CVC » matche un org classé « BTP &
+// Construction ». « Généraliste » est passe-partout.
 
-/** Adjacence symétrique entre deux secteurs du référentiel. */
+/** Compatibilité de scoring : identiques, ou même famille, ou Généraliste. */
+export function sectorsCompatible(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  if (a === b || a === "Généraliste" || b === "Généraliste") return true;
+  return (SECTOR_TO_FAMILY[a] ?? a) === (SECTOR_TO_FAMILY[b] ?? b);
+}
+
+/** Adjacence secteur (matching acquéreurs) : même famille = adjacent. */
 export function sectorsAreAdjacent(a: string, b: string): boolean {
   if (!a || !b || a === b) return false;
-  return (SECTOR_ADJACENCY[a] ?? []).includes(b) || (SECTOR_ADJACENCY[b] ?? []).includes(a);
+  return (SECTOR_TO_FAMILY[a] ?? a) === (SECTOR_TO_FAMILY[b] ?? b);
 }
 
 // ── Maturité cession M&A (organizations type = target) ───────────────────────
@@ -162,84 +136,172 @@ export const SALE_READINESS_OPTIONS = [
 
 export type SaleReadiness = (typeof SALE_READINESS_OPTIONS)[number]["value"];
 
-// ── Secteurs ─────────────────────────────────────────────────────────────────
+// ── Secteurs : SOURCE DE VÉRITÉ unique (small cap FR) ─────────────────────────
+// Deux niveaux. FAMILLES = grossier, produit par l'auto-classification NAF et
+// niveau de compatibilité du scoring. FEUILLES = précis, pour le choix manuel
+// des critères d'un mandat. Le tech RÉEL est conservé (SaaS, ESN, cyber...) ;
+// le pur jargon startup et l'international sont retirés.
+export const SECTOR_GROUPS: { family: string; options: string[] }[] = [
+  { family: "BTP & Construction", options: [
+    "Gros œuvre", "Second œuvre", "Génie climatique / CVC", "Électricité / Courants faibles",
+    "Couverture / Étanchéité", "Menuiserie / Agencement", "Travaux publics / VRD", "Peinture / Finitions",
+  ] },
+  { family: "Industrie & Production", options: [
+    "Métallurgie / Travail des métaux", "Mécanique / Usinage", "Plasturgie / Composites",
+    "Électronique / Électrotechnique", "Chimie / Cosmétique", "Textile / Habillement",
+    "Bois / Ameublement", "Emballage / Packaging", "Imprimerie / Arts graphiques",
+    "Automobile (équipementier)", "Aéronautique / Défense", "Industrie agroalimentaire", "Autres industries",
+  ] },
+  { family: "Négoce & Distribution B2B", options: [
+    "Négoce de matériaux BTP", "Négoce industriel", "Commerce de gros alimentaire", "Commerce de gros non-alimentaire",
+  ] },
+  { family: "Transport & Logistique", options: [
+    "Transport routier de marchandises", "Logistique / Entreposage", "Messagerie / Dernier km", "Transport de personnes",
+  ] },
+  { family: "Services aux entreprises", options: [
+    "Conseil / Ingénierie", "Propreté / Facility management", "Sécurité privée / Gardiennage",
+    "Intérim / RH", "Maintenance industrielle", "Marketing / Communication / Média", "Formation professionnelle",
+  ] },
+  { family: "Numérique & Tech", options: [
+    "Éditeurs de logiciels / SaaS", "ESN / Infogérance", "Agences web / digital",
+    "Cybersécurité", "Marketplace / plateforme", "Télécoms",
+  ] },
+  { family: "Santé & Médico-social", options: [
+    "EHPAD / Médico-social", "Services à la personne / Aide à domicile", "Laboratoires / Analyses",
+    "Pharmacie / Parapharmacie", "Cabinets / Cliniques",
+  ] },
+  { family: "Agriculture & Agro", options: [
+    "Agriculture / Élevage", "Viticulture / Vins & spiritueux", "Transformation alimentaire artisanale",
+  ] },
+  { family: "Commerce & CHR", options: [
+    "Hôtellerie / Restauration", "Commerce de détail spécialisé", "E-commerce", "Loisirs / Sport",
+  ] },
+  { family: "Immobilier & Énergie", options: [
+    "Promotion immobilière", "Administration de biens / Syndic", "Énergies renouvelables", "Environnement / Déchets / Recyclage",
+  ] },
+  { family: "Services financiers", options: [
+    "Expertise comptable / Audit", "Courtage (assurance / crédit)", "Fintech / Assurtech",
+  ] },
+];
 
-export const SECTORS = [
-  // Tech / innovation
-  "SaaS", "Fintech", "Healthtech", "Deeptech", "Cybersécurité",
-  "Edtech", "Marketplace", "Hardware", "PropTech", "InsurTech",
-  "RegTech", "HRtech", "CleanTech", "BioTech", "MedTech",
-  // Industrie et matériaux
-  "Industrie", "Métallurgie", "Plasturgie", "Chimie", "Textile",
-  "Bois & Ameublement", "Emballage", "Imprimerie", "Pharma",
-  "Aéronautique", "Défense", "Automobile",
-  // Construction et immobilier
-  "BTP", "Immobilier", "Infrastructure",
-  // Commerce et distribution
-  "Négoce", "Retail", "Luxe", "Food",
-  // Agro
-  "Agroalimentaire", "Agriculture",
-  // Transport et logistique
-  "Transport", "Logistique",
-  // Services
-  "Services B2B", "Conseil", "Propreté & Facility", "Sécurité privée",
-  "Formation", "Santé & Médico-social", "Hôtellerie-Restauration",
-  // Autres
-  "Energie", "Média", "Sport", "Impact", "Social", "Généraliste",
-] as const;
+/** Les 11 familles (niveau grossier, cible du mapping NAF). */
+export const SECTOR_FAMILIES: string[] = SECTOR_GROUPS.map((g) => g.family);
 
-export type Sector = (typeof SECTORS)[number];
+/** Référentiel complet : familles + feuilles + Généraliste (passe-partout). */
+export const SECTORS: readonly string[] = [
+  ...SECTOR_FAMILIES,
+  ...SECTOR_GROUPS.flatMap((g) => g.options),
+  "Généraliste",
+];
+
+export type Sector = string;
+
+/** Feuille ou famille -> famille (une famille se mappe sur elle-même). */
+export const SECTOR_TO_FAMILY: Record<string, string> = (() => {
+  const m: Record<string, string> = {};
+  for (const g of SECTOR_GROUPS) {
+    m[g.family] = g.family;
+    for (const o of g.options) m[o] = g.family;
+  }
+  return m;
+})();
 
 /**
- * Normalise les anciennes valeurs de secteur (texte long du formulaire deals)
- * vers les valeurs courtes du référentiel SECTORS.
+ * Normalise toute ancienne valeur de secteur (référentiel pré-2026 ou texte
+ * long du formulaire) vers le référentiel actuel (familles + feuilles), pour
+ * que les deals/orgs existants continuent de scorer. Cible ⊆ SECTORS (garanti
+ * par tests/sector-taxonomy.test.ts).
  */
 export const DEAL_SECTOR_NORMALIZATION: Record<string, string> = {
-  "Généraliste":                 "Généraliste",
-  "Technologie / SaaS":          "SaaS",
-  "Intelligence Artificielle":   "Deeptech",
-  "Fintech / Insurtech":         "Fintech",
-  "Santé / Medtech":             "MedTech",
-  "Industrie / Manufacturing":   "Industrie",
-  "Énergie / CleanTech":         "CleanTech",
-  "Immobilier":                  "Immobilier",
-  "Distribution / Retail":       "Retail",
-  "Médias / Entertainment":      "Média",
-  "Transport / Logistique":      "Transport",
-  "Agroalimentaire":             "Agroalimentaire",
-  "Éducation / EdTech":          "Edtech",
-  "Défense / Sécurité":          "Défense",
-  "Tourisme / Hospitality":      "Hôtellerie-Restauration",
-  "Services B2B":                "Services B2B",
-  "Conseil / Advisory":          "Conseil",
-  "Juridique":                   "Conseil",
-  "Finance / Investissement":    "Fintech",
-  "Ressources Humaines":         "HRtech",
-  "Luxe / Premium":              "Luxe",
-  "Construction / BTP":          "BTP",
-  "Télécommunications":          "Infrastructure",
-  "Agriculture / AgriTech":      "Agriculture",
-  "Chimie / Matériaux":          "Chimie",
-  "Aérospatial":                 "Aéronautique",
-  "Environnement":               "Energie",
-  "Sport / Loisirs":             "Sport",
-  "Bien-être / Beauté":          "Luxe",
-  "Cybersécurité":               "Cybersécurité",
-  // Small cap traditionnel (pivot M&A 2026)
-  "Négoce / Distribution B2B":   "Négoce",
-  "Logistique":                  "Logistique",
-  "Propreté / Nettoyage":        "Propreté & Facility",
-  "Sécurité / Gardiennage":      "Sécurité privée",
-  "Santé / Médico-social":       "Santé & Médico-social",
-  "Hôtellerie / Restauration":   "Hôtellerie-Restauration",
-  "Formation / Organisme":       "Formation",
-  "Automobile":                  "Automobile",
-  "Métallurgie / Usinage":       "Métallurgie",
-  "Plasturgie":                  "Plasturgie",
-  "Textile / Habillement":       "Textile",
-  "Bois / Ameublement":          "Bois & Ameublement",
-  "Emballage / Packaging":       "Emballage",
-  "Imprimerie / Print":          "Imprimerie",
+  // Anciens libellés courts (référentiel pré-2026, dont tech retiré)
+  "SaaS": "Éditeurs de logiciels / SaaS",
+  "Fintech": "Fintech / Assurtech",
+  "InsurTech": "Fintech / Assurtech",
+  "Healthtech": "Cabinets / Cliniques",
+  "MedTech": "Santé & Médico-social",
+  "BioTech": "Industrie & Production",
+  "Deeptech": "Numérique & Tech",
+  "RegTech": "Numérique & Tech",
+  "Cybersécurité": "Cybersécurité",
+  "Edtech": "Formation professionnelle",
+  "Marketplace": "Marketplace / plateforme",
+  "Hardware": "Électronique / Électrotechnique",
+  "PropTech": "Immobilier & Énergie",
+  "HRtech": "Intérim / RH",
+  "CleanTech": "Énergies renouvelables",
+  "Industrie": "Industrie & Production",
+  "Métallurgie": "Métallurgie / Travail des métaux",
+  "Plasturgie": "Plasturgie / Composites",
+  "Chimie": "Chimie / Cosmétique",
+  "Textile": "Textile / Habillement",
+  "Bois & Ameublement": "Bois / Ameublement",
+  "Emballage": "Emballage / Packaging",
+  "Imprimerie": "Imprimerie / Arts graphiques",
+  "Pharma": "Industrie & Production",
+  "Aéronautique": "Aéronautique / Défense",
+  "Défense": "Aéronautique / Défense",
+  "Automobile": "Automobile (équipementier)",
+  "BTP": "BTP & Construction",
+  "Immobilier": "Immobilier & Énergie",
+  "Infrastructure": "Travaux publics / VRD",
+  "Négoce": "Négoce & Distribution B2B",
+  "Retail": "Commerce de détail spécialisé",
+  "Luxe": "Commerce de détail spécialisé",
+  "Food": "Commerce & CHR",
+  "Agroalimentaire": "Industrie agroalimentaire",
+  "Agriculture": "Agriculture / Élevage",
+  "Transport": "Transport & Logistique",
+  "Logistique": "Logistique / Entreposage",
+  "Services B2B": "Services aux entreprises",
+  "Conseil": "Conseil / Ingénierie",
+  "Propreté & Facility": "Propreté / Facility management",
+  "Sécurité privée": "Sécurité privée / Gardiennage",
+  "Formation": "Formation professionnelle",
+  "Santé & Médico-social": "Santé & Médico-social",
+  "Hôtellerie-Restauration": "Hôtellerie / Restauration",
+  "Energie": "Immobilier & Énergie",
+  "Média": "Marketing / Communication / Média",
+  "Sport": "Loisirs / Sport",
+  "Impact": "Généraliste",
+  "Social": "Services à la personne / Aide à domicile",
+  "Généraliste": "Généraliste",
+  // Anciens libellés longs (formulaire deals pré-refonte)
+  "Technologie / SaaS": "Éditeurs de logiciels / SaaS",
+  "Intelligence Artificielle": "Numérique & Tech",
+  "Fintech / Insurtech": "Fintech / Assurtech",
+  "Santé / Medtech": "Santé & Médico-social",
+  "Industrie / Manufacturing": "Industrie & Production",
+  "Énergie / CleanTech": "Énergies renouvelables",
+  "Distribution / Retail": "Commerce de détail spécialisé",
+  "Médias / Entertainment": "Marketing / Communication / Média",
+  "Transport / Logistique": "Transport & Logistique",
+  "Éducation / EdTech": "Formation professionnelle",
+  "Défense / Sécurité": "Aéronautique / Défense",
+  "Tourisme / Hospitality": "Hôtellerie / Restauration",
+  "Conseil / Advisory": "Conseil / Ingénierie",
+  "Juridique": "Conseil / Ingénierie",
+  "Finance / Investissement": "Services financiers",
+  "Ressources Humaines": "Intérim / RH",
+  "Luxe / Premium": "Commerce de détail spécialisé",
+  "Construction / BTP": "BTP & Construction",
+  "Télécommunications": "Télécoms",
+  "Agriculture / AgriTech": "Agriculture / Élevage",
+  "Chimie / Matériaux": "Chimie / Cosmétique",
+  "Aérospatial": "Aéronautique / Défense",
+  "Environnement": "Environnement / Déchets / Recyclage",
+  "Sport / Loisirs": "Loisirs / Sport",
+  "Bien-être / Beauté": "Commerce de détail spécialisé",
+  "Négoce / Distribution B2B": "Négoce & Distribution B2B",
+  "Propreté / Nettoyage": "Propreté / Facility management",
+  "Sécurité / Gardiennage": "Sécurité privée / Gardiennage",
+  "Santé / Médico-social": "Santé & Médico-social",
+  "Hôtellerie / Restauration": "Hôtellerie / Restauration",
+  "Formation / Organisme": "Formation professionnelle",
+  "Métallurgie / Usinage": "Métallurgie / Travail des métaux",
+  "Textile / Habillement": "Textile / Habillement",
+  "Bois / Ameublement": "Bois / Ameublement",
+  "Emballage / Packaging": "Emballage / Packaging",
+  "Imprimerie / Print": "Imprimerie / Arts graphiques",
 };
 
 // ── NAF → secteur ────────────────────────────────────────────────────────────
@@ -249,52 +311,52 @@ export const DEAL_SECTOR_NORMALIZATION: Record<string, string> = {
 // Source de vérité pour rattacher automatiquement une organisation enrichie
 // (Pappers / INSEE / Recherche d'Entreprises) à un secteur du référentiel.
 
+// NAF (division = 2 chiffres) -> FAMILLE. La division est trop grossière pour
+// distinguer les feuilles (gros œuvre vs second œuvre) : on classe donc à la
+// famille, et le scoring reste compatible feuille<->famille via SECTOR_TO_FAMILY.
 export const NAF_DIVISION_TO_SECTOR: Record<string, string> = {
   // Agriculture, sylviculture, pêche
-  "01": "Agriculture", "02": "Agriculture", "03": "Agriculture",
-  // Industries extractives
-  "05": "Industrie", "06": "Industrie", "07": "Industrie", "08": "Industrie", "09": "Industrie",
-  // Industrie manufacturière
-  "10": "Agroalimentaire", "11": "Agroalimentaire", "12": "Agroalimentaire",
-  "13": "Textile", "14": "Textile", "15": "Textile",
-  "16": "Bois & Ameublement",
-  "17": "Emballage", "18": "Imprimerie",
-  "19": "Chimie", "20": "Chimie", "21": "Pharma", "22": "Plasturgie",
-  "23": "Industrie",
-  "24": "Métallurgie", "25": "Métallurgie",
-  "26": "Hardware", "27": "Industrie", "28": "Industrie",
-  "29": "Automobile", "30": "Aéronautique",
-  "31": "Bois & Ameublement", "32": "Industrie", "33": "Industrie",
+  "01": "Agriculture & Agro", "02": "Agriculture & Agro", "03": "Agriculture & Agro",
+  // Industries extractives + manufacturières
+  "05": "Industrie & Production", "06": "Industrie & Production", "07": "Industrie & Production", "08": "Industrie & Production", "09": "Industrie & Production",
+  "10": "Industrie & Production", "11": "Industrie & Production", "12": "Industrie & Production",
+  "13": "Industrie & Production", "14": "Industrie & Production", "15": "Industrie & Production",
+  "16": "Industrie & Production", "17": "Industrie & Production", "18": "Industrie & Production",
+  "19": "Industrie & Production", "20": "Industrie & Production", "21": "Industrie & Production", "22": "Industrie & Production",
+  "23": "Industrie & Production", "24": "Industrie & Production", "25": "Industrie & Production",
+  "26": "Industrie & Production", "27": "Industrie & Production", "28": "Industrie & Production",
+  "29": "Industrie & Production", "30": "Industrie & Production",
+  "31": "Industrie & Production", "32": "Industrie & Production", "33": "Industrie & Production",
   // Énergie, eau, déchets
-  "35": "Energie", "36": "Energie", "37": "Energie", "38": "Energie", "39": "Energie",
+  "35": "Immobilier & Énergie", "36": "Immobilier & Énergie", "37": "Immobilier & Énergie", "38": "Immobilier & Énergie", "39": "Immobilier & Énergie",
   // Construction
-  "41": "BTP", "42": "BTP", "43": "BTP",
+  "41": "BTP & Construction", "42": "BTP & Construction", "43": "BTP & Construction",
   // Commerce
-  "45": "Automobile", "46": "Négoce", "47": "Retail",
+  "45": "Commerce & CHR", "46": "Négoce & Distribution B2B", "47": "Commerce & CHR",
   // Transport et entreposage
-  "49": "Transport", "50": "Transport", "51": "Transport",
-  "52": "Logistique", "53": "Logistique",
+  "49": "Transport & Logistique", "50": "Transport & Logistique", "51": "Transport & Logistique",
+  "52": "Transport & Logistique", "53": "Transport & Logistique",
   // Hébergement et restauration
-  "55": "Hôtellerie-Restauration", "56": "Hôtellerie-Restauration",
+  "55": "Commerce & CHR", "56": "Commerce & CHR",
   // Information et communication
-  "58": "Média", "59": "Média", "60": "Média",
-  "61": "Infrastructure", "62": "SaaS", "63": "SaaS",
+  "58": "Numérique & Tech", "59": "Services aux entreprises", "60": "Services aux entreprises",
+  "61": "Numérique & Tech", "62": "Numérique & Tech", "63": "Numérique & Tech",
   // Finance et assurance
-  "64": "Fintech", "65": "InsurTech", "66": "Fintech",
+  "64": "Services financiers", "65": "Services financiers", "66": "Services financiers",
   // Immobilier
-  "68": "Immobilier",
+  "68": "Immobilier & Énergie",
   // Services scientifiques et techniques
-  "69": "Conseil", "70": "Conseil", "71": "Conseil",
-  "72": "Deeptech", "73": "Média", "74": "Conseil", "75": "Services B2B",
+  "69": "Services aux entreprises", "70": "Services aux entreprises", "71": "Services aux entreprises",
+  "72": "Services aux entreprises", "73": "Services aux entreprises", "74": "Services aux entreprises", "75": "Services aux entreprises",
   // Services administratifs et de soutien
-  "77": "Services B2B", "78": "HRtech", "79": "Services B2B",
-  "80": "Sécurité privée", "81": "Propreté & Facility", "82": "Services B2B",
+  "77": "Services aux entreprises", "78": "Services aux entreprises", "79": "Services aux entreprises",
+  "80": "Services aux entreprises", "81": "Services aux entreprises", "82": "Services aux entreprises",
   // Administration, enseignement, santé
-  "84": "Services B2B", "85": "Formation",
+  "84": "Services aux entreprises", "85": "Services aux entreprises",
   "86": "Santé & Médico-social", "87": "Santé & Médico-social", "88": "Santé & Médico-social",
   // Arts, autres services
-  "90": "Média", "91": "Média", "92": "Sport", "93": "Sport",
-  "94": "Social", "95": "Services B2B", "96": "Services B2B",
+  "90": "Services aux entreprises", "91": "Services aux entreprises", "92": "Commerce & CHR", "93": "Commerce & CHR",
+  "94": "Services aux entreprises", "95": "Services aux entreprises", "96": "Services aux entreprises",
 };
 
 /**
@@ -461,13 +523,10 @@ export const DEAL_TIMING_OPTIONS = [
 
 export type DealTiming = (typeof DEAL_TIMING_OPTIONS)[number]["value"];
 
-// ── Devises (multi-devise cabinet) ───────────────────────────────────────────
+// ── Devise (périmètre national France : EUR) ─────────────────────────────────
 
 export const CURRENCIES = [
   { value: "EUR", label: "EUR (€)", symbol: "€" },
-  { value: "CHF", label: "CHF",     symbol: "CHF" },
-  { value: "USD", label: "USD ($)", symbol: "$" },
-  { value: "GBP", label: "GBP (£)", symbol: "£" },
 ] as const;
 
 export type Currency = (typeof CURRENCIES)[number]["value"];

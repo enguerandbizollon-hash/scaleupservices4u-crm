@@ -12,7 +12,7 @@ import {
 
 const deal = (over: Partial<AcquirerDealInput> = {}): AcquirerDealInput => ({
   name: "Cession Transports Martin",
-  sector: "Transport",
+  sector: "Transport routier de marchandises",
   location: "Lyon",
   deal_context: "succession",
   partial_sale_ok: false,
@@ -26,7 +26,7 @@ const org = (over: Partial<AcquirerOrgInput> = {}): AcquirerOrgInput => ({
   id: "o1",
   name: "Groupe Levage SA",
   organization_type: "corporate",
-  target_sectors: ["Transport"],
+  target_sectors: ["Transport routier de marchandises"],
   excluded_sectors: [],
   target_ebitda_min: 500_000,
   target_ebitda_max: 3_000_000,
@@ -123,8 +123,8 @@ describe("secteur — exact, adjacent, généraliste, exclu", () => {
     expect(r.breakdown.secteur.earned).toBe(20);
   });
 
-  it("adjacent (Transport ↔ Logistique) : 12 points", () => {
-    const r = scoreAcquirer(deal(), org({ target_sectors: ["Logistique"] }));
+  it("adjacent (même famille Transport & Logistique) : 12 points", () => {
+    const r = scoreAcquirer(deal(), org({ target_sectors: ["Logistique / Entreposage"] }));
     expect(r.breakdown.secteur.earned).toBe(12);
     expect(r.breakdown.secteur.reason).toContain("adjacent");
   });
@@ -135,13 +135,13 @@ describe("secteur — exact, adjacent, généraliste, exclu", () => {
   });
 
   it("hors thèse : 0 point mais évalué", () => {
-    const r = scoreAcquirer(deal(), org({ target_sectors: ["SaaS"] }));
+    const r = scoreAcquirer(deal(), org({ target_sectors: ["Éditeurs de logiciels / SaaS"] }));
     expect(r.breakdown.secteur.earned).toBe(0);
     expect(r.breakdown.secteur.evaluated).toBe(true);
   });
 
   it("secteur exclu : éliminatoire nommé", () => {
-    const r = scoreAcquirer(deal(), org({ excluded_sectors: ["Transport"] }));
+    const r = scoreAcquirer(deal(), org({ excluded_sectors: ["Transport routier de marchandises"] }));
     expect(r.score).toBeNull();
     expect(r.dealBreaker).toContain("exclu");
   });
