@@ -10,16 +10,34 @@ import { EntityPicker } from "@/components/ui/EntityPicker";
 import { Building2 } from "lucide-react";
 import {
   SECTORS,
-  COMPANY_STAGES,
+  SECTOR_GROUPS,
   ORG_COMPANY_STAGES,
   DEAL_TIMING_OPTIONS,
   CURRENCIES,
   GEO_ALL,
+  GEO_REGIONS_FRANCE,
   GEO_LABELS,
 } from "@/lib/crm/matching-maps";
+import { GEO_DEPT_OPTIONS } from "@/lib/crm/departements";
+import { dealTypeLabels } from "@/lib/crm/labels";
+import { IncludeExcludeMultiSelect } from "@/components/ui/IncludeExcludeMultiSelect";
+import type { FacetGroup } from "@/components/ui/FacetMultiSelect";
+import { extractCadrageFromUploadAction } from "@/actions/ai/cadrage";
+import { cadrageToWizardPrefill } from "@/lib/crm/cadrage-map";
+import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 
-// Options {value,label} construites depuis GEO_ALL (tableau de strings)
+// Options {value,label} pour les selects de l'étape 1 (France + régions).
 const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
+
+// Facettes groupées du multi-sélecteur : secteurs par famille, géo par niveau.
+const SECTOR_FACET_GROUPS: FacetGroup[] = SECTOR_GROUPS.map(g => ({
+  label: g.family, options: g.options.map(o => ({ value: o, label: o })),
+}));
+const GEO_FACET_GROUPS: FacetGroup[] = [
+  { label: "France", options: [{ value: "france", label: "France entière" }] },
+  { label: "Régions", options: [...GEO_REGIONS_FRANCE].map(r => ({ value: r, label: GEO_LABELS[r] ?? r })) },
+  { label: "Départements", options: GEO_DEPT_OPTIONS },
+];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,10 +53,6 @@ interface Props {
   initialType?: DealType;
 }
 
-const DEAL_TYPE_LABELS: Record<string, string> = {
-  ma_sell: "Cession (sell-side)",
-  ma_buy: "Acquisition (buy-side)",
-};
 
 const DEAL_STAGES = [
   { value: "kickoff", label: "Kickoff" },
@@ -87,82 +101,6 @@ const grid3: React.CSSProperties = {
 function numOrNull(v: string): number | null {
   const n = Number(v);
   return v.trim() === "" || Number.isNaN(n) ? null : n;
-}
-
-// ── Composants réutilisables ─────────────────────────────────────────────────
-
-function TagsInput({ values, onChange, placeholder }: {
-  values: string[]; onChange: (v: string[]) => void; placeholder: string;
-}) {
-  const [input, setInput] = useState("");
-  function commit() {
-    const v = input.trim();
-    if (!v || values.includes(v)) { setInput(""); return; }
-    onChange([...values, v]);
-    setInput("");
-  }
-  return (
-    <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: values.length > 0 ? 6 : 0 }}>
-        {values.map(v => (
-          <span key={v} style={{
-            display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px",
-            borderRadius: 20, background: "var(--surface-3)", color: "var(--text-2)",
-            fontSize: 12, fontWeight: 500,
-          }}>
-            {v}
-            <button type="button" onClick={() => onChange(values.filter(x => x !== v))}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-5)", fontSize: 14, padding: 0 }}>
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-      <input type="text" value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === "Enter" || e.key === "," || e.key === ";" || e.key === "Tab") {
-            e.preventDefault();
-            commit();
-          } else if (e.key === "Backspace" && !input && values.length > 0) {
-            onChange(values.slice(0, -1));
-          }
-        }}
-        onBlur={commit}
-        placeholder={placeholder}
-        style={inp} />
-    </div>
-  );
-}
-
-function MultiSelect({ values, onChange, options, placeholder }: {
-  values: string[]; onChange: (v: string[]) => void;
-  options: readonly { value: string; label: string }[] | { value: string; label: string }[];
-  placeholder: string;
-}) {
-  return (
-    <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {options.map(o => {
-          const active = values.includes(o.value);
-          return (
-            <button key={o.value} type="button"
-              onClick={() => onChange(active ? values.filter(v => v !== o.value) : [...values, o.value])}
-              style={{
-                padding: "5px 12px", borderRadius: 18,
-                border: active ? "1px solid var(--su-500)" : "1px solid var(--border)",
-                background: active ? "var(--su-500)" : "var(--surface-2)",
-                color: active ? "#fff" : "var(--text-3)",
-                fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}>
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-      {values.length === 0 && <div style={hint}>{placeholder}</div>}
-    </div>
-  );
 }
 
 // ── Wizard principal ─────────────────────────────────────────────────────────
@@ -222,13 +160,15 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
   const [excludedGeographies, setExcludedGeographies] = useState<string[]>([]);
   const [targetRevenueMin, setTargetRevenueMin] = useState("");
   const [targetRevenueMax, setTargetRevenueMax] = useState("");
-  const [targetEvMin, setTargetEvMin] = useState("");
-  const [targetEvMax, setTargetEvMax] = useState("");
   const [targetStage, setTargetStage] = useState("");
   const [acquisitionBudgetMin, setAcquisitionBudgetMin] = useState("");
-  const [acquisitionBudgetMax, setAcquisitionBudgetMax] = useState("");
   const [fullAcquisitionRequired, setFullAcquisitionRequired] = useState(false);
   const [strategicRationale, setStrategicRationale] = useState("");
+
+  // Step 2 — Fiche de cadrage (cadrage-first) : upload PDF -> IA -> pré-remplissage.
+  const [cadrageContent, setCadrageContent] = useState<CadrageContent | null>(null);
+  const [cadrageLoading, setCadrageLoading] = useState(false);
+  const [cadrageMsg, setCadrageMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   // Step 3 — données financières
   const [financialEnabled, setFinancialEnabled] = useState(false);
@@ -266,14 +206,43 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
 
   const canNext1 = step1Valid && step1ClientOk && step1DirigeantOk;
 
+  // Un mandat d'acquisition n'a pas d'étape financière (pas de cible unique) :
+  // 2 étapes pour ma_buy, 3 pour une cession.
+  const lastStep: 2 | 3 = dealType === "ma_buy" ? 2 : 3;
+
   // Navigation entre étapes
   function goNext() {
-    if (step === 1) setStep(2);
-    else if (step === 2) setStep(3);
+    if (step < lastStep) setStep((step + 1) as 1 | 2 | 3);
   }
   function goPrev() {
-    if (step === 3) setStep(2);
-    else if (step === 2) setStep(1);
+    if (step > 1) setStep((step - 1) as 1 | 2 | 3);
+  }
+
+  // Fiche de cadrage : l'IA extrait les critères, on pré-remplit, l'utilisateur
+  // vérifie et corrige avant de valider (propose/dispose).
+  async function analyzeCadrage(file: File) {
+    setCadrageLoading(true);
+    setCadrageMsg(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await extractCadrageFromUploadAction(fd);
+    setCadrageLoading(false);
+    if (!res.success || !res.content) {
+      setCadrageMsg({ kind: "err", text: res.error ?? "Analyse échouée." });
+      return;
+    }
+    const c = res.content;
+    setCadrageContent(c);
+    const p = cadrageToWizardPrefill(c);
+    setTargetSectors(p.targetSectors);
+    setTargetGeographies(p.targetGeographies);
+    setTargetRevenueMin(p.targetRevenueMin);
+    setTargetRevenueMax(p.targetRevenueMax);
+    setAcquisitionBudgetMin(p.acquisitionBudgetMin);
+    setFullAcquisitionRequired(p.fullAcquisitionRequired);
+    setStrategicRationale(p.strategicRationale);
+    if (c.repreneur_nom && !name.trim()) setName(`Acquisition ${c.repreneur_nom}`);
+    setCadrageMsg({ kind: "ok", text: `Fiche analysée (confiance ${c.confidence}/100). Vérifiez et corrigez les critères ci-dessous.` });
   }
 
   // ── Soumission finale ──
@@ -412,13 +381,18 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
       excluded_geographies: excludedGeographies.length > 0 ? excludedGeographies : null,
       target_revenue_min: numOrNull(targetRevenueMin),
       target_revenue_max: numOrNull(targetRevenueMax),
-      target_ev_min: numOrNull(targetEvMin),
-      target_ev_max: numOrNull(targetEvMax),
+      // EV et budget max : colonnes conservées en base mais non saisies au
+      // cadrage small cap (rarement pertinent) ; renseignables plus tard.
+      target_ev_min: null,
+      target_ev_max: null,
       target_stage: targetStage || null,
       acquisition_budget_min: numOrNull(acquisitionBudgetMin),
-      acquisition_budget_max: numOrNull(acquisitionBudgetMax),
+      acquisition_budget_max: null,
       full_acquisition_required: dealType === "ma_buy" ? fullAcquisitionRequired : null,
       strategic_rationale: strategicRationale.trim() || null,
+      // Fiche de cadrage extraite au wizard : persistée à l'INSERT pour la
+      // génération de la chasse rattachée ensuite (?tab=sourcing).
+      cadrage_content: dealType === "ma_buy" ? cadrageContent : null,
 
       // Financial (Step 3)
       financial: financialEnabled ? {
@@ -448,11 +422,18 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
   }
 
   // ── Progress bar ────────────────────────────────────────────────────────
-  const steps = [
-    { n: 1, label: "Identité & contexte" },
-    { n: 2, label: "Spécificités" },
-    { n: 3, label: "Données financières" },
-  ];
+  // Un mandat d'acquisition se cadre en 2 étapes (identité + critères de
+  // recherche) ; une cession garde l'étape 3 des données financières N-1.
+  const steps = dealType === "ma_buy"
+    ? [
+        { n: 1, label: "Identité & contexte" },
+        { n: 2, label: "Critères d'acquisition" },
+      ]
+    : [
+        { n: 1, label: "Identité & contexte" },
+        { n: 2, label: "Spécificités de la cession" },
+        { n: 3, label: "Données financières" },
+      ];
 
   return (
     <div style={{ padding: "32px 24px", minHeight: "100vh", background: "var(--bg)" }}>
@@ -508,7 +489,8 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
                 <div>
                   <label style={lbl}>Type de mission *</label>
                   <select value={dealType} onChange={e => setDealType(e.target.value as DealType)} style={inp}>
-                    {Object.entries(DEAL_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    <option value="ma_sell">{dealTypeLabels.ma_sell}</option>
+                    <option value="ma_buy">{dealTypeLabels.ma_buy}</option>
                   </select>
                 </div>
                 <div>
@@ -796,92 +778,77 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
         {step === 2 && dealType === "ma_buy" && (
           <div style={sectionCard}>
             <div style={sectionTitle}>Acquisition : critères de recherche</div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Secteurs visés</label>
-              <MultiSelect values={targetSectors} onChange={setTargetSectors}
-                options={SECTORS.map(s => ({ value: s, label: s }))}
-                placeholder="Sélectionne un ou plusieurs secteurs" />
+
+            {/* Cadrage-first : la fiche pré-remplit tout, on vérifie ensuite. */}
+            <div style={{ border: "1px dashed var(--su-500, #1a56db)", borderRadius: 10, padding: "14px 16px", marginBottom: 16, background: "var(--surface-2)" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", marginBottom: 4 }}>Importer la fiche de cadrage (PDF)</div>
+              <div style={{ fontSize: 12, color: "var(--text-4)", marginBottom: 10 }}>
+                L&apos;IA lit le brief du repreneur et pré-remplit les critères ci-dessous. Vous vérifiez et corrigez avant de créer.
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <input type="file" accept="application/pdf" disabled={cadrageLoading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) analyzeCadrage(f); }}
+                  style={{ fontSize: 12.5, fontFamily: "inherit", color: "var(--text-3)" }} />
+                {cadrageLoading && <span style={{ fontSize: 12.5, color: "var(--text-4)" }}>Analyse en cours…</span>}
+              </div>
+              {cadrageMsg && (
+                <div style={{ marginTop: 10, padding: "8px 11px", borderRadius: 8, fontSize: 12.5, fontWeight: 500, background: cadrageMsg.kind === "ok" ? "#D1FAE5" : "#FEE2E2", color: cadrageMsg.kind === "ok" ? "#065F46" : "#991B1B" }}>
+                  {cadrageMsg.text}
+                </div>
+              )}
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Secteurs exclus</label>
-              <MultiSelect values={excludedSectors} onChange={setExcludedSectors}
-                options={SECTORS.map(s => ({ value: s, label: s }))}
-                placeholder="Secteurs à exclure du matching (deal breaker)" />
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Secteurs (visés / exclus)</label>
+              <IncludeExcludeMultiSelect groups={SECTOR_FACET_GROUPS}
+                included={targetSectors} excluded={excludedSectors}
+                onIncluded={setTargetSectors} onExcluded={setExcludedSectors} />
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Géographies visées</label>
-              <MultiSelect values={targetGeographies} onChange={setTargetGeographies}
-                options={GEO_OPTIONS}
-                placeholder="Zones géographiques cibles" />
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Géographies exclues</label>
-              <MultiSelect values={excludedGeographies} onChange={setExcludedGeographies}
-                options={GEO_OPTIONS}
-                placeholder="Zones à exclure" />
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Géographies (visées / exclues)</label>
+              <IncludeExcludeMultiSelect groups={GEO_FACET_GROUPS}
+                included={targetGeographies} excluded={excludedGeographies}
+                onIncluded={setTargetGeographies} onExcluded={setExcludedGeographies} />
             </div>
             <div style={grid2}>
               <div>
-                <label style={lbl}>Revenue cible min ({currencySymbol})</label>
+                <label style={lbl}>CA cible min ({currencySymbol})</label>
                 <input type="number" value={targetRevenueMin} onChange={e => setTargetRevenueMin(e.target.value)} style={inp} />
               </div>
               <div>
-                <label style={lbl}>Revenue cible max ({currencySymbol})</label>
+                <label style={lbl}>CA cible max ({currencySymbol})</label>
                 <input type="number" value={targetRevenueMax} onChange={e => setTargetRevenueMax(e.target.value)} style={inp} />
               </div>
             </div>
             <div style={grid2}>
               <div>
-                <label style={lbl}>EV cible min ({currencySymbol})</label>
-                <input type="number" value={targetEvMin} onChange={e => setTargetEvMin(e.target.value)} style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>EV cible max ({currencySymbol})</label>
-                <input type="number" value={targetEvMax} onChange={e => setTargetEvMax(e.target.value)} style={inp} />
-              </div>
-            </div>
-            <div style={grid2}>
-              <div>
-                <label style={lbl}>Budget acquisition min ({currencySymbol})</label>
+                <label style={lbl}>Apport / budget ({currencySymbol})</label>
                 <input type="number" value={acquisitionBudgetMin} onChange={e => setAcquisitionBudgetMin(e.target.value)} style={inp} />
               </div>
               <div>
-                <label style={lbl}>Budget acquisition max ({currencySymbol})</label>
-                <input type="number" value={acquisitionBudgetMax} onChange={e => setAcquisitionBudgetMax(e.target.value)} style={inp} />
-              </div>
-            </div>
-            <div style={grid2}>
-              <div>
-                <label style={lbl}>Stade cible</label>
+                <label style={lbl}>Stade / taille cible</label>
                 <select value={targetStage} onChange={e => setTargetStage(e.target.value)} style={inp}>
                   <option value="">— Non renseigné —</option>
-                  {COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Timing</label>
-                <select value={dealTiming} onChange={e => setDealTiming(e.target.value)} style={inp}>
-                  <option value="">— Non renseigné —</option>
-                  {DEAL_TIMING_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {ORG_COMPANY_STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
             </div>
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--text-2)" }}>
                 <input type="checkbox" checked={fullAcquisitionRequired} onChange={e => setFullAcquisitionRequired(e.target.checked)} />
-                Acquisition 100% requise (deal breaker)
+                Prise de contrôle majoritaire requise (deal breaker)
               </label>
             </div>
             <div>
-              <label style={lbl}>Rationale stratégique</label>
+              <label style={lbl}>Projet du repreneur / rationale</label>
               <textarea rows={3} value={strategicRationale} onChange={e => setStrategicRationale(e.target.value)}
-                placeholder="Synergies, expansion géo, consolidation…" style={{ ...inp, resize: "vertical" }} />
+                placeholder="Projet de reprise, synergies, zone, accompagnement souhaité…" style={{ ...inp, resize: "vertical" }} />
             </div>
           </div>
         )}
 
-        {/* Step 3 — Données financières */}
-        {step === 3 && (
+        {/* Step 3 — Données financières (cession uniquement) */}
+        {step === 3 && dealType !== "ma_buy" && (
           <div style={sectionCard}>
             <div style={sectionTitle}>Données financières initiales (optionnel)</div>
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13.5, color: "var(--text-2)", marginBottom: 14 }}>
@@ -976,7 +943,7 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
           <div style={{ fontSize: 12, color: "var(--text-5)" }}>
             Étape {steps.findIndex(s => s.n === step) + 1} / {steps.length}
           </div>
-          {step < 3 ? (
+          {step < lastStep ? (
             <button type="button" onClick={goNext} disabled={step === 1 && !canNext1}
               style={{
                 padding: "10px 22px", borderRadius: 9, border: "none",
