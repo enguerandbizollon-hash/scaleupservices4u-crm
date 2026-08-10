@@ -194,10 +194,14 @@ export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]>
   if (chasseIds.length === 0) return [];
   const chasseName = new Map((chasses ?? []).map((c) => [c.id as string, c.name as string]));
 
+  // Bornage à 200 : ORDER BY radar décroissant pour que la coupe garde les
+  // fiches les plus cédables (sans order, les 200 lignes seraient arbitraires
+  // et le tri par fit ne s'appliquerait qu'à un sous-ensemble aléatoire).
   const { data: fiches } = await supabase
     .from("univers_entreprises")
     .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id, finances")
     .in("source_profile_id", chasseIds)
+    .order("cedabilite_score", { ascending: false, nullsFirst: false })
     .limit(200);
 
   const dealProfile: MaDealProfile | null = deal

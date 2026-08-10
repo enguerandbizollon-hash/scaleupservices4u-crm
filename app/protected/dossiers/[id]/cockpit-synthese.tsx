@@ -45,7 +45,8 @@ export function CockpitSynthese({ deal, financialData, suggestions, clientOrg, o
   financialData: FinancialRow[];
   suggestions: SuggestionWithRelations[];
   clientOrg: { id: string; name: string; actionnariat?: ActionnaireNormalise[] | null } | null;
-  onOpenMarket: () => void;
+  /** Absent quand le dossier n'a pas de pane marché (deal_type legacy non M&A). */
+  onOpenMarket?: () => void;
 }) {
   const c = deal.currency ?? "EUR";
 
@@ -203,10 +204,12 @@ export function CockpitSynthese({ deal, financialData, suggestions, clientOrg, o
         ) : (
           <div style={{ fontSize: 12, color: "var(--text-5)" }}>Aucun {marketLabel.slice(0, -1)} scoré pour l&apos;instant.</div>
         )}
-        <button onClick={onOpenMarket}
-          style={{ alignSelf: "flex-start", marginTop: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#0F766E", padding: 0, fontFamily: "inherit" }}>
-          Travailler les {marketLabel} →
-        </button>
+        {onOpenMarket && (
+          <button onClick={onOpenMarket}
+            style={{ alignSelf: "flex-start", marginTop: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#0F766E", padding: 0, fontFamily: "inherit" }}>
+            Travailler les {marketLabel} →
+          </button>
+        )}
       </div>
     </div>
   );

@@ -492,7 +492,7 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           financialData={initialFinancialData}
           suggestions={initialSuggestions}
           clientOrg={initialClientOrganization}
-          onOpenMarket={() => openTab(deal.deal_type === "ma_sell" ? "acquereurs" : "sourcing")}
+          onOpenMarket={isMa ? () => openTab(deal.deal_type === "ma_sell" ? "acquereurs" : "sourcing") : undefined}
         />
 
         {/* Espaces de travail — Deal OS : 3 moments au lieu de 7 onglets à plat */}
@@ -1216,19 +1216,20 @@ function MaBuySpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
           placeholder="Choisir un stade"
         />
       </SpecRow>
-      <SpecRow label="Timing">
+      {/* Libellés alignés sur le barème de qualification (renvois Compléter). */}
+      <SpecRow label="Horizon de reprise">
         <EditableSpec
           dealId={dealId} field="deal_timing" initialValue={deal.deal_timing ?? null}
           selectOptions={DEAL_TIMING_OPTIONS.map(t => ({ value: t.value, label: t.label }))}
           formatter={(v) => v ? (DEAL_TIMING_OPTIONS.find(t => t.value === v)?.label ?? String(v)) : ""}
-          placeholder="Choisir un timing"
+          placeholder="Choisir un horizon"
         />
       </SpecRow>
       {deal.full_acquisition_required !== null && deal.full_acquisition_required && (
         <SpecRow label="Acquisition"><strong style={{ color:"var(--rec-tx)" }}>100% requis (deal breaker)</strong></SpecRow>
       )}
-      <SpecRow label="Rationale">
-        <EditableSpec dealId={dealId} field="strategic_rationale" initialValue={deal.strategic_rationale ?? null} placeholder="Rationale stratégique" />
+      <SpecRow label="Projet du repreneur">
+        <EditableSpec dealId={dealId} field="strategic_rationale" initialValue={deal.strategic_rationale ?? null} placeholder="Projet de reprise, synergies, accompagnement souhaité" />
       </SpecRow>
     </>
   );

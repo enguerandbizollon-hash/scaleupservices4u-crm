@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { syncToGCal } from "@/lib/gcal/sync-helper";
+import { refreshBuyQualificationScore } from "@/actions/screening";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -553,6 +554,9 @@ export async function updateBuyCriteriaAction(
     .eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
+
+  // Les critères comptent dans la qualification : le score persisté suit.
+  await refreshBuyQualificationScore(dealId);
 
   revalidatePath("/protected/dossiers");
   revalidatePath(`/protected/dossiers/${dealId}`);

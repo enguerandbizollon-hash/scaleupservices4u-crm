@@ -45,6 +45,19 @@ const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> 
   ready_for_outreach: { bg: "#D1FAE5",          tx: "#065F46",        label: "Prêt outreach" },
   on_hold:            { bg: "var(--surface-3)", tx: "var(--text-5)", label: "Pause" },
 };
+// Vocabulaire acquisition : screening_status y porte la qualification du
+// repreneur (cadrage), pas le screening de cession.
+const BUY_PILL_LABELS: Record<string, string> = {
+  not_started: "À cadrer",
+  drafting: "En cadrage",
+  ready_for_outreach: "Prêt pour la recherche",
+  on_hold: "Pause",
+};
+function screeningPillLabel(status: string, dealType: string): string {
+  return dealType === "ma_buy"
+    ? (BUY_PILL_LABELS[status] ?? SCREENING_PILL[status]!.label)
+    : SCREENING_PILL[status]!.label;
+}
 
 interface Props {
   deals: KanbanDeal[];
@@ -452,7 +465,7 @@ function KanbanCard({ deal, lastActivityDate, onMove, onDragStart }: {
             color: SCREENING_PILL[deal.screening_status]!.tx,
             borderRadius: 3,
           }}>
-            {SCREENING_PILL[deal.screening_status]!.label}
+            {screeningPillLabel(deal.screening_status, deal.deal_type)}
           </span>
         )}
         {isDormant(lastActivityDate, deal.deal_status, deal.created_at) && (

@@ -353,6 +353,19 @@ const SCREENING_PILL: Record<string, { bg: string; tx: string; label: string }> 
   ready_for_outreach: { bg: "#D1FAE5",          tx: "#065F46",       label: "Prêt outreach" },
   on_hold:            { bg: "var(--surface-3)", tx: "var(--text-5)", label: "Pause" },
 };
+// Sur un mandat d'acquisition, screening_status porte la QUALIFICATION du
+// repreneur (cadrage) : mêmes couleurs, vocabulaire du métier buy.
+const BUY_PILL_LABELS: Record<string, string> = {
+  not_started: "À cadrer",
+  drafting: "En cadrage",
+  ready_for_outreach: "Prêt pour la recherche",
+  on_hold: "Pause",
+};
+function screeningPillLabel(status: string, dealType: string): string {
+  return dealType === "ma_buy"
+    ? (BUY_PILL_LABELS[status] ?? SCREENING_PILL[status]!.label)
+    : SCREENING_PILL[status]!.label;
+}
 type TaskType = { id:string; deal_id:string; task_status:string; due_date:string|null; priority_level:string };
 type EventType = { id:string; deal_id:string; title:string; event_type:string; due_date:string; status:string } | null;
 
@@ -411,7 +424,7 @@ function DealCard({ deal, dt, tasks, lastActivity, nextEvent, orgCount, health }
                   background: SCREENING_PILL[deal.screening_status]!.bg,
                   color: SCREENING_PILL[deal.screening_status]!.tx,
                 }}>
-                  {SCREENING_PILL[deal.screening_status]!.label}
+                  {screeningPillLabel(deal.screening_status, deal.deal_type)}
                 </span>
               )}
             </div>

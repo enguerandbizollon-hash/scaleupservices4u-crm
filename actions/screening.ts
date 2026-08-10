@@ -38,6 +38,7 @@ export async function fetchDealScreening(dealId: string): Promise<ScreeningPaylo
 export type BuyQualificationPayload = {
   snapshot: BuyQualificationSnapshot & {
     screening_status: ScreeningStatus;
+    screening_score: number | null;
     screening_validated_at: string | null;
   };
   breakdown: ScreeningScoreBreakdown;
@@ -56,7 +57,7 @@ async function getDealBuyQualification(dealId: string): Promise<BuyQualification
       target_revenue_min, target_revenue_max,
       acquisition_budget_min, acquisition_budget_max,
       deal_timing, dirigeant_id, dirigeant_nom,
-      screening_status, screening_validated_at
+      screening_status, screening_score, screening_validated_at
     `)
     .eq("id", dealId)
     .eq("user_id", user.id)
@@ -76,16 +77,50 @@ async function getDealBuyQualification(dealId: string): Promise<BuyQualification
     dirigeant_id: deal.dirigeant_id,
     dirigeant_nom: deal.dirigeant_nom,
     screening_status: (deal.screening_status ?? "not_started") as ScreeningStatus,
+    screening_score: deal.screening_score,
     screening_validated_at: deal.screening_validated_at,
   };
 }
 
-// Lecture côté client : BuyQualificationSection l'appelle au mount et après
-// chaque mutation.
-export async function fetchBuyQualification(dealId: string): Promise<BuyQualificationPayload | null> {
+/**
+ * Recalcule le score de qualification d'un ma_buy et RÉCONCILIE la colonne
+ * persistée (lue par la liste Dossiers, le kanban, l'export CSV) : les
+ * critères s'éditent partout (budget, critères, cadrage) sans passer par une
+ * action de screening, le score stocké doit suivre. Transition implicite
+ * not_started -> drafting dès qu'un critère est rempli (parité cession) ;
+ * ne rétrograde jamais un statut validé.
+ */
+export async function refreshBuyQualificationScore(dealId: string): Promise<BuyQualificationPayload | null> {
   const snapshot = await getDealBuyQualification(dealId);
   if (!snapshot) return null;
-  return { snapshot, breakdown: computeBuyQualificationScore(snapshot) };
+  const breakdown = computeBuyQualificationScore(snapshot);
+  const nextStatus: ScreeningStatus =
+    snapshot.screening_status === "not_started" && breakdown.total > 0 ? "drafting" : snapshot.screening_status;
+
+  if (breakdown.total !== snapshot.screening_score || nextStatus !== snapshot.screening_status) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("deals")
+        .update({
+          screening_score: breakdown.total,
+          screening_status: nextStatus,
+          screening_updated_at: new Date().toISOString(),
+        })
+        .eq("id", dealId)
+        .eq("user_id", user.id);
+      snapshot.screening_score = breakdown.total;
+      snapshot.screening_status = nextStatus;
+    }
+  }
+  return { snapshot, breakdown };
+}
+
+// Lecture côté client : BuyQualificationSection l'appelle au mount et après
+// chaque mutation. La lecture réconcilie au passage le score persisté.
+export async function fetchBuyQualification(dealId: string): Promise<BuyQualificationPayload | null> {
+  return refreshBuyQualificationScore(dealId);
 }
 
 export interface ScreeningInput {
@@ -129,6 +164,21 @@ export async function updateDealScreening(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
+
+  // Garde serveur : le barème cession n'écrit JAMAIS sur un mandat
+  // d'acquisition (sa qualification vit sur les critères, pas sur les champs
+  // narratifs). Sans elle, un appelant écraserait le score buy avec un score
+  // cession quasi nul tout en laissant le statut validé.
+  const { data: typed } = await supabase
+    .from("deals")
+    .select("deal_type")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!typed) return { success: false, error: "Dossier introuvable" };
+  if (typed.deal_type === "ma_buy") {
+    return { success: false, error: "Un mandat d'acquisition se qualifie par ses critères (fiche de cadrage), pas par le screening de cession." };
+  }
 
   const current = await getDealScreening(dealId);
   if (!current) return { success: false, error: "Dossier introuvable" };

@@ -28,16 +28,23 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
     if (!confirm("Lancer la chasse rattachée ? Les fiches trouvées rejoindront l'univers et apparaîtront ici.")) return;
     setRunning(true);
     setBanner(null);
-    const res = await runChasseForDeal(dealId);
-    setRunning(false);
-    if (!res.success) { setBanner({ kind: "err", text: res.error }); return; }
-    const d = res.data;
-    setBanner({
-      kind: "ok",
-      text: `Chasse « ${d.chasse_name} » : ${d.imported.toLocaleString("fr-FR")} fiches dans l'univers${d.truncated ? " (résultat tronqué)" : ""}.`,
-    });
-    setTargets(await getBuyMandateTargets(dealId));
-    setChasse(await getDealChasse(dealId));
+    // finally : une coupure réseau pendant un long run ne doit pas laisser le
+    // bouton bloqué sur « Chasse en cours » jusqu'au rechargement.
+    try {
+      const res = await runChasseForDeal(dealId);
+      if (!res.success) { setBanner({ kind: "err", text: res.error }); return; }
+      const d = res.data;
+      setBanner({
+        kind: "ok",
+        text: `Chasse « ${d.chasse_name} » : ${d.imported.toLocaleString("fr-FR")} fiches dans l'univers${d.truncated ? " (résultat tronqué)" : ""}.`,
+      });
+      setTargets(await getBuyMandateTargets(dealId));
+      setChasse(await getDealChasse(dealId));
+    } catch {
+      setBanner({ kind: "err", text: "Le lancement a échoué (réseau ou délai dépassé). Réessayez, ou vérifiez l'univers : la chasse a pu aboutir malgré tout." });
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function suivre(t: BuyTarget) {
@@ -67,7 +74,7 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
           <span style={{ fontSize: 11.5, fontWeight: 700, background: "var(--surface-3)", color: "var(--text-4)", borderRadius: 20, padding: "2px 9px" }}>{targets.length}</span>
         )}
         <button type="button" onClick={lancerChasse} disabled={running}
-          title="Lance la chasse rattachée à ce mandat (préparée par la fiche de cadrage)"
+          title="Lance la chasse rattachée à ce mandat (celle affichée ci-dessus)"
           style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", padding: "6px 13px", borderRadius: 8, border: "none", background: "#0F766E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: running ? 0.6 : 1 }}>
           {running ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
           {running ? "Chasse en cours…" : "Lancer la chasse"}
@@ -113,7 +120,7 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
 
       {targets.length === 0 ? (
         <p style={{ fontSize: 12.5, color: "var(--text-4)", margin: 0, lineHeight: 1.6 }}>
-          Aucune cible pour l&apos;instant. Analysez la fiche de cadrage ci-dessus (elle prépare la chasse), puis cliquez « Lancer la chasse » : les résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord. Les chasses se rattachent et s&apos;affinent aussi depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link>.
+          Aucune cible pour l&apos;instant. Dans la fiche de cadrage ci-dessus, cliquez « Appliquer au dossier et préparer la chasse » (c&apos;est ce geste qui crée la chasse), puis « Lancer la chasse » : les résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord. Les chasses se rattachent et s&apos;affinent aussi depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link>.
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

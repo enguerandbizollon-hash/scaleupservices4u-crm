@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { extractCadrageFromPdf, type CadrageContent } from "@/lib/ai/cadrage-engine";
 import { cadrageToDealPatch, cadrageToChasseFilters, cadrageChasseName } from "@/lib/crm/cadrage-map";
+import { refreshBuyQualificationScore } from "@/actions/screening";
 
 const STORAGE_BUCKET = "deal-documents";
 
@@ -78,6 +79,9 @@ export async function extractCadrageAction(documentId: string): Promise<ExtractC
     .eq("id", doc.deal_id)
     .eq("user_id", user.id);
 
+  // La fiche importée compte dans la qualification : le score persisté suit.
+  await refreshBuyQualificationScore(doc.deal_id);
+
   revalidatePath(`/protected/dossiers/${doc.deal_id}`);
   return { success: true, content: res.data };
 }
@@ -137,6 +141,8 @@ export async function applyCadrageToMandate(dealId: string): Promise<ApplyCadrag
   // 1. Critères ma_buy du dossier (uniquement ceux présents dans la fiche).
   if (Object.keys(patch).length > 0) {
     await supabase.from("deals").update(patch).eq("id", dealId).eq("user_id", user.id);
+    // Les critères comptent dans la qualification : le score persisté suit.
+    await refreshBuyQualificationScore(dealId);
   }
 
   // 2. Chasse rattachée pré-remplie. Une seule « chasse de cadrage » par
