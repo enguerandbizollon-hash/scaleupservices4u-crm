@@ -296,7 +296,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
     initialTab && validTabs.includes(initialTab) ? (initialTab as TabKey) : "dossier",
   );
   // replaceState (shallow) : l'URL suit l'onglet sans refetch serveur.
+  // Garde validTabs : un appelant (cockpit, renvoi) ne peut pas ouvrir un
+  // pane qui n'existe pas pour ce type de dossier.
   const openTab = (tab: TabKey) => {
+    if (!validTabs.includes(tab)) return;
     setActiveTab(tab);
     window.history.replaceState(null, "", `/protected/dossiers/${deal.id}${tab === "dossier" ? "" : `?tab=${tab}`}`);
   };
@@ -616,20 +619,24 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           <MaMatchingTab dealId={deal.id} dealType="ma_sell" />
         )}
 
-        {/* Onglet Sourcing — stratégie IA + CRM + Apollo unifiés (S4) */}
+        {/* Onglet Sourcing / Cibles. Acquisition : UN seul moteur, le pipeline
+            cadrage -> chasse -> cibles (le SourcingWizard de cession, doublon
+            gated par le screening sell, n'y est plus rendu). */}
         {activeTab === "sourcing" && (
           <>
             {deal.deal_type === "ma_buy" && <CadragePanel dealId={deal.id} initialCadrage={(deal.cadrage_content ?? null) as CadrageContent | null} />}
             {deal.deal_type === "ma_buy" && <BuyMandateTargets dealId={deal.id} />}
-            <SourcingWizard
-              dealId={deal.id}
-              screeningReady={isScreeningReady(deal.screening_status)}
-              initialSuggestions={initialSuggestions}
-              initialPlan={(deal.sourcing_plan_json ?? null) as Parameters<typeof SourcingWizard>[0]["initialPlan"]}
-              initialPlanGeneratedAt={deal.sourcing_plan_generated_at ?? null}
-              initialPlanSource={deal.sourcing_plan_source ?? null}
-              initialUrlsToConsult={deal.sourcing_urls_to_consult ?? []}
-            />
+            {deal.deal_type === "ma_sell" && (
+              <SourcingWizard
+                dealId={deal.id}
+                screeningReady={isScreeningReady(deal.screening_status)}
+                initialSuggestions={initialSuggestions}
+                initialPlan={(deal.sourcing_plan_json ?? null) as Parameters<typeof SourcingWizard>[0]["initialPlan"]}
+                initialPlanGeneratedAt={deal.sourcing_plan_generated_at ?? null}
+                initialPlanSource={deal.sourcing_plan_source ?? null}
+                initialUrlsToConsult={deal.sourcing_urls_to_consult ?? []}
+              />
+            )}
           </>
         )}
 
