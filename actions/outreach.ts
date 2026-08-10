@@ -28,6 +28,7 @@ interface SuggestionForDraft {
   organization_id: string;
   contact_id: string | null;
   status: string;
+  role_suggested: string | null;
   gmail_thread_id: string | null;
   outreach_brief_json: OutreachBriefJson | null;
   teaser_sent_at: string | null;
@@ -53,7 +54,7 @@ async function loadForDraft(suggestionId: string) {
 
   const { data: s, error } = await supabase
     .from("deal_target_suggestions")
-    .select("id, deal_id, organization_id, contact_id, status, gmail_thread_id, outreach_brief_json, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at")
+    .select("id, deal_id, organization_id, contact_id, status, role_suggested, gmail_thread_id, outreach_brief_json, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at")
     .eq("id", suggestionId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -90,7 +91,7 @@ async function resolveRecipient(
     .filter(x => !!x.email);
   const primary = withEmail.find(x => x.is_primary) ?? withEmail[0];
   if (primary?.email) return { email: primary.email };
-  return { error: "Aucun email : rattachez un contact avec email à cet acquéreur (bouton Enrichir sur sa fiche)." };
+  return { error: "Aucun email : rattachez un contact avec email à cette organisation (bouton Enrichir sur sa fiche)." };
 }
 
 async function persistDraft(
@@ -153,6 +154,8 @@ export async function createOutreachDraftForSuggestion(suggestionId: string): Pr
 
 // Relances déterministes par étape : courtes, sobres, l'utilisateur ajuste
 // dans Gmail. Pas d'IA ici (v1) : une relance doit partir en 10 secondes.
+// Deux jeux : on relance un ACQUÉREUR (cession) ou le DIRIGEANT d'une cible
+// pour le compte d'un repreneur (acquisition, mêmes étapes, autre langage).
 const FOLLOWUP_TEMPLATES: Partial<Record<FunnelStage, { subject: string; body: string }>> = {
   teaser_envoye: {
     subject: "Opportunité de reprise, relance",
@@ -168,6 +171,21 @@ const FOLLOWUP_TEMPLATES: Partial<Record<FunnelStage, { subject: string; body: s
   },
 };
 
+const TARGET_FOLLOWUP_TEMPLATES: Partial<Record<FunnelStage, { subject: string; body: string }>> = {
+  teaser_envoye: {
+    subject: "Projet de reprise, relance",
+    body: "Bonjour,\n\nJe me permets de revenir vers vous suite à mon message : j'accompagne un repreneur dont le projet correspond au profil de votre entreprise. Seriez-vous ouvert à un échange confidentiel, sans engagement ?\n\nBien à vous",
+  },
+  nda_signe: {
+    subject: "Suite de nos échanges, éléments d'information",
+    body: "Bonjour,\n\nMerci pour le NDA signé. Pour avancer, pourriez-vous nous transmettre les premiers éléments sur votre société (activité, derniers comptes) ? Je reste disponible pour en parler de vive voix.\n\nBien à vous",
+  },
+  im_envoye: {
+    subject: "Vos éléments, prochaine étape",
+    body: "Bonjour,\n\nMerci pour les éléments transmis, que nous étudions avec le repreneur. Je vous propose un échange cette semaine pour vous partager notre lecture et discuter de la suite.\n\nBien à vous",
+  },
+};
+
 /**
  * Brouillon de RELANCE adapté à l'étape courante, accroché au fil Gmail
  * d'origine quand il est connu (Re: + In-Reply-To), sinon nouveau fil.
@@ -178,7 +196,8 @@ export async function createFollowupDraftForSuggestion(suggestionId: string): Pr
   const { supabase, userId, s } = ctx;
 
   const stage = computeFunnelStage(s);
-  const template = FOLLOWUP_TEMPLATES[stage];
+  const templates = s.role_suggested === "target" ? TARGET_FOLLOWUP_TEMPLATES : FOLLOWUP_TEMPLATES;
+  const template = templates[stage];
   if (!template) {
     return { success: false, error: "Aucune relance type à ce stade (marquez d'abord une étape du funnel)." };
   }

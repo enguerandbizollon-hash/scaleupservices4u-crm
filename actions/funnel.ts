@@ -21,6 +21,77 @@ type FunnelResult =
   | { success: true; data: { stage: string; next_followup_at: string | null } }
   | { success: false; error: string };
 
+// ── Lecture du funnel des CIBLES d'un mandat d'acquisition ──────────────────
+
+export interface TargetFunnelRow {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  organization_siren: string | null;
+  status: string;
+  stage: string;
+  teaser_sent_at: string | null;
+  nda_signed_at: string | null;
+  im_sent_at: string | null;
+  offer_received_at: string | null;
+  next_followup_at: string | null;
+  intent_score: number | null;
+  has_brief: boolean;
+  has_contact: boolean;
+}
+
+/**
+ * Les cibles suivies d'un mandat ma_buy (suggestions role='target'), avec
+ * leurs étapes d'approche. Même moteur que le funnel acquéreurs, lu côté buy.
+ */
+export async function getDealTargetFunnel(dealId: string): Promise<TargetFunnelRow[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: rows } = await supabase
+    .from("deal_target_suggestions")
+    .select(`
+      id, organization_id, status, contact_id, outreach_brief_json,
+      teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at,
+      next_followup_at, intent_score,
+      organizations(name, siren)
+    `)
+    .eq("deal_id", dealId)
+    .eq("user_id", user.id)
+    .eq("role_suggested", "target")
+    .neq("status", "rejected")
+    .order("created_at", { ascending: true });
+
+  return (rows ?? []).map((r) => {
+    const org = (Array.isArray(r.organizations) ? r.organizations[0] : r.organizations) as
+      | { name?: string | null; siren?: string | null }
+      | null;
+    return {
+      id: r.id as string,
+      organization_id: r.organization_id as string,
+      organization_name: org?.name ?? "Organisation",
+      organization_siren: org?.siren ?? null,
+      status: r.status as string,
+      stage: computeFunnelStage({
+        status: r.status as string,
+        teaser_sent_at: r.teaser_sent_at,
+        nda_signed_at: r.nda_signed_at,
+        im_sent_at: r.im_sent_at,
+        offer_received_at: r.offer_received_at,
+      }),
+      teaser_sent_at: r.teaser_sent_at,
+      nda_signed_at: r.nda_signed_at,
+      im_sent_at: r.im_sent_at,
+      offer_received_at: r.offer_received_at,
+      next_followup_at: r.next_followup_at,
+      intent_score: r.intent_score,
+      has_brief: r.outreach_brief_json != null,
+      has_contact: r.contact_id != null,
+    };
+  });
+}
+
 interface SuggestionRow {
   id: string;
   deal_id: string;

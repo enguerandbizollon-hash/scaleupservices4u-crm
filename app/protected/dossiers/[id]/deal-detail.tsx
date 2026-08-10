@@ -8,6 +8,7 @@ import ActionModal from "@/components/actions/ActionModal";
 // MaMatchingTab : remonté en onglet Acquéreurs (phase 3, scoring V2).
 import { MaMatchingTab } from "./ma-matching-tab";
 import { BuyMandateTargets } from "@/components/dossiers/BuyMandateTargets";
+import { BuyTargetsFunnel } from "@/components/dossiers/BuyTargetsFunnel";
 import { CadragePanel } from "@/components/dossiers/CadragePanel";
 import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 import { CockpitSynthese } from "./cockpit-synthese";
@@ -306,6 +307,10 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
 
   // Drawer latéral pour entités liées (contacts, organisations)
   const [drawerEntity, setDrawerEntity] = useState<EntityRef>(null);
+
+  // Suivre une cible (BuyMandateTargets) doit rafraîchir le funnel d'approche
+  // juste en dessous (BuyTargetsFunnel) sans recharger la page.
+  const [buyFunnelRefresh, setBuyFunnelRefresh] = useState(0);
 
   const router = useRouter();
 
@@ -620,12 +625,13 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
         )}
 
         {/* Onglet Sourcing / Cibles. Acquisition : UN seul moteur, le pipeline
-            cadrage -> chasse -> cibles (le SourcingWizard de cession, doublon
-            gated par le screening sell, n'y est plus rendu). */}
+            cadrage -> chasse -> cibles -> approche (le SourcingWizard de
+            cession, doublon gated par le screening sell, n'y est plus rendu). */}
         {activeTab === "sourcing" && (
           <>
             {deal.deal_type === "ma_buy" && <CadragePanel dealId={deal.id} initialCadrage={(deal.cadrage_content ?? null) as CadrageContent | null} />}
-            {deal.deal_type === "ma_buy" && <BuyMandateTargets dealId={deal.id} />}
+            {deal.deal_type === "ma_buy" && <BuyMandateTargets dealId={deal.id} onPromoted={() => setBuyFunnelRefresh(k => k + 1)} />}
+            {deal.deal_type === "ma_buy" && <BuyTargetsFunnel dealId={deal.id} refreshKey={buyFunnelRefresh} />}
             {deal.deal_type === "ma_sell" && (
               <SourcingWizard
                 dealId={deal.id}

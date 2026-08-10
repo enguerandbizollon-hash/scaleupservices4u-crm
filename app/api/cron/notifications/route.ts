@@ -279,7 +279,7 @@ export async function GET(req: Request) {
   {
     const { data: dues, error: dueErr } = await supabase
       .from("deal_target_suggestions")
-      .select("id, user_id, deal_id, organization_id, status, next_followup_at, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, last_outreach_at, gmail_thread_id, organizations(name), deals(name)")
+      .select("id, user_id, deal_id, organization_id, status, role_suggested, next_followup_at, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, last_outreach_at, gmail_thread_id, organizations(name), deals(name)")
       .not("next_followup_at", "is", null)
       .lte("next_followup_at", today)
       .neq("status", "rejected")
@@ -292,17 +292,21 @@ export async function GET(req: Request) {
       for (const s of dues ?? []) {
         const org = Array.isArray(s.organizations) ? s.organizations[0] : s.organizations;
         const deal = Array.isArray(s.deals) ? s.deals[0] : s.deals;
-        const etape = s.offer_received_at ? "offre reçue"
-          : s.im_sent_at ? "IM envoyé"
+        // Rôle : acquéreur d'une cession, ou CIBLE d'un mandat d'acquisition
+        // (le funnel buy vit dans l'onglet Cibles, pas dans Acquéreurs, et
+        // ?tab=acquereurs n'existe pas sur un ma_buy).
+        const isTarget = s.role_suggested === "target";
+        const etape = s.offer_received_at ? (isTarget ? "offre envoyée" : "offre reçue")
+          : s.im_sent_at ? (isTarget ? "infos reçues" : "IM envoyé")
           : s.nda_signed_at ? "NDA signé"
-          : s.teaser_sent_at ? "teaser envoyé"
+          : s.teaser_sent_at ? (isTarget ? "approchée" : "teaser envoyé")
           : "approche";
         const res = await enqueueNotification(supabase, {
           user_id: s.user_id,
           kind: "suggestion_followup",
-          title: `Relancer ${(org as { name?: string } | null)?.name ?? "un acquéreur"} (${etape})`,
+          title: `Relancer ${(org as { name?: string } | null)?.name ?? (isTarget ? "une cible" : "un acquéreur")} (${etape})`,
           body: `Mandat ${(deal as { name?: string } | null)?.name ?? ""} : relance prévue le ${s.next_followup_at}. Le bouton Brouillon relance prépare l'email dans Gmail.`,
-          link_url: `/protected/dossiers/${s.deal_id}?tab=acquereurs`,
+          link_url: `/protected/dossiers/${s.deal_id}?tab=${isTarget ? "sourcing" : "acquereurs"}`,
           source_type: "suggestion",
           source_id: s.id,
           trigger_date: s.next_followup_at,

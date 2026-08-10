@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getBuyMandateTargets, promoteTargetToFunnel, runChasseForDeal, getDealChasse, type BuyTarget, type DealChasseInfo } from "@/actions/prospection";
+import { getDealTargetFunnel } from "@/actions/funnel";
 import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play, Pencil, ListFilter } from "lucide-react";
 
 // Vue Cibles d'un mandat d'acquisition (buy-side v75) : les fiches univers
@@ -9,7 +10,7 @@ import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play, Pencil, ListFilter
 // chasse SUR PLACE (plus besoin de passer par Prospection). Chaque cible
 // pointe vers son tiroir 360 dans Prospection (navigation deux sens). Rendu
 // dans l'onglet « sourcing » de la fiche mandat, uniquement pour un deal ma_buy.
-export function BuyMandateTargets({ dealId }: { dealId: string }) {
+export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPromoted?: () => void }) {
   const [targets, setTargets] = useState<BuyTarget[] | null>(null);
   const [suivies, setSuivies] = useState<Set<string>>(new Set());
   const [promoting, setPromoting] = useState<string | null>(null);
@@ -21,6 +22,12 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
     let alive = true;
     getBuyMandateTargets(dealId).then((t) => { if (alive) setTargets(t); });
     getDealChasse(dealId).then((c) => { if (alive) setChasse(c); });
+    // Hydrate « Suivie » depuis les suggestions existantes : après un
+    // rechargement, une cible déjà promue ne réaffiche plus « Suivre ».
+    getDealTargetFunnel(dealId).then((rows) => {
+      if (!alive) return;
+      setSuivies(new Set(rows.map((r) => r.organization_siren).filter((s): s is string => !!s)));
+    });
     return () => { alive = false; };
   }, [dealId]);
 
@@ -51,8 +58,15 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
     setPromoting(t.siren);
     const res = await promoteTargetToFunnel(dealId, t.siren, t.fit_score);
     setPromoting(null);
-    if (res.success) setSuivies((prev) => new Set(prev).add(t.siren));
-    else alert(res.error);
+    if (res.success) {
+      setSuivies((prev) => new Set(prev).add(t.siren));
+      setBanner(res.data.contact_warning
+        ? { kind: "err", text: `Cible suivie, mais sans contact : ${res.data.contact_warning}` }
+        : { kind: "ok", text: `${t.nom} suivie : dirigeant promu en contact, l'approche se pilote dans le bloc ci-dessous.` });
+      onPromoted?.();
+    } else {
+      setBanner({ kind: "err", text: res.error });
+    }
   }
 
   const box: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", marginBottom: 16 };

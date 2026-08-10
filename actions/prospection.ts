@@ -280,7 +280,7 @@ export async function promoteTargetToFunnel(
   dealId: string,
   siren: string,
   scoreAlgo?: number | null,
-): Promise<ProspectionActionResult<{ suggestion_id: string; organization_id: string }>> {
+): Promise<ProspectionActionResult<{ suggestion_id: string; organization_id: string; contact_warning: string | null }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
@@ -303,6 +303,19 @@ export async function promoteTargetToFunnel(
     .update({ organization_id: orgId, updated_at: new Date().toISOString() })
     .eq("siren", siren);
 
+  // Le dirigeant principal devient un contact : l'approche a besoin d'un
+  // destinataire (resolveRecipient). Best-effort : sans prénom exploitable,
+  // la cible est quand même suivie, l'enrichissement coordonnées viendra.
+  const dirigeants = (fiche.dirigeants ?? []) as { nom?: string | null; prenoms?: string | null }[];
+  const idxDirigeant = dirigeants.findIndex((d) => d?.nom?.trim() && d?.prenoms?.trim());
+  let contactWarning: string | null = null;
+  if (idxDirigeant >= 0) {
+    const promoted = await promoteDirigeantToContact(siren, idxDirigeant);
+    if (!promoted.success) contactWarning = promoted.error;
+  } else {
+    contactWarning = "Dirigeant sans prénom dans la source : créez le contact depuis la fiche organisation.";
+  }
+
   // Dédup : une suggestion pour (deal, org) existe déjà.
   const { data: existing } = await supabase
     .from("deal_target_suggestions")
@@ -315,7 +328,7 @@ export async function promoteTargetToFunnel(
     .maybeSingle();
   if (existing) {
     revalidatePath(`/protected/dossiers/${dealId}`);
-    return { success: true, data: { suggestion_id: existing.id as string, organization_id: orgId } };
+    return { success: true, data: { suggestion_id: existing.id as string, organization_id: orgId, contact_warning: contactWarning } };
   }
 
   const { data: created, error } = await supabase
@@ -334,7 +347,7 @@ export async function promoteTargetToFunnel(
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/protected/dossiers/${dealId}`);
-  return { success: true, data: { suggestion_id: created.id as string, organization_id: orgId } };
+  return { success: true, data: { suggestion_id: created.id as string, organization_id: orgId, contact_warning: contactWarning } };
 }
 
 export async function saveScreeningProfile(input: {

@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  getMaTargetMatches,
   getAcquirerMatches, ensureAcquirerSuggestion, aiJustifyAcquirers,
   type AcquirerMatchView,
 } from "@/actions/ma-matching";
@@ -661,92 +660,15 @@ function MaMatchCard({ match }: { match: MaMatchResult }) {
   );
 }
 
-function LegacyTargetsView({ dealId }: { dealId: string }) {
-  const [matches, setMatches] = useState<MaMatchResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [minScore, setMinScore] = useState(-1);
-  const [search, setSearch] = useState("");
-  const [showAll, setShowAll] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const result = await getMaTargetMatches(dealId, showAll);
-    if (result.error) setError(result.error);
-    else setMatches(result.matches);
-    setLoading(false);
-  }, [dealId, showAll]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const filtered = matches.filter(m => {
-    if (minScore >= 0 && (m.score === null || m.score < minScore)) return false;
-    if (search.trim().length >= 2 && !m.org.name.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
-
-  const inp: React.CSSProperties = {
-    padding: "7px 12px", border: "1px solid var(--border)", borderRadius: 8,
-    background: "var(--surface-2)", color: "var(--text-1)", fontSize: 13,
-    fontFamily: "inherit", outline: "none", boxSizing: "border-box",
-  };
-
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--text-5)" }}>Calcul du matching M&A…</div>;
-  if (error) return <div style={{ padding: 24, color: "#991B1B", fontSize: 13 }}>Erreur : {error}</div>;
-  if (matches.length === 0) return (
-    <div style={{ padding: 40, textAlign: "center" }}>
-      <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 6 }}>Aucune cible à matcher</div>
-      <div style={{ fontSize: 13, color: "var(--text-5)", maxWidth: 400, margin: "0 auto" }}>
-        Ajoutez des organisations de type Cible (sale_readiness = open/actively_selling) pour activer le matching.
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ padding: "20px 0" }}>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <input style={{ ...inp, flex: 1, minWidth: 180 }} placeholder="Rechercher une cible…"
-          value={search} onChange={e => setSearch(e.target.value)} />
-        <select style={inp} value={minScore} onChange={e => setMinScore(Number(e.target.value))}>
-          <option value={-1}>Tous (deal breakers inclus)</option>
-          <option value={0}>Score ≥ 0</option>
-          <option value={40}>Score ≥ 40</option>
-          <option value={70}>Score ≥ 70</option>
-        </select>
-        <button onClick={() => setShowAll(p => !p)}
-          style={{ ...inp, cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap",
-            border: showAll ? "1.5px solid #1a56db" : "1px solid var(--border)",
-            background: showAll ? "#eff6ff" : "var(--surface-2)",
-            color: showAll ? "#1a56db" : "var(--text-3)" }}>
-          {showAll ? "✓ Toutes cibles" : "Inclure 'non à vendre'"}
-        </button>
-        <button onClick={load} style={{ ...inp, cursor: "pointer", color: "var(--text-3)", fontWeight: 500 }}>↺</button>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div style={{ padding: 24, textAlign: "center", fontSize: 13, color: "var(--text-5)" }}>
-          Aucune cible ne correspond à ces critères.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 10 }}>
-          {filtered.map(m => <MaMatchCard key={m.org.id} match={m} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Entrée ───────────────────────────────────────────────────────────────────
+// ma_sell uniquement : le sens buy (deal -> cibles) vit dans l'onglet Cibles
+// (BuyMandateTargets + BuyTargetsFunnel), la vue legacy a été supprimée.
 
 interface MaMatchingTabProps {
   dealId: string;
-  dealType: "ma_sell" | "ma_buy";
+  dealType: "ma_sell";
 }
 
-export function MaMatchingTab({ dealId, dealType }: MaMatchingTabProps) {
-  return dealType === "ma_sell"
-    ? <AcquirerMatchesView dealId={dealId} />
-    : <LegacyTargetsView dealId={dealId} />;
+export function MaMatchingTab({ dealId }: MaMatchingTabProps) {
+  return <AcquirerMatchesView dealId={dealId} />;
 }
