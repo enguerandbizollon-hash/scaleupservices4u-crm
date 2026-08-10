@@ -27,6 +27,7 @@ import { FeesTab, type FeeRow } from "@/components/dossiers/FeesTab";
 import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
 import { StagePlaybook } from "@/components/dossiers/StagePlaybook";
 import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
+import { BuyQualificationSection } from "@/components/dossiers/BuyQualificationSection";
 import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
 import { computeDealHealth } from "@/lib/crm/health-score";
 import type { SuggestionWithRelations } from "@/lib/crm/suggestions";
@@ -495,9 +496,11 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           type PaneKey = typeof activeTab;
           const espaces: { key: string; label: string; panes: { key: PaneKey; label: string }[] }[] = [
             {
+              // Buy-side : pas d'entreprise sujette unique. Le « Financier »
+              // devient le budget du repreneur, le « Screening » sa qualification.
               key: "cible", label: "L'affaire", panes: [
-                { key: "financier", label: "Financier" },
-                { key: "screening", label: "Screening" },
+                { key: "financier", label: deal.deal_type === "ma_buy" ? "Budget" : "Financier" },
+                { key: "screening", label: deal.deal_type === "ma_buy" ? "Qualification" : "Screening" },
                 { key: "documents", label: "Documents" },
               ],
             },
@@ -587,9 +590,13 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
             La logique scoring réseau interne (ma-scoring, matching algo) est
             intégrée comme source dans executeSourcingPlanAction. */}
 
-        {/* Onglet Screening — qualification dossier avant ouverture vers l'extérieur (V53) */}
+        {/* Onglet Screening / Qualification — le dossier doit être qualifié
+            avant ouverture vers l'extérieur (V53). Cession : screening de
+            l'entreprise. Acquisition : qualification du projet du repreneur. */}
         {activeTab === "screening" && (
-          <ScreeningSection dealId={deal.id} />
+          deal.deal_type === "ma_buy"
+            ? <BuyQualificationSection dealId={deal.id} onOpenPane={openTab} />
+            : <ScreeningSection dealId={deal.id} />
         )}
 
         {/* Onglet Acquéreurs — classement de la base par la grille V2 (phase 3) */}

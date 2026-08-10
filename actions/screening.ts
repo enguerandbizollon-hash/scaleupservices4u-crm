@@ -9,6 +9,11 @@ import {
   type DealScreeningSnapshot,
   type ScreeningScoreBreakdown,
 } from "@/lib/crm/screening";
+import {
+  computeBuyQualificationScore,
+  BUY_QUALIFICATION_READY_MIN_SCORE,
+  type BuyQualificationSnapshot,
+} from "@/lib/crm/buy-qualification";
 import type { ScreeningStatus } from "@/lib/crm/matching-maps";
 
 export type ScreeningPayload = {
@@ -22,6 +27,65 @@ export async function fetchDealScreening(dealId: string): Promise<ScreeningPaylo
   const snapshot = await getDealScreening(dealId);
   if (!snapshot) return null;
   return { snapshot, breakdown: computeScreeningScore(snapshot) };
+}
+
+// ── Qualification buy-side ──────────────────────────────────────────────────
+// Un mandat d'acquisition ne se screene pas comme une cession : sa
+// qualification se lit sur les critères du dossier (cadrage, projet, cibles,
+// budget). Même machine à statuts (screening_status / screening_score), barème
+// dédié (lib/crm/buy-qualification.ts).
+
+export type BuyQualificationPayload = {
+  snapshot: BuyQualificationSnapshot & {
+    screening_status: ScreeningStatus;
+    screening_validated_at: string | null;
+  };
+  breakdown: ScreeningScoreBreakdown;
+};
+
+async function getDealBuyQualification(dealId: string): Promise<BuyQualificationPayload["snapshot"] | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select(`
+      cadrage_content, strategic_rationale,
+      target_sectors, target_geographies,
+      target_revenue_min, target_revenue_max,
+      acquisition_budget_min, acquisition_budget_max,
+      deal_timing, dirigeant_id, dirigeant_nom,
+      screening_status, screening_validated_at
+    `)
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!deal) return null;
+
+  return {
+    cadrage_present: deal.cadrage_content != null,
+    strategic_rationale: deal.strategic_rationale,
+    target_sectors: deal.target_sectors,
+    target_geographies: deal.target_geographies,
+    target_revenue_min: deal.target_revenue_min,
+    target_revenue_max: deal.target_revenue_max,
+    acquisition_budget_min: deal.acquisition_budget_min,
+    acquisition_budget_max: deal.acquisition_budget_max,
+    deal_timing: deal.deal_timing,
+    dirigeant_id: deal.dirigeant_id,
+    dirigeant_nom: deal.dirigeant_nom,
+    screening_status: (deal.screening_status ?? "not_started") as ScreeningStatus,
+    screening_validated_at: deal.screening_validated_at,
+  };
+}
+
+// Lecture côté client : BuyQualificationSection l'appelle au mount et après
+// chaque mutation.
+export async function fetchBuyQualification(dealId: string): Promise<BuyQualificationPayload | null> {
+  const snapshot = await getDealBuyQualification(dealId);
+  if (!snapshot) return null;
+  return { snapshot, breakdown: computeBuyQualificationScore(snapshot) };
 }
 
 export interface ScreeningInput {
@@ -118,7 +182,9 @@ export async function updateDealScreening(
 
 // Bascule screening_status manuellement. Seuls drafting, ready_for_outreach
 // et on_hold sont accessibles (not_started est l'état initial uniquement).
-// Pour ready_for_outreach, on exige un score minimum.
+// Pour ready_for_outreach, on exige un score minimum : barème cession
+// (computeScreeningScore) pour ma_sell, barème de qualification du repreneur
+// (computeBuyQualificationScore) pour ma_buy. Même machine à statuts.
 export async function setScreeningStatus(
   dealId: string,
   target: ScreeningStatus,
@@ -131,15 +197,32 @@ export async function setScreeningStatus(
     return { success: false, error: "Le statut 'not_started' ne peut pas être défini manuellement" };
   }
 
-  const current = await getDealScreening(dealId);
-  if (!current) return { success: false, error: "Dossier introuvable" };
+  const { data: typed } = await supabase
+    .from("deals")
+    .select("deal_type")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!typed) return { success: false, error: "Dossier introuvable" };
 
-  const breakdown = computeScreeningScore(current);
+  let breakdown: ScreeningScoreBreakdown;
+  let minScore: number;
+  if (typed.deal_type === "ma_buy") {
+    const snap = await getDealBuyQualification(dealId);
+    if (!snap) return { success: false, error: "Dossier introuvable" };
+    breakdown = computeBuyQualificationScore(snap);
+    minScore = BUY_QUALIFICATION_READY_MIN_SCORE;
+  } else {
+    const current = await getDealScreening(dealId);
+    if (!current) return { success: false, error: "Dossier introuvable" };
+    breakdown = computeScreeningScore(current);
+    minScore = SCREENING_READY_MIN_SCORE;
+  }
 
-  if (target === "ready_for_outreach" && breakdown.total < SCREENING_READY_MIN_SCORE) {
+  if (target === "ready_for_outreach" && breakdown.total < minScore) {
     return {
       success: false,
-      error: `Score de complétude insuffisant (${breakdown.total}/100, minimum ${SCREENING_READY_MIN_SCORE})`,
+      error: `Score de complétude insuffisant (${breakdown.total}/100, minimum ${minScore})`,
     };
   }
 
