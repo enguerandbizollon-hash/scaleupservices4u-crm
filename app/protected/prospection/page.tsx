@@ -20,7 +20,19 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
   // ?chasse=<profileId> : l'univers se restreint aux fiches trouvées par cette
   // chasse (source_profile_id). C'est la réponse à « où sont mes 78 cibles ? » :
   // les résultats d'une chasse se consultent isolés, plus noyés dans l'univers.
-  const chasseParam = chasse && /^[0-9a-f][0-9a-f-]{8,}$/i.test(chasse) ? chasse : null;
+  // Regex UUID stricte : une valeur invalide passée à une colonne uuid ferait
+  // tomber toute la page sur une erreur Postgres 22P02 trompeuse.
+  const chasseRaw = chasse && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chasse) ? chasse : null;
+
+  // Profils chargés AVANT la requête univers : le filtre chasse ne s'applique
+  // que si le profil existe encore (FK source_profile_id ON DELETE SET NULL :
+  // une chasse supprimée n'a plus aucune fiche, filtrer dessus n'a pas de sens).
+  const { data: profilesData } = await supabase
+    .from("screening_profiles")
+    .select("id, name, filters, last_run_at, last_total_results, watch_enabled, deal_id")
+    .order("created_at", { ascending: true });
+  const activeChasseProfil = chasseRaw ? (profilesData ?? []).find((p) => p.id === chasseRaw) : null;
+  const chasseParam = activeChasseProfil ? chasseRaw : null;
   // Filtres du bandeau KPI : le clic sur une tuile doit montrer EXACTEMENT la
   // population comptée (audit 2026-07-31 : chiffre 0 face à une liste de 74).
   const activeFiltre = filtre === "chaudes" || filtre === "entrees7j" ? filtre : null;
@@ -64,12 +76,10 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
 
   // Bandeau de flux (audit 2026-07-30 : « il me faut des KPI, du flux ») :
   // l'écran dit ce qui entre, ce qui chauffe, ce qui attend une décision.
-  const [universRes, profilesRes, buyMandatesRes, nouveau, aApprocher, approche, echange, dormant, ecarte, promu, totalAll, chaudes, entrees7j, scorees, signaux7j] = await Promise.all([
+  // Ses compteurs sont GLOBAUX (dont « À trier ») : ses tuiles sortent du
+  // périmètre chasse au clic, chaque chiffre retrouve exactement sa liste.
+  const [universRes, buyMandatesRes, nouveau, aApprocher, approche, echange, dormant, ecarte, promu, totalAll, chaudes, entrees7j, nouveauGlobal, scorees, signaux7j] = await Promise.all([
     universQuery,
-    supabase
-      .from("screening_profiles")
-      .select("id, name, filters, last_run_at, last_total_results, watch_enabled, deal_id")
-      .order("created_at", { ascending: true }),
     // Mandats d'acquisition (buy-side) : rattacher une chasse à l'un d'eux.
     supabase
       .from("deals")
@@ -86,6 +96,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("cedabilite_score", 70).not("statut", "in", '("ecarte","promu")'),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).gte("first_seen_at", sevenDaysAgoIso),
+    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", "nouveau"),
     supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).not("cedabilite_score", "is", null),
     supabase.from("signaux").select("id", { count: "exact", head: true }).gte("signal_date", sevenDaysAgoDate),
   ]);
@@ -122,27 +133,27 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     if (f) initialFiche = { siren: f.siren, nom: f.nom, statut: f.statut };
   }
 
-  // Chasse active (?chasse=) : nom retrouvé dans les profils ; une chasse
-  // supprimée reste filtrable (ses fiches portent toujours son id).
-  const activeChasse = chasseParam
-    ? { id: chasseParam, name: (profilesRes.data ?? []).find((p) => p.id === chasseParam)?.name ?? null }
+  // Chasse active (?chasse=) : seulement si le profil existe encore (validé
+  // plus haut, avant la requête univers).
+  const activeChasse = activeChasseProfil
+    ? { id: activeChasseProfil.id as string, name: activeChasseProfil.name as string }
     : null;
   // Deep-link ?profil= : ouvre le composeur avec cette chasse chargée
   // (critères éditables), utilisé par la fiche mandat.
-  const initialProfileId = profil && (profilesRes.data ?? []).some((p) => p.id === profil) ? profil : null;
+  const initialProfileId = profil && (profilesData ?? []).some((p) => p.id === profil) ? profil : null;
 
   const flux = {
     total: totalAll.count ?? 0,
     chaudes: chaudes.count ?? 0,
     entrees7j: entrees7j.count ?? 0,
-    aTrier: statCounts.nouveau,
+    aTrier: nouveauGlobal.count ?? 0,
     signaux7j: signaux7j.count ?? 0,
     couvertureRadar: (totalAll.count ?? 0) > 0 ? Math.round(((scorees.count ?? 0) / (totalAll.count ?? 1)) * 100) : 0,
   };
 
   return (
     <ProspectionClient
-      profiles={(profilesRes.data ?? []) as ProfileRow[]}
+      profiles={(profilesData ?? []) as ProfileRow[]}
       buyMandates={(buyMandatesRes.data ?? []) as { id: string; name: string }[]}
       univers={(universRes.data ?? []) as UniversRow[]}
       universTotal={universRes.count ?? 0}

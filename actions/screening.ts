@@ -52,7 +52,7 @@ async function getDealBuyQualification(dealId: string): Promise<BuyQualification
   const { data: deal } = await supabase
     .from("deals")
     .select(`
-      cadrage_content, strategic_rationale,
+      deal_type, cadrage_content, strategic_rationale,
       target_sectors, target_geographies,
       target_revenue_min, target_revenue_max,
       acquisition_budget_min, acquisition_budget_max,
@@ -63,6 +63,9 @@ async function getDealBuyQualification(dealId: string): Promise<BuyQualification
     .eq("user_id", user.id)
     .maybeSingle();
   if (!deal) return null;
+  // Garde : le barème buy ne se calcule et ne s'écrit QUE sur un mandat
+  // d'acquisition (les appelants partagés, updateDealField, passent par ici).
+  if (deal.deal_type !== "ma_buy") return null;
 
   return {
     cadrage_present: deal.cadrage_content != null,

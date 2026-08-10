@@ -365,6 +365,8 @@ export async function updateDealDirigeant(dealId: string, data: {
     .eq("user_id", user.id);
 
   if (error) return { success: false, error: error.message };
+  // Repreneur identifié = critère de qualification buy ; no-op sur une cession.
+  await refreshBuyQualificationScore(dealId);
   revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true };
 }
@@ -512,10 +514,24 @@ export async function updateDealField(
 
   if (error) return { success: false, error: error.message };
 
+  // Ces champs comptent dans le barème de qualification d'un mandat
+  // d'acquisition : le score persisté (liste, kanban, export) doit suivre.
+  // refreshBuyQualificationScore est un no-op sur une cession.
+  if (BUY_QUALIFICATION_FIELDS.has(field)) {
+    await refreshBuyQualificationScore(dealId);
+  }
+
   revalidatePath("/protected/dossiers");
   revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true };
 }
+
+// Champs du barème buy édités via updateDealField (lib/crm/buy-qualification).
+const BUY_QUALIFICATION_FIELDS = new Set<string>([
+  "target_revenue_min", "target_revenue_max",
+  "acquisition_budget_min", "acquisition_budget_max",
+  "deal_timing", "strategic_rationale",
+]);
 
 /**
  * Critères de recherche d'un mandat d'acquisition (colonnes TABLEAU, hors

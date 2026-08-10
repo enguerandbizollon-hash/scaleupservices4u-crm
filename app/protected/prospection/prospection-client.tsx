@@ -18,7 +18,7 @@ import {
   type UniversStatut,
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
-import type { ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
+import { EFFECTIF_OPTIONS, type ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
 import { NAF_DIVISION_TO_SECTOR } from "@/lib/crm/matching-maps";
 import { nafCodesForDivisions } from "@/lib/crm/naf-codes";
 import { FicheUniversDrawer } from "@/components/prospection/FicheUniversDrawer";
@@ -81,17 +81,6 @@ export type FluxKpis = {
 
 // ── Constantes UI ────────────────────────────────────────────────────────────
 
-const EFFECTIF_OPTIONS = [
-  { code: "01", label: "1-2" },
-  { code: "02", label: "3-5" },
-  { code: "03", label: "6-9" },
-  { code: "11", label: "10-19" },
-  { code: "12", label: "20-49" },
-  { code: "21", label: "50-99" },
-  { code: "22", label: "100-199" },
-  { code: "31", label: "200-249" },
-  { code: "32", label: "250-499" },
-];
 
 const EMPTY_UI: UiState = {
   secteurs: [], nafExtra: "", caMin: "", caMax: "", ageMin: "", ageMax: "",
@@ -157,8 +146,8 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
   flux: FluxKpis;
   activeStatut: string | null;
   activeFiltre: "chaudes" | "entrees7j" | null;
-  /** Filtre ?chasse= : l'univers affiché est restreint aux fiches de cette chasse. */
-  activeChasse: { id: string; name: string | null } | null;
+  /** Filtre ?chasse= : l'univers affiché est restreint aux fiches de cette chasse (profil existant, validé côté page). */
+  activeChasse: { id: string; name: string } | null;
   /** Deep-link ?profil= : ouvre le composeur avec cette chasse chargée. */
   initialProfileId: string | null;
   sortRadar: boolean;
@@ -436,11 +425,13 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
 
         {/* ── Bandeau de flux ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 14 }}>
+          {/* Compteurs GLOBAUX : chaque tuile sort du périmètre chasse au clic
+              (chasse: null), sinon le chiffre ne compterait pas la liste. */}
           {([
-            { n: flux.total, label: "Univers", sub: "fiches suivies", href: buildHref({ statut: null, q: null }), color: "var(--text-1)" },
-            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70, hors promues/écartées", href: buildHref({ statut: null, q: null, radar: true, filtre: "chaudes" }), color: "#991B1B" },
-            { n: flux.entrees7j, label: "Entrées 7 j", sub: "flux de la semaine", href: buildHref({ statut: null, q: null, radar: false, filtre: "entrees7j" }), color: "#0F766E" },
-            { n: flux.aTrier, label: "À trier", sub: "en attente de décision", href: buildHref({ statut: "nouveau", q: null }), color: "#B45309" },
+            { n: flux.total, label: "Univers", sub: "fiches suivies", href: buildHref({ statut: null, q: null, chasse: null }), color: "var(--text-1)" },
+            { n: flux.chaudes, label: "Chaudes", sub: "radar ≥ 70, hors promues/écartées", href: buildHref({ statut: null, q: null, radar: true, filtre: "chaudes", chasse: null }), color: "#991B1B" },
+            { n: flux.entrees7j, label: "Entrées 7 j", sub: "flux de la semaine", href: buildHref({ statut: null, q: null, radar: false, filtre: "entrees7j", chasse: null }), color: "#0F766E" },
+            { n: flux.aTrier, label: "À trier", sub: "en attente de décision", href: buildHref({ statut: "nouveau", q: null, chasse: null }), color: "#B45309" },
             { n: flux.signaux7j, label: "Signaux 7 j", sub: "BODACC + veille", href: "/protected/signaux", color: "#B45309" },
             { n: `${flux.couvertureRadar}%`, label: "Radar", sub: "fiches scorées", href: null, color: flux.couvertureRadar >= 95 ? "#065F46" : "#B45309" },
           ] as Array<{ n: number | string; label: string; sub: string; href: string | null; color: string }>).map(k => {
@@ -664,15 +655,31 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
 
             <input style={{ ...inp, width: 220 }} placeholder="Nom du profil (ex : BTP AURA cédants)"
               value={profileName} onChange={e => setProfileName(e.target.value)} />
-            <button onClick={handleSaveProfile} disabled={!profileName.trim()}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: profileName.trim() ? 1 : 0.5 }}>
-              <Save size={13} /> {selectedProfileId ? "Mettre à jour" : "Sauvegarder"}
-            </button>
-            <button onClick={handleRun} disabled={running || !hasCriteria || (total != null && total > 10_000)}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 9, border: "none", background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: running || !hasCriteria || (total != null && total > 10_000) ? 0.55 : 1 }}>
-              {running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-              {running ? "Chasse en cours…" : "Lancer la chasse"}
-            </button>
+            {(() => {
+              // Mission mandat : exiger le mandat choisi pour sauvegarder, et un
+              // profil sauvegardé pour lancer. Sinon la chasse partirait en
+              // veille cédants (deal_id null) ou sans attribution
+              // (source_profile_id null) : ses fiches n'apparaîtraient jamais
+              // dans l'onglet Cibles, contredisant le texte d'aide.
+              const saveBlocked = !profileName.trim() || (mission === "mandat" && !profileDealId);
+              const runBlocked = running || !hasCriteria || (total != null && total > 10_000)
+                || (mission === "mandat" && (!selectedProfileId || !profileDealId));
+              return (
+                <>
+                  <button onClick={handleSaveProfile} disabled={saveBlocked}
+                    title={mission === "mandat" && !profileDealId ? "Choisissez d'abord le mandat servi par cette chasse" : ""}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saveBlocked ? 0.5 : 1 }}>
+                    <Save size={13} /> {selectedProfileId ? "Mettre à jour" : "Sauvegarder"}
+                  </button>
+                  <button onClick={handleRun} disabled={runBlocked}
+                    title={mission === "mandat" && (!selectedProfileId || !profileDealId) ? "Choisissez le mandat puis sauvegardez la chasse : c'est ce qui rattache ses fiches à l'onglet Cibles" : ""}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 9, border: "none", background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: runBlocked ? 0.55 : 1 }}>
+                    {running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+                    {running ? "Chasse en cours…" : "Lancer la chasse"}
+                  </button>
+                </>
+              );
+            })()}
             {selectedProfileId && (
               <button onClick={() => { setSelectedProfileId(null); setProfileName(""); setProfileDealId(null); setMission("veille"); setUi(EMPTY_UI); }}
                 style={{ all: "unset", cursor: "pointer", fontSize: 12, color: "var(--text-5)" }}>
@@ -691,11 +698,14 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
                 ...toggleChip(true), display: "inline-flex", alignItems: "center", gap: 5,
                 background: "#0F766E", border: "1px solid #0F766E", color: "#fff",
               }}>
-              <ListFilter size={11} /> Chasse : {activeChasse.name ?? "supprimée"} ✕
+              <ListFilter size={11} /> Chasse : {activeChasse.name} ✕
             </Link>
           )}
+          {/* Sans statut actif, universTotal colle à la liste (il inclut q et
+              le filtre chasse) ; avec un statut, scopeTotal donne la population
+              du périmètre hors statut. */}
           <Link href={buildHref({ statut: null })} style={toggleChip(activeStatut === null)}>
-            {activeChasse ? "Toutes ses fiches" : "Tout l'univers"} ({scopeTotal.toLocaleString("fr-FR")})
+            {activeChasse ? "Toutes ses fiches" : "Tout l'univers"} ({(activeStatut === null ? universTotal : scopeTotal).toLocaleString("fr-FR")})
           </Link>
           {Object.entries(STATUT_META).map(([key, meta]) => (
             <Link key={key} href={buildHref({ statut: key })} style={toggleChip(activeStatut === key)}>

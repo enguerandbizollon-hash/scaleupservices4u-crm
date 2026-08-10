@@ -15,8 +15,10 @@ import {
   countScreening,
   findDirigeantPrincipal,
   runScreening,
+  EFFECTIF_TRANCHE_LABELS,
   type ScreeningFilters,
 } from "@/lib/connectors/recherche-entreprises";
+import { geoLabel } from "@/lib/crm/geo-match";
 import { computeCedabilite } from "@/lib/crm/cedabilite";
 import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { universRowFromHit, mergeFinancesReingest } from "@/lib/crm/univers-ingest";
@@ -148,14 +150,17 @@ export async function getDealChasse(dealId: string): Promise<DealChasseInfo | nu
   const fmtEur = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(".", ",")} M€` : `${Math.round(n / 1_000)} k€`;
   const resume: string[] = [];
   if (f.naf?.length) resume.push(`NAF : ${f.naf.slice(0, 6).join(", ")}${f.naf.length > 6 ? ` +${f.naf.length - 6}` : ""}`);
-  if (f.ca_min != null || f.ca_max != null) {
-    resume.push(`CA ${[f.ca_min != null ? fmtEur(f.ca_min) : null, f.ca_max != null ? fmtEur(f.ca_max) : null].filter(Boolean).join(" à ")}`);
-  }
+  // Bornes explicites : « CA 1,5 M€ » seul ne dit pas si c'est un min ou un max.
+  if (f.ca_min != null && f.ca_max != null) resume.push(`CA ${fmtEur(f.ca_min)} à ${fmtEur(f.ca_max)}`);
+  else if (f.ca_min != null) resume.push(`CA min ${fmtEur(f.ca_min)}`);
+  else if (f.ca_max != null) resume.push(`CA max ${fmtEur(f.ca_max)}`);
   if (f.departements?.length) resume.push(`Départements : ${f.departements.join(", ")}`);
-  if (f.effectif_tranches?.length) resume.push(`Effectif : ${f.effectif_tranches.join(", ")}`);
-  if (f.age_dirigeant_min != null || f.age_dirigeant_max != null) {
-    resume.push(`Âge dirigeant ${[f.age_dirigeant_min, f.age_dirigeant_max].filter((v) => v != null).join(" à ")} ans`);
-  }
+  // La restriction régionale fait partie des critères : elle doit se voir.
+  if (f.regions?.length) resume.push(`Régions : ${f.regions.map((r) => geoLabel(r)).join(", ")}`);
+  if (f.effectif_tranches?.length) resume.push(`Effectif : ${f.effectif_tranches.map((c) => EFFECTIF_TRANCHE_LABELS[c] ?? c).join(", ")}`);
+  if (f.age_dirigeant_min != null && f.age_dirigeant_max != null) resume.push(`Âge dirigeant ${f.age_dirigeant_min} à ${f.age_dirigeant_max} ans`);
+  else if (f.age_dirigeant_min != null) resume.push(`Âge dirigeant min ${f.age_dirigeant_min} ans`);
+  else if (f.age_dirigeant_max != null) resume.push(`Âge dirigeant max ${f.age_dirigeant_max} ans`);
 
   return {
     id: p.id as string,

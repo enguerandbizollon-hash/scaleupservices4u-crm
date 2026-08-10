@@ -245,6 +245,24 @@ export interface ScreeningFilters {
 export const SCREENING_WINDOW = 10_000;
 export const SCREENING_PER_PAGE = 25; // max accepté par l'API
 
+/** Tranches d'effectif INSEE proposées au filtre de chasse : code API ->
+ * libellé court. Source unique (composeur, carte chasse de la fiche mandat).
+ * Sous-ensemble small cap du mapping EFFECTIF_LABELS complet ci-dessus. */
+export const EFFECTIF_OPTIONS: readonly { code: string; label: string }[] = [
+  { code: "01", label: "1-2" },
+  { code: "02", label: "3-5" },
+  { code: "03", label: "6-9" },
+  { code: "11", label: "10-19" },
+  { code: "12", label: "20-49" },
+  { code: "21", label: "50-99" },
+  { code: "22", label: "100-199" },
+  { code: "31", label: "200-249" },
+  { code: "32", label: "250-499" },
+];
+export const EFFECTIF_TRANCHE_LABELS: Record<string, string> = Object.fromEntries(
+  EFFECTIF_OPTIONS.map((o) => [o.code, o.label]),
+);
+
 export const DEPARTEMENTS_FR: readonly string[] = [
   ...Array.from({ length: 19 }, (_, i) => String(i + 1).padStart(2, "0")),
   "2A", "2B",
