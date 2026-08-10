@@ -114,6 +114,58 @@ function latestRevenueFromFinances(finances: unknown): number | null {
   return null;
 }
 
+export interface DealChasseInfo {
+  id: string;
+  name: string;
+  last_run_at: string | null;
+  last_total_results: number | null;
+  /** Résumé lisible des filtres de la chasse (NAF, CA, départements...). */
+  resume: string[];
+}
+
+/**
+ * La chasse rattachée à un mandat d'acquisition (la première, celle que
+ * prépare applyCadrageToMandate), avec un résumé lisible de ses filtres.
+ * Sert la carte chasse de l'onglet Cibles : voir les critères sans quitter
+ * la fiche, les modifier via le deep-link ?profil= de Prospection.
+ */
+export async function getDealChasse(dealId: string): Promise<DealChasseInfo | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: p } = await supabase
+    .from("screening_profiles")
+    .select("id, name, filters, last_run_at, last_total_results")
+    .eq("deal_id", dealId)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!p) return null;
+
+  const f = (p.filters ?? {}) as ScreeningFilters;
+  const fmtEur = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(".", ",")} M€` : `${Math.round(n / 1_000)} k€`;
+  const resume: string[] = [];
+  if (f.naf?.length) resume.push(`NAF : ${f.naf.slice(0, 6).join(", ")}${f.naf.length > 6 ? ` +${f.naf.length - 6}` : ""}`);
+  if (f.ca_min != null || f.ca_max != null) {
+    resume.push(`CA ${[f.ca_min != null ? fmtEur(f.ca_min) : null, f.ca_max != null ? fmtEur(f.ca_max) : null].filter(Boolean).join(" à ")}`);
+  }
+  if (f.departements?.length) resume.push(`Départements : ${f.departements.join(", ")}`);
+  if (f.effectif_tranches?.length) resume.push(`Effectif : ${f.effectif_tranches.join(", ")}`);
+  if (f.age_dirigeant_min != null || f.age_dirigeant_max != null) {
+    resume.push(`Âge dirigeant ${[f.age_dirigeant_min, f.age_dirigeant_max].filter((v) => v != null).join(" à ")} ans`);
+  }
+
+  return {
+    id: p.id as string,
+    name: p.name as string,
+    last_run_at: (p.last_run_at as string | null) ?? null,
+    last_total_results: (p.last_total_results as number | null) ?? null,
+    resume,
+  };
+}
+
 /**
  * Cibles d'un mandat d'acquisition : les fiches univers trouvées par les
  * chasses rattachées (screening_profiles.deal_id = dealId), SCORÉES par fit à

@@ -515,3 +515,46 @@ export async function updateDealField(
   revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true };
 }
+
+/**
+ * Critères de recherche d'un mandat d'acquisition (colonnes TABLEAU, hors
+ * périmètre d'updateDealField qui ne coerce que texte/nombre/date). Écrit les
+ * 4 listes d'un coup : c'est UNE décision de cadrage, pas 4 champs isolés.
+ * Lues par le scoring buy_to_target et la qualification du mandat.
+ */
+export async function updateBuyCriteriaAction(
+  dealId: string,
+  criteria: {
+    target_sectors: string[];
+    excluded_sectors: string[];
+    target_geographies: string[];
+    excluded_geographies: string[];
+  },
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const clean = (arr: string[]): string[] | null => {
+    const out = [...new Set(arr.map((v) => v.trim()).filter(Boolean))];
+    return out.length ? out : null;
+  };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({
+      target_sectors: clean(criteria.target_sectors),
+      excluded_sectors: clean(criteria.excluded_sectors),
+      target_geographies: clean(criteria.target_geographies),
+      excluded_geographies: clean(criteria.excluded_geographies),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/protected/dossiers");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true };
+}

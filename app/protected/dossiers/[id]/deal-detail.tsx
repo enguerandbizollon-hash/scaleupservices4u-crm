@@ -29,6 +29,7 @@ import { StagePlaybook } from "@/components/dossiers/StagePlaybook";
 import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
 import { BuyQualificationSection } from "@/components/dossiers/BuyQualificationSection";
 import { BuyBudgetTab } from "@/components/dossiers/BuyBudgetTab";
+import { BuyCriteriaEditor } from "@/components/dossiers/BuyCriteriaEditor";
 import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
 import { computeDealHealth } from "@/lib/crm/health-score";
 import type { SuggestionWithRelations } from "@/lib/crm/suggestions";
@@ -37,7 +38,6 @@ import { upsertContact, linkContactToOrganisation } from "@/actions/contacts";
 import { createOrganisationAction } from "@/actions/organisations";
 import { getAllOrganisationsSimple } from "@/actions/organisations";
 import { ORG_COMPANY_STAGES, DEAL_TIMING_OPTIONS, DEAL_CONTEXTS, stageLabel } from "@/lib/crm/matching-maps";
-import { geoLabel } from "@/lib/crm/geo-match";
 import { organizationTypeLabels, ORG_TYPE_SELECT_ORDER, dealTypeLabels, roleInDossierLabels } from "@/lib/crm/labels";
 import { GeoSelect } from "@/components/ui/GeoSelect";
 import Link from "next/link";
@@ -1105,32 +1105,6 @@ function SpecRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Chips({ values }: { values: string[] }) {
-  if (!values || values.length === 0) return <span style={{ color:"var(--text-5)" }}>—</span>;
-  return (
-    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-      {values.map(v => (
-        <span key={v} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-2)", fontWeight:500 }}>
-          {v}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function GeoChips({ values }: { values: string[] }) {
-  if (!values || values.length === 0) return <span style={{ color:"var(--text-5)" }}>—</span>;
-  return (
-    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-      {values.map(v => (
-        <span key={v} style={{ fontSize:11.5, padding:"2px 8px", borderRadius:20, background:"var(--surface-3)", color:"var(--text-2)", fontWeight:500 }}>
-          {geoLabel(v)}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function rangeFmt(min: number | null, max: number | null, currency: string | null): string | null {
   if (!min && !max) return null;
   const c = currency ?? "EUR";
@@ -1205,18 +1179,17 @@ function MaBuySpecs({ deal, dealId }: { deal: SpecDeal; dealId: string }) {
   };
   return (
     <>
-      {deal.target_sectors && deal.target_sectors.length > 0 && (
-        <SpecRow label="Secteurs cibles"><Chips values={deal.target_sectors} /></SpecRow>
-      )}
-      {deal.excluded_sectors && deal.excluded_sectors.length > 0 && (
-        <SpecRow label="Secteurs exclus"><Chips values={deal.excluded_sectors} /></SpecRow>
-      )}
-      {deal.target_geographies && deal.target_geographies.length > 0 && (
-        <SpecRow label="Géos cibles"><GeoChips values={deal.target_geographies} /></SpecRow>
-      )}
-      {deal.excluded_geographies && deal.excluded_geographies.length > 0 && (
-        <SpecRow label="Géos exclues"><GeoChips values={deal.excluded_geographies} /></SpecRow>
-      )}
+      {/* Secteurs et géos visés/exclus : éditables sur place (référentiel
+          harmonisé, mêmes sélecteurs que le wizard). */}
+      <BuyCriteriaEditor
+        dealId={dealId}
+        initial={{
+          target_sectors: deal.target_sectors ?? [],
+          excluded_sectors: deal.excluded_sectors ?? [],
+          target_geographies: deal.target_geographies ?? [],
+          excluded_geographies: deal.excluded_geographies ?? [],
+        }}
+      />
       <SpecRow label="CA cible min">
         <EditableSpec dealId={dealId} field="target_revenue_min" initialValue={deal.target_revenue_min} type="number" formatter={fmMoney} placeholder="Min" />
       </SpecRow>

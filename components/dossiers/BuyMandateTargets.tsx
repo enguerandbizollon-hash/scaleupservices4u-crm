@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getBuyMandateTargets, promoteTargetToFunnel, runChasseForDeal, type BuyTarget } from "@/actions/prospection";
-import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play } from "lucide-react";
+import { getBuyMandateTargets, promoteTargetToFunnel, runChasseForDeal, getDealChasse, type BuyTarget, type DealChasseInfo } from "@/actions/prospection";
+import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play, Pencil, ListFilter } from "lucide-react";
 
 // Vue Cibles d'un mandat d'acquisition (buy-side v75) : les fiches univers
 // trouvées par les chasses rattachées à ce mandat, avec le lancement de la
@@ -15,10 +15,12 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
   const [promoting, setPromoting] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [chasse, setChasse] = useState<DealChasseInfo | null>(null);
 
   useEffect(() => {
     let alive = true;
     getBuyMandateTargets(dealId).then((t) => { if (alive) setTargets(t); });
+    getDealChasse(dealId).then((c) => { if (alive) setChasse(c); });
     return () => { alive = false; };
   }, [dealId]);
 
@@ -35,6 +37,7 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
       text: `Chasse « ${d.chasse_name} » : ${d.imported.toLocaleString("fr-FR")} fiches dans l'univers${d.truncated ? " (résultat tronqué)" : ""}.`,
     });
     setTargets(await getBuyMandateTargets(dealId));
+    setChasse(await getDealChasse(dealId));
   }
 
   async function suivre(t: BuyTarget) {
@@ -70,6 +73,37 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
           {running ? "Chasse en cours…" : "Lancer la chasse"}
         </button>
       </div>
+
+      {/* Carte chasse : les critères de la recherche, visibles et modifiables
+          sans quitter la fiche (deep-link ?profil= vers le composeur). */}
+      {chasse && (
+        <div style={{ marginBottom: 12, padding: "10px 13px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-2)" }}>{chasse.name}</span>
+            {chasse.last_total_results != null && (
+              <span style={{ fontSize: 11.5, color: "var(--text-5)" }}>{chasse.last_total_results.toLocaleString("fr-FR")} cibles au dernier comptage</span>
+            )}
+            <span style={{ flex: 1 }} />
+            <Link href={`/protected/prospection?profil=${chasse.id}`}
+              title="Ouvre le composeur de Prospection avec cette chasse chargée : critères modifiables, compteur live"
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: "#1a56db", textDecoration: "none" }}>
+              <Pencil size={11} /> Modifier les critères
+            </Link>
+            <Link href={`/protected/prospection?chasse=${chasse.id}`}
+              title="Voir les fiches de cette chasse dans Prospection (univers restreint à ses résultats)"
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: "#0F766E", textDecoration: "none" }}>
+              <ListFilter size={11} /> Ses fiches dans Prospection
+            </Link>
+          </div>
+          {chasse.resume.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
+              {chasse.resume.map((r) => (
+                <span key={r} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: "var(--surface-3)", color: "var(--text-4)", fontWeight: 600 }}>{r}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {banner && (
         <div style={{ marginBottom: 10, padding: "8px 11px", borderRadius: 8, fontSize: 12.5, fontWeight: 500, background: banner.kind === "ok" ? "#D1FAE5" : "#FEE2E2", color: banner.kind === "ok" ? "#065F46" : "#991B1B" }}>
