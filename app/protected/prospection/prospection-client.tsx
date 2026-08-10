@@ -591,6 +591,13 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
                 ))}
               </select>
             )}
+            {profileDealId && (
+              <Link href={`/protected/dossiers/${profileDealId}?tab=sourcing`}
+                title="Ouvrir le mandat servi par cette chasse (onglet Cibles)"
+                style={{ fontSize: 12, fontWeight: 600, color: "#1a56db", textDecoration: "none" }}>
+                Voir le mandat →
+              </Link>
+            )}
             <button onClick={handleSaveProfile} disabled={!profileName.trim()}
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: profileName.trim() ? 1 : 0.5 }}>
               <Save size={13} /> {selectedProfileId ? "Mettre à jour" : "Sauvegarder"}

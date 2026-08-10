@@ -1,23 +1,41 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getBuyMandateTargets, promoteTargetToFunnel, type BuyTarget } from "@/actions/prospection";
-import { Crosshair, Loader2, ArrowUpRight, Plus, Check } from "lucide-react";
+import { getBuyMandateTargets, promoteTargetToFunnel, runChasseForDeal, type BuyTarget } from "@/actions/prospection";
+import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play } from "lucide-react";
 
 // Vue Cibles d'un mandat d'acquisition (buy-side v75) : les fiches univers
-// trouvées par les chasses rattachées à ce mandat. Chaque cible pointe vers
-// son tiroir 360 dans Prospection (navigation deux sens). Rendu dans l'onglet
-// « sourcing » de la fiche mandat, uniquement pour un deal ma_buy.
+// trouvées par les chasses rattachées à ce mandat, avec le lancement de la
+// chasse SUR PLACE (plus besoin de passer par Prospection). Chaque cible
+// pointe vers son tiroir 360 dans Prospection (navigation deux sens). Rendu
+// dans l'onglet « sourcing » de la fiche mandat, uniquement pour un deal ma_buy.
 export function BuyMandateTargets({ dealId }: { dealId: string }) {
   const [targets, setTargets] = useState<BuyTarget[] | null>(null);
   const [suivies, setSuivies] = useState<Set<string>>(new Set());
   const [promoting, setPromoting] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
     getBuyMandateTargets(dealId).then((t) => { if (alive) setTargets(t); });
     return () => { alive = false; };
   }, [dealId]);
+
+  async function lancerChasse() {
+    if (!confirm("Lancer la chasse rattachée ? Les fiches trouvées rejoindront l'univers et apparaîtront ici.")) return;
+    setRunning(true);
+    setBanner(null);
+    const res = await runChasseForDeal(dealId);
+    setRunning(false);
+    if (!res.success) { setBanner({ kind: "err", text: res.error }); return; }
+    const d = res.data;
+    setBanner({
+      kind: "ok",
+      text: `Chasse « ${d.chasse_name} » : ${d.imported.toLocaleString("fr-FR")} fiches dans l'univers${d.truncated ? " (résultat tronqué)" : ""}.`,
+    });
+    setTargets(await getBuyMandateTargets(dealId));
+  }
 
   async function suivre(t: BuyTarget) {
     setPromoting(t.siren);
@@ -45,11 +63,23 @@ export function BuyMandateTargets({ dealId }: { dealId: string }) {
         {targets.length > 0 && (
           <span style={{ fontSize: 11.5, fontWeight: 700, background: "var(--surface-3)", color: "var(--text-4)", borderRadius: 20, padding: "2px 9px" }}>{targets.length}</span>
         )}
+        <button type="button" onClick={lancerChasse} disabled={running}
+          title="Lance la chasse rattachée à ce mandat (préparée par la fiche de cadrage)"
+          style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", padding: "6px 13px", borderRadius: 8, border: "none", background: "#0F766E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: running ? 0.6 : 1 }}>
+          {running ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+          {running ? "Chasse en cours…" : "Lancer la chasse"}
+        </button>
       </div>
+
+      {banner && (
+        <div style={{ marginBottom: 10, padding: "8px 11px", borderRadius: 8, fontSize: 12.5, fontWeight: 500, background: banner.kind === "ok" ? "#D1FAE5" : "#FEE2E2", color: banner.kind === "ok" ? "#065F46" : "#991B1B" }}>
+          {banner.text}
+        </div>
+      )}
 
       {targets.length === 0 ? (
         <p style={{ fontSize: 12.5, color: "var(--text-4)", margin: 0, lineHeight: 1.6 }}>
-          Aucune cible pour l&apos;instant. Analysez la fiche de cadrage ci-dessus (elle prépare la chasse), ou depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link> rattachez une chasse à ce mandat, puis lancez-la : ses résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord.
+          Aucune cible pour l&apos;instant. Analysez la fiche de cadrage ci-dessus (elle prépare la chasse), puis cliquez « Lancer la chasse » : les résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord. Les chasses se rattachent et s&apos;affinent aussi depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link>.
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

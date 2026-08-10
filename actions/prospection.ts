@@ -367,6 +367,40 @@ export interface ProspectionRunSummary {
   queries: number;
 }
 
+/**
+ * Lance la chasse rattachée à un mandat d'acquisition DEPUIS la fiche dossier
+ * (une seule chasse de cadrage par mandat, celle que prépare
+ * applyCadrageToMandate). Réutilise runScreeningIngest avec les filtres
+ * stockés du profil, débarrassés de l'état UI (_ui) que Prospection y range.
+ */
+export async function runChasseForDeal(
+  dealId: string,
+): Promise<ProspectionActionResult<ProspectionRunSummary & { chasse_name: string }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: profile } = await supabase
+    .from("screening_profiles")
+    .select("id, name, filters")
+    .eq("deal_id", dealId)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!profile) {
+    return { success: false, error: "Aucune chasse rattachée à ce mandat. Appliquez d'abord la fiche de cadrage." };
+  }
+
+  const { _ui, ...filters } = (profile.filters ?? {}) as ScreeningFilters & { _ui?: unknown };
+  void _ui;
+  const res = await runScreeningIngest({ profileId: profile.id, filters });
+  if (!res.success) return res;
+
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true, data: { ...res.data, chasse_name: profile.name as string } };
+}
+
 export async function runScreeningIngest(input: {
   profileId?: string | null;
   filters: ScreeningFilters;

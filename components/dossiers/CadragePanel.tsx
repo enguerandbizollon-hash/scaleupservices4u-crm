@@ -64,7 +64,7 @@ export function CadragePanel({ dealId, initialCadrage }: { dealId: string; initi
     const res = await applyCadrageToMandate(dealId);
     setApplying(false);
     if (!res.success) { setMsg({ kind: "err", text: res.error ?? "Échec." }); return; }
-    setMsg({ kind: "ok", text: `Appliqué : ${res.fields_written ?? 0} critères du dossier, et la chasse rattachée est prête. Lancez-la depuis Prospection.` });
+    setMsg({ kind: "ok", text: `Appliqué : ${res.fields_written ?? 0} critères du dossier, et la chasse rattachée est prête. Lancez-la ci-dessous (bloc Cibles).` });
   }
 
   const box: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", marginBottom: 16 };
@@ -125,7 +125,7 @@ export function CadragePanel({ dealId, initialCadrage }: { dealId: string; initi
               Appliquer au dossier et préparer la chasse
             </button>
             <Link href="/protected/prospection" style={{ fontSize: 12, color: "var(--text-4)", textDecoration: "none" }}>
-              Aller lancer la chasse →
+              Affiner la chasse dans Prospection →
             </Link>
           </div>
         </div>
