@@ -28,6 +28,7 @@ import { DealHealthBadge } from "@/components/dossiers/DealHealthBadge";
 import { StagePlaybook } from "@/components/dossiers/StagePlaybook";
 import { ScreeningSection } from "@/components/dossiers/ScreeningSection";
 import { BuyQualificationSection } from "@/components/dossiers/BuyQualificationSection";
+import { BuyBudgetTab } from "@/components/dossiers/BuyBudgetTab";
 import { SourcingWizard } from "@/components/dossiers/SourcingWizard";
 import { computeDealHealth } from "@/lib/crm/health-score";
 import type { SuggestionWithRelations } from "@/lib/crm/suggestions";
@@ -559,8 +560,19 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
           );
         })()}
 
-        {/* Onglet Financier */}
-        {activeTab === "financier" && (
+        {/* Onglet Financier / Budget. Acquisition : pas d'entreprise sujette,
+            la grille P&L laisse place au budget du repreneur. */}
+        {activeTab === "financier" && deal.deal_type === "ma_buy" && (
+          <BuyBudgetTab
+            dealId={deal.id}
+            budgetMin={deal.acquisition_budget_min ?? null}
+            budgetMax={deal.acquisition_budget_max ?? null}
+            revenueMin={deal.target_revenue_min ?? null}
+            revenueMax={deal.target_revenue_max ?? null}
+            onOpenPane={openTab}
+          />
+        )}
+        {activeTab === "financier" && deal.deal_type !== "ma_buy" && (
           <FinancialTab
             dealId={deal.id}
             dealType={deal.deal_type}
