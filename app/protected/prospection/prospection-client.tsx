@@ -19,7 +19,8 @@ import {
 } from "@/actions/prospection";
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
 import { EFFECTIF_OPTIONS, type ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
-import { NAF_DIVISION_TO_SECTOR } from "@/lib/crm/matching-maps";
+import { NAF_DIVISION_TO_SECTOR, GEO_REGIONS_FRANCE, GEO_LABELS } from "@/lib/crm/matching-maps";
+import { normalizeGeoText } from "@/lib/crm/investor-parsers";
 import { nafCodesForDivisions } from "@/lib/crm/naf-codes";
 import { FicheUniversDrawer } from "@/components/prospection/FicheUniversDrawer";
 import { STATUT_META } from "@/components/prospection/statut-meta";
@@ -54,6 +55,8 @@ type UiState = {
   ageMax: string;
   rentables: boolean;
   departements: string;
+  /** Slugs de GEO_REGIONS_FRANCE (convertis en codes INSEE à l'appel API). */
+  regions: string[];
   effectifs: string[];
   categorie: string;
   actives: boolean;
@@ -84,7 +87,7 @@ export type FluxKpis = {
 
 const EMPTY_UI: UiState = {
   secteurs: [], nafExtra: "", caMin: "", caMax: "", ageMin: "", ageMax: "",
-  rentables: false, departements: "", effectifs: [], categorie: "", actives: true,
+  rentables: false, departements: "", regions: [], effectifs: [], categorie: "", actives: true,
 };
 
 function fmtAmt(n: number | null | undefined) {
@@ -129,6 +132,7 @@ function toApiFilters(ui: UiState): ScreeningFilters {
     age_dirigeant_min: num(ui.ageMin),
     age_dirigeant_max: num(ui.ageMax),
     departements,
+    regions: ui.regions,
     effectif_tranches: ui.effectifs,
     categorie: ui.categorie || null,
     actives_seulement: ui.actives,
@@ -202,7 +206,8 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
   const apiFilters = useMemo(() => toApiFilters(ui), [ui]);
   const hasCriteria = (apiFilters.naf?.length ?? 0) > 0 || apiFilters.ca_min != null || apiFilters.ca_max != null
     || apiFilters.age_dirigeant_min != null || apiFilters.age_dirigeant_max != null
-    || (apiFilters.departements?.length ?? 0) > 0 || (apiFilters.effectif_tranches?.length ?? 0) > 0
+    || (apiFilters.departements?.length ?? 0) > 0 || (apiFilters.regions?.length ?? 0) > 0
+    || (apiFilters.effectif_tranches?.length ?? 0) > 0
     || !!apiFilters.categorie;
 
   // Compteur live, débouncé.
@@ -249,6 +254,9 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
         ageMax: p.filters.age_dirigeant_max != null ? String(p.filters.age_dirigeant_max) : "",
         rentables: p.filters.resultat_net_min != null,
         departements: (p.filters.departements ?? []).join(","),
+        // Régions : slugs du référentiel ; un libellé legacy est normalisé
+        // (sinon conservé tel quel pour ne pas le perdre à l'enregistrement).
+        regions: (p.filters.regions ?? []).map(r => normalizeGeoText(r) ?? r),
         effectifs: p.filters.effectif_tranches ?? [],
         categorie: p.filters.categorie ?? "",
         actives: p.filters.actives_seulement !== false,
@@ -596,9 +604,23 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
                   onChange={e => setUi(p => ({ ...p, ageMax: e.target.value }))} />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={lbl}>Départements (ex : 69, 38, 01 — vide = France)</label>
+                <label style={lbl}>Départements (ex : 69, 38, 01, vide = France)</label>
                 <input style={inp} value={ui.departements} placeholder="69, 38, 01"
                   onChange={e => setUi(p => ({ ...p, departements: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={lbl}>Régions (l&apos;API croise régions ET départements : utilisez l&apos;un ou l&apos;autre)</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {GEO_REGIONS_FRANCE.map(r => (
+                    <button key={r} type="button" style={toggleChip(ui.regions.includes(r))}
+                      onClick={() => setUi(p => ({
+                        ...p,
+                        regions: p.regions.includes(r) ? p.regions.filter(x => x !== r) : [...p.regions, r],
+                      }))}>
+                      {GEO_LABELS[r] ?? r}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

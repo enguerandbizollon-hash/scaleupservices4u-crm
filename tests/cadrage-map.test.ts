@@ -81,6 +81,11 @@ describe("cadrageToChasseFilters", () => {
     const f = cadrageToChasseFilters(validateCadrageContent({ confidence: 40 }));
     expect(f).toEqual({ actives_seulement: true });
   });
+
+  it("normalise les régions IA en slugs du référentiel (conversion INSEE en aval)", () => {
+    const f = cadrageToChasseFilters({ ...ROUSSON, departements: [], regions: ["Auvergne-Rhône-Alpes", "Pays de la Loire"] });
+    expect(f.regions).toEqual(["auvergne_rhone_alpes", "pays_de_la_loire"]);
+  });
 });
 
 describe("cadrageToDealPatch", () => {
@@ -101,9 +106,9 @@ describe("cadrageToDealPatch", () => {
     expect(Object.keys(p)).toHaveLength(0);
   });
 
-  it("fusionne départements et régions dans target_geographies", () => {
+  it("fusionne départements et régions (normalisées en slugs) dans target_geographies", () => {
     const p = cadrageToDealPatch({ ...ROUSSON, regions: ["Auvergne-Rhône-Alpes"] });
-    expect(p.target_geographies).toEqual(["38", "69", "Auvergne-Rhône-Alpes"]);
+    expect(p.target_geographies).toEqual(["38", "69", "auvergne_rhone_alpes"]);
   });
 });
 

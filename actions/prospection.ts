@@ -121,31 +121,40 @@ export interface DealChasseInfo {
   name: string;
   last_run_at: string | null;
   last_total_results: number | null;
+  watch_enabled: boolean;
   /** Résumé lisible des filtres de la chasse (NAF, CA, départements...). */
   resume: string[];
 }
 
 /**
- * La chasse rattachée à un mandat d'acquisition (la première, celle que
- * prépare applyCadrageToMandate), avec un résumé lisible de ses filtres.
- * Sert la carte chasse de l'onglet Cibles : voir les critères sans quitter
- * la fiche, les modifier via le deep-link ?profil= de Prospection.
+ * TOUTES les chasses rattachées à un mandat d'acquisition (celle du cadrage
+ * et celles rattachées depuis Prospection), avec un résumé lisible de leurs
+ * filtres. Sert la carte chasses de l'onglet Cibles : voir les critères sans
+ * quitter la fiche, les modifier via le deep-link ?profil= de Prospection.
  */
-export async function getDealChasse(dealId: string): Promise<DealChasseInfo | null> {
+export async function getDealChasses(dealId: string): Promise<DealChasseInfo[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return [];
 
-  const { data: p } = await supabase
+  const { data: rows } = await supabase
     .from("screening_profiles")
-    .select("id, name, filters, last_run_at, last_total_results")
+    .select("id, name, filters, last_run_at, last_total_results, watch_enabled")
     .eq("deal_id", dealId)
     .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!p) return null;
+    .order("created_at", { ascending: true });
 
+  return (rows ?? []).map((p) => resumeChasse(p));
+}
+
+function resumeChasse(p: {
+  id: string;
+  name: string;
+  filters: unknown;
+  last_run_at: string | null;
+  last_total_results: number | null;
+  watch_enabled: boolean;
+}): DealChasseInfo {
   const f = (p.filters ?? {}) as ScreeningFilters;
   const fmtEur = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(".", ",")} M€` : `${Math.round(n / 1_000)} k€`;
   const resume: string[] = [];
@@ -163,10 +172,11 @@ export async function getDealChasse(dealId: string): Promise<DealChasseInfo | nu
   else if (f.age_dirigeant_max != null) resume.push(`Âge dirigeant max ${f.age_dirigeant_max} ans`);
 
   return {
-    id: p.id as string,
-    name: p.name as string,
-    last_run_at: (p.last_run_at as string | null) ?? null,
-    last_total_results: (p.last_total_results as number | null) ?? null,
+    id: p.id,
+    name: p.name,
+    last_run_at: p.last_run_at,
+    last_total_results: p.last_total_results,
+    watch_enabled: p.watch_enabled,
     resume,
   };
 }
@@ -175,8 +185,8 @@ export async function getDealChasse(dealId: string): Promise<DealChasseInfo | nu
  * Cibles d'un mandat d'acquisition : les fiches univers trouvées par les
  * chasses rattachées (screening_profiles.deal_id = dealId), SCORÉES par fit à
  * la fiche de cadrage (score stratégique buy_to_target de ma-scoring : secteur,
- * taille, géo), tri par fit décroissant puis cédabilité. Lien via
- * source_profile_id, aucune colonne dédiée sur l'univers.
+ * taille, géo), tri par fit décroissant puis cédabilité. Attribution durable
+ * via univers_chasse_hits (v77).
  */
 export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]> {
   const supabase = await createClient();
@@ -199,13 +209,15 @@ export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]>
   if (chasseIds.length === 0) return [];
   const chasseName = new Map((chasses ?? []).map((c) => [c.id as string, c.name as string]));
 
+  // Attribution durable (v77, univers_chasse_hits) : une cible reste liée à
+  // sa chasse même re-vue ensuite par une autre chasse ou la veille.
   // Bornage à 200 : ORDER BY radar décroissant pour que la coupe garde les
   // fiches les plus cédables (sans order, les 200 lignes seraient arbitraires
   // et le tri par fit ne s'appliquerait qu'à un sous-ensemble aléatoire).
   const { data: fiches } = await supabase
     .from("univers_entreprises")
-    .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id, finances")
-    .in("source_profile_id", chasseIds)
+    .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id, finances, univers_chasse_hits!inner(profile_id)")
+    .in("univers_chasse_hits.profile_id", chasseIds)
     .order("cedabilite_score", { ascending: false, nullsFirst: false })
     .limit(200);
 
@@ -256,7 +268,13 @@ export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]>
       ville: (f.ville as string | null) ?? null,
       cedabilite_score: (f.cedabilite_score as number | null) ?? null,
       statut: f.statut as string,
-      chasse_name: chasseName.get(f.source_profile_id as string) ?? null,
+      // Attribution via la table de liaison (le premier hit de CE mandat),
+      // repli sur source_profile_id pour l'affichage legacy.
+      chasse_name: (() => {
+        const hits = (f as { univers_chasse_hits?: { profile_id: string }[] }).univers_chasse_hits ?? [];
+        const hitId = hits.find((h) => chasseName.has(h.profile_id))?.profile_id ?? (f.source_profile_id as string | null);
+        return hitId ? chasseName.get(hitId) ?? null : null;
+      })(),
       fit_score: fit,
     };
   });
@@ -442,22 +460,25 @@ export interface ProspectionRunSummary {
 }
 
 /**
- * Lance la chasse rattachée à un mandat d'acquisition DEPUIS la fiche dossier
- * (une seule chasse de cadrage par mandat, celle que prépare
- * applyCadrageToMandate). Réutilise runScreeningIngest avec les filtres
- * stockés du profil, débarrassés de l'état UI (_ui) que Prospection y range.
+ * Lance une chasse rattachée à un mandat d'acquisition DEPUIS la fiche
+ * dossier. profileId cible une chasse précise (carte multi-chasses) ; sans
+ * lui, la plus ancienne (celle du cadrage). Réutilise runScreeningIngest avec
+ * les filtres stockés du profil, débarrassés de l'état UI (_ui).
  */
 export async function runChasseForDeal(
   dealId: string,
+  profileId?: string,
 ): Promise<ProspectionActionResult<ProspectionRunSummary & { chasse_name: string }>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
 
-  const { data: profile } = await supabase
+  let query = supabase
     .from("screening_profiles")
     .select("id, name, filters")
-    .eq("deal_id", dealId)
+    .eq("deal_id", dealId);
+  if (profileId) query = query.eq("id", profileId);
+  const { data: profile } = await query
     .eq("user_id", user.id)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -532,6 +553,17 @@ export async function runScreeningIngest(input: {
     }
 
     if (input.profileId) {
+      // Attribution DURABLE (v77) : la fiche reste rattachée à cette chasse
+      // même si une autre chasse ou la veille la revoit ensuite
+      // (source_profile_id, dernier écrivain, reste en legacy).
+      const hits = rows.map((r) => ({ siren: r.siren, profile_id: input.profileId as string, last_seen_at: nowIso }));
+      for (let i = 0; i < hits.length; i += UPSERT_BATCH) {
+        const { error } = await supabase
+          .from("univers_chasse_hits")
+          .upsert(hits.slice(i, i + UPSERT_BATCH), { onConflict: "siren,profile_id" });
+        if (error) return { success: false, error: `Attribution chasse : ${error.message}. La migration v77 est-elle appliquée ?` };
+      }
+
       await supabase
         .from("screening_profiles")
         .update({ last_run_at: nowIso, last_total_results: result.hits.length })

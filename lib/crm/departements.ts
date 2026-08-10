@@ -94,3 +94,41 @@ export const GEO_DEPT_OPTIONS = DEPARTEMENTS.map((d) => ({ value: d.code, label:
 export function isDepartementCode(code: string): boolean {
   return code in DEPT_TO_REGION;
 }
+
+/**
+ * Slug de région -> code(s) INSEE région, le format qu'attend le paramètre
+ * `region` de l'API Recherche d'Entreprises (un libellé ou un slug y est
+ * silencieusement ignoré). dom_tom est un regroupement : plusieurs codes.
+ */
+export const REGION_INSEE_CODES: Record<string, string[]> = {
+  ile_de_france: ["11"],
+  centre_val_de_loire: ["24"],
+  bourgogne_franche_comte: ["27"],
+  normandie: ["28"],
+  hauts_de_france: ["32"],
+  grand_est: ["44"],
+  pays_de_la_loire: ["52"],
+  bretagne: ["53"],
+  nouvelle_aquitaine: ["75"],
+  occitanie: ["76"],
+  auvergne_rhone_alpes: ["84"],
+  paca: ["93"],
+  corse: ["94"],
+  dom_tom: ["01", "02", "03", "04", "06"],
+};
+
+/**
+ * Convertit des valeurs de régions (slugs du référentiel, ou déjà des codes
+ * INSEE à 2 chiffres) en codes INSEE dédupliqués. Les valeurs inconnues
+ * (libellé IA non normalisé) sont écartées : mieux vaut ne pas filtrer que
+ * d'envoyer un paramètre que l'API ignore en silence.
+ */
+export function regionsToInseeCodes(values: string[]): string[] {
+  const out = new Set<string>();
+  for (const v of values) {
+    const codes = REGION_INSEE_CODES[v];
+    if (codes) codes.forEach((c) => out.add(c));
+    else if (/^\d{2}$/.test(v)) out.add(v);
+  }
+  return [...out];
+}

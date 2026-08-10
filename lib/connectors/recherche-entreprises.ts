@@ -13,6 +13,7 @@
  */
 
 import type { ConnectorRecord } from "./base";
+import { regionsToInseeCodes } from "@/lib/crm/departements";
 
 const API_BASE = "https://recherche-entreprises.api.gouv.fr";
 
@@ -309,7 +310,12 @@ export function buildScreeningParams(
   if (filters.ca_max != null) p.set("ca_max", String(filters.ca_max));
   if (filters.resultat_net_min != null) p.set("resultat_net_min", String(filters.resultat_net_min));
   if (filters.departements?.length) p.set("departement", filters.departements.join(","));
-  if (filters.regions?.length) p.set("region", filters.regions.join(","));
+  // L'API attend des codes INSEE région, pas des slugs ni des libellés (un
+  // libellé serait ignoré en silence : chasse France entière sans prévenir).
+  if (filters.regions?.length) {
+    const codes = regionsToInseeCodes(filters.regions);
+    if (codes.length) p.set("region", codes.join(","));
+  }
   if (filters.effectif_tranches?.length) p.set("tranche_effectif_salarie", filters.effectif_tranches.join(","));
   if (filters.categorie) p.set("categorie_entreprise", filters.categorie);
   if (filters.actives_seulement !== false) p.set("etat_administratif", "A");

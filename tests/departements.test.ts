@@ -5,6 +5,8 @@ import {
   REGION_TO_DEPTS,
   DEPARTEMENT_LABELS,
   isDepartementCode,
+  REGION_INSEE_CODES,
+  regionsToInseeCodes,
 } from "@/lib/crm/departements";
 import { DEPARTEMENTS_FR } from "@/lib/connectors/recherche-entreprises";
 import { GEO_REGIONS_FRANCE } from "@/lib/crm/matching-maps";
@@ -42,5 +44,16 @@ describe("référentiel départements", () => {
     expect(isDepartementCode("38")).toBe(true);
     expect(isDepartementCode("2B")).toBe(true);
     expect(isDepartementCode("99")).toBe(false);
+  });
+
+  it("chaque région du référentiel a un code INSEE, conversion propre", () => {
+    for (const slug of GEO_REGIONS_FRANCE) {
+      expect(REGION_INSEE_CODES[slug], `code INSEE manquant pour ${slug}`).toBeDefined();
+    }
+    expect(regionsToInseeCodes(["auvergne_rhone_alpes", "pays_de_la_loire"])).toEqual(["84", "52"]);
+    expect(regionsToInseeCodes(["dom_tom"])).toEqual(["01", "02", "03", "04", "06"]);
+    // Un code déjà INSEE passe, un libellé inconnu est écarté (pas de filtre fantôme).
+    expect(regionsToInseeCodes(["84", "Auvergne-Rhône-Alpes"])).toEqual(["84"]);
+    expect(regionsToInseeCodes([])).toEqual([]);
   });
 });

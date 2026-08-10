@@ -45,14 +45,18 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const sevenDaysAgoDate = sevenDaysAgoIso.slice(0, 10);
 
+  // Filtre chasse : jointure interne sur l'attribution DURABLE (v77,
+  // univers_chasse_hits) : une fiche reste dans les résultats de sa chasse
+  // même re-vue ensuite par une autre chasse ou la veille.
+  const universCols = "siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, last_seen_at";
   let universQuery = supabase
     .from("univers_entreprises")
-    .select("siren, nom, naf, secteur, departement, ville, date_creation, effectif_label, categorie, finances, age_dirigeant_principal, cedabilite_score, cedabilite_raisons, statut, organization_id, last_seen_at", { count: "exact" });
+    .select(chasseParam ? `${universCols}, univers_chasse_hits!inner(profile_id)` : universCols, { count: "exact" });
   universQuery = sortRadar
     ? universQuery.order("cedabilite_score", { ascending: false, nullsFirst: false })
     : universQuery.order("last_seen_at", { ascending: false });
   universQuery = universQuery.order("siren", { ascending: true }).range(from, from + PAGE_SIZE - 1);
-  if (chasseParam) universQuery = universQuery.eq("source_profile_id", chasseParam);
+  if (chasseParam) universQuery = universQuery.eq("univers_chasse_hits.profile_id", chasseParam);
   if (activeStatut) universQuery = universQuery.eq("statut", activeStatut);
   if (q) {
     universQuery = /^\d{9}$/.test(q)
@@ -69,8 +73,11 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
   // Compteurs des pastilles de statut : scopés à la chasse active quand il y en
   // a une, pour que chaque chiffre compte EXACTEMENT la liste affichée.
   const countByStatut = (s: string) => {
-    let q = supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", s);
-    if (chasseParam) q = q.eq("source_profile_id", chasseParam);
+    let q = supabase
+      .from("univers_entreprises")
+      .select(chasseParam ? "siren, univers_chasse_hits!inner(profile_id)" : "siren", { count: "exact", head: true })
+      .eq("statut", s);
+    if (chasseParam) q = q.eq("univers_chasse_hits.profile_id", chasseParam);
     return q;
   };
 
@@ -155,7 +162,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     <ProspectionClient
       profiles={(profilesData ?? []) as ProfileRow[]}
       buyMandates={(buyMandatesRes.data ?? []) as { id: string; name: string }[]}
-      univers={(universRes.data ?? []) as UniversRow[]}
+      univers={(universRes.data ?? []) as unknown as UniversRow[]}
       universTotal={universRes.count ?? 0}
       statCounts={statCounts}
       flux={flux}

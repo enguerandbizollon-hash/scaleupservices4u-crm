@@ -169,7 +169,9 @@ export async function applyCadrageToMandate(dealId: string): Promise<ApplyCadrag
   } else {
     const { data: created, error } = await supabase
       .from("screening_profiles")
-      .insert({ user_id: user.id, name, filters, deal_id: dealId })
+      // watch_enabled : une chasse de mandat naît VEILLÉE (la veille hebdo
+      // remonte ses nouvelles cibles vers l'onglet Cibles du mandat).
+      .insert({ user_id: user.id, name, filters, deal_id: dealId, watch_enabled: true })
       .select("id")
       .single();
     if (error || !created) return { success: false, error: error?.message ?? "Création de la chasse échouée." };

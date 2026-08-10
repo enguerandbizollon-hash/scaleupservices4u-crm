@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getBuyMandateTargets, promoteTargetToFunnel, runChasseForDeal, getDealChasse, type BuyTarget, type DealChasseInfo } from "@/actions/prospection";
+import { getBuyMandateTargets, promoteTargetToFunnel, runChasseForDeal, getDealChasses, toggleProfileWatch, type BuyTarget, type DealChasseInfo } from "@/actions/prospection";
 import { getDealTargetFunnel } from "@/actions/funnel";
-import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play, Pencil, ListFilter } from "lucide-react";
+import { Crosshair, Loader2, ArrowUpRight, Plus, Check, Play, Pencil, ListFilter, Bell, BellOff } from "lucide-react";
 
 // Vue Cibles d'un mandat d'acquisition (buy-side v75) : les fiches univers
 // trouvées par les chasses rattachées à ce mandat, avec le lancement de la
@@ -14,14 +14,14 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
   const [targets, setTargets] = useState<BuyTarget[] | null>(null);
   const [suivies, setSuivies] = useState<Set<string>>(new Set());
   const [promoting, setPromoting] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [chasse, setChasse] = useState<DealChasseInfo | null>(null);
+  const [chasses, setChasses] = useState<DealChasseInfo[]>([]);
 
   useEffect(() => {
     let alive = true;
     getBuyMandateTargets(dealId).then((t) => { if (alive) setTargets(t); });
-    getDealChasse(dealId).then((c) => { if (alive) setChasse(c); });
+    getDealChasses(dealId).then((c) => { if (alive) setChasses(c); });
     // Hydrate « Suivie » depuis les suggestions existantes : après un
     // rechargement, une cible déjà promue ne réaffiche plus « Suivre ».
     getDealTargetFunnel(dealId).then((rows) => {
@@ -31,14 +31,14 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
     return () => { alive = false; };
   }, [dealId]);
 
-  async function lancerChasse() {
-    if (!confirm("Lancer la chasse rattachée ? Les fiches trouvées rejoindront l'univers et apparaîtront ici.")) return;
-    setRunning(true);
+  async function lancerChasse(c: DealChasseInfo) {
+    if (!confirm(`Lancer la chasse « ${c.name} » ? Les fiches trouvées rejoindront l'univers et apparaîtront ici.`)) return;
+    setRunning(c.id);
     setBanner(null);
     // finally : une coupure réseau pendant un long run ne doit pas laisser le
     // bouton bloqué sur « Chasse en cours » jusqu'au rechargement.
     try {
-      const res = await runChasseForDeal(dealId);
+      const res = await runChasseForDeal(dealId, c.id);
       if (!res.success) { setBanner({ kind: "err", text: res.error }); return; }
       const d = res.data;
       setBanner({
@@ -46,12 +46,18 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
         text: `Chasse « ${d.chasse_name} » : ${d.imported.toLocaleString("fr-FR")} fiches dans l'univers${d.truncated ? " (résultat tronqué)" : ""}.`,
       });
       setTargets(await getBuyMandateTargets(dealId));
-      setChasse(await getDealChasse(dealId));
+      setChasses(await getDealChasses(dealId));
     } catch {
       setBanner({ kind: "err", text: "Le lancement a échoué (réseau ou délai dépassé). Réessayez, ou vérifiez l'univers : la chasse a pu aboutir malgré tout." });
     } finally {
-      setRunning(false);
+      setRunning(null);
     }
+  }
+
+  async function toggleVeille(c: DealChasseInfo) {
+    const res = await toggleProfileWatch(c.id, !c.watch_enabled);
+    if (!res.success) { setBanner({ kind: "err", text: res.error }); return; }
+    setChasses((prev) => prev.map((x) => (x.id === c.id ? { ...x, watch_enabled: !c.watch_enabled } : x)));
   }
 
   async function suivre(t: BuyTarget) {
@@ -87,44 +93,49 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
         {targets.length > 0 && (
           <span style={{ fontSize: 11.5, fontWeight: 700, background: "var(--surface-3)", color: "var(--text-4)", borderRadius: 20, padding: "2px 9px" }}>{targets.length}</span>
         )}
-        <button type="button" onClick={lancerChasse} disabled={running}
-          title="Lance la chasse rattachée à ce mandat (celle affichée ci-dessus)"
-          style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", padding: "6px 13px", borderRadius: 8, border: "none", background: "#0F766E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: running ? 0.6 : 1 }}>
-          {running ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-          {running ? "Chasse en cours…" : "Lancer la chasse"}
-        </button>
       </div>
 
-      {/* Carte chasse : les critères de la recherche, visibles et modifiables
-          sans quitter la fiche (deep-link ?profil= vers le composeur). */}
-      {chasse && (
-        <div style={{ marginBottom: 12, padding: "10px 13px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+      {/* Cartes chasses : critères visibles, veille, lancement et édition par
+          chasse, sans quitter la fiche (deep-links ?profil= et ?chasse=). */}
+      {chasses.map((c) => (
+        <div key={c.id} style={{ marginBottom: 10, padding: "10px 13px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-2)" }}>{chasse.name}</span>
-            {chasse.last_total_results != null && (
-              <span style={{ fontSize: 11.5, color: "var(--text-5)" }}>{chasse.last_total_results.toLocaleString("fr-FR")} cibles au dernier comptage</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-2)" }}>{c.name}</span>
+            {c.last_total_results != null && (
+              <span style={{ fontSize: 11.5, color: "var(--text-5)" }}>{c.last_total_results.toLocaleString("fr-FR")} cibles au dernier comptage</span>
             )}
+            <button type="button" onClick={() => toggleVeille(c)}
+              title={c.watch_enabled ? "Veille hebdo active : les nouvelles cibles remonteront en notification vers ce mandat. Cliquer pour désactiver." : "Activer la veille hebdo de cette chasse"}
+              style={{ all: "unset", cursor: "pointer", display: "flex", opacity: c.watch_enabled ? 1 : 0.4, color: c.watch_enabled ? "#B45309" : "var(--text-4)" }}>
+              {c.watch_enabled ? <Bell size={12} /> : <BellOff size={12} />}
+            </button>
             <span style={{ flex: 1 }} />
-            <Link href={`/protected/prospection?profil=${chasse.id}`}
+            <button type="button" onClick={() => lancerChasse(c)} disabled={running === c.id}
+              title="Lance cette chasse : les fiches trouvées rejoignent l'univers et la liste ci-dessous"
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 11px", borderRadius: 8, border: "none", background: "#0F766E", color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: running === c.id ? 0.6 : 1 }}>
+              {running === c.id ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+              {running === c.id ? "En cours…" : "Lancer"}
+            </button>
+            <Link href={`/protected/prospection?profil=${c.id}`}
               title="Ouvre le composeur de Prospection avec cette chasse chargée : critères modifiables, compteur live"
               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: "#1a56db", textDecoration: "none" }}>
-              <Pencil size={11} /> Modifier les critères
+              <Pencil size={11} /> Modifier
             </Link>
-            <Link href={`/protected/prospection?chasse=${chasse.id}`}
+            <Link href={`/protected/prospection?chasse=${c.id}`}
               title="Voir les fiches de cette chasse dans Prospection (univers restreint à ses résultats)"
               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: "#0F766E", textDecoration: "none" }}>
-              <ListFilter size={11} /> Ses fiches dans Prospection
+              <ListFilter size={11} /> Ses fiches
             </Link>
           </div>
-          {chasse.resume.length > 0 && (
+          {c.resume.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
-              {chasse.resume.map((r) => (
+              {c.resume.map((r) => (
                 <span key={r} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: "var(--surface-3)", color: "var(--text-4)", fontWeight: 600 }}>{r}</span>
               ))}
             </div>
           )}
         </div>
-      )}
+      ))}
 
       {banner && (
         <div style={{ marginBottom: 10, padding: "8px 11px", borderRadius: 8, fontSize: 12.5, fontWeight: 500, background: banner.kind === "ok" ? "#D1FAE5" : "#FEE2E2", color: banner.kind === "ok" ? "#065F46" : "#991B1B" }}>

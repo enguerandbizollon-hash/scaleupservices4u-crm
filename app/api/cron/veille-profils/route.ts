@@ -80,7 +80,7 @@ export async function GET(req: Request) {
 
   const { data: profiles, error: pErr } = await supabase
     .from("screening_profiles")
-    .select("id, name, filters, user_id")
+    .select("id, name, filters, user_id, deal_id, deals(name)")
     .eq("watch_enabled", true)
     .order("last_run_at", { ascending: true, nullsFirst: true });
   if (pErr) {
@@ -126,6 +126,16 @@ export async function GET(req: Request) {
           .from("univers_entreprises")
           .upsert(rows.slice(i, i + BATCH), { onConflict: "siren" });
         if (error) errors.push(`${profile.name} univers: ${error.message}`);
+      }
+
+      // Attribution durable (v77) : la veille rattache aussi ses fiches à la
+      // chasse, l'onglet Cibles d'un mandat voit les nouvelles entrées.
+      const hitRows = rows.map((r) => ({ siren: r.siren, profile_id: profile.id, last_seen_at: nowIso }));
+      for (let i = 0; i < hitRows.length; i += BATCH) {
+        const { error } = await supabase
+          .from("univers_chasse_hits")
+          .upsert(hitRows.slice(i, i + BATCH), { onConflict: "siren,profile_id" });
+        if (error) errors.push(`${profile.name} attribution: ${error.message}`);
       }
 
       // 1 bis. Passages à chaud : fiches EXISTANTES qui franchissent le seuil
@@ -183,12 +193,20 @@ export async function GET(req: Request) {
         const parts: string[] = [];
         if (nouveaux.length > 0) parts.push(`${nouveaux.length} nouvelle${nouveaux.length > 1 ? "s" : ""} cible${nouveaux.length > 1 ? "s" : ""}`);
         if (passeesChaudes.length > 0) parts.push(`${passeesChaudes.length} passée${passeesChaudes.length > 1 ? "s" : ""} chaude${passeesChaudes.length > 1 ? "s" : ""}`);
+        // Chasse de mandat : la notification nomme le mandat et y ramène
+        // (onglet Cibles), au lieu de fondre dans la veille cédants globale.
+        const dealRel = Array.isArray(profile.deals) ? profile.deals[0] : profile.deals;
+        const dealName = (dealRel as { name?: string } | null)?.name ?? null;
         const notifRes = await enqueueNotification(supabase, {
           user_id: profile.user_id,
           kind: "veille_profil",
-          title: `Veille « ${profile.name} » : ${parts.join(", ")}`,
+          title: profile.deal_id && dealName
+            ? `Chasse « ${profile.name} » : ${parts.join(", ")} pour le mandat ${dealName}`
+            : `Veille « ${profile.name} » : ${parts.join(", ")}`,
           body: topChaudes.length > 0 ? `À voir en premier : ${topChaudes.join(", ")}.` : null,
-          link_url: "/protected/prospection",
+          link_url: profile.deal_id
+            ? `/protected/dossiers/${profile.deal_id}?tab=sourcing`
+            : "/protected/prospection",
           source_type: "screening_profile",
           source_id: profile.id,
           trigger_date: today,
