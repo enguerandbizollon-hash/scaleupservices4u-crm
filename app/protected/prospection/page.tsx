@@ -10,13 +10,17 @@ export const maxDuration = 300;
 const PAGE_SIZE = 50;
 const VALID_STATUTS = new Set(["nouveau", "a_approcher", "approche", "echange", "dormant", "ecarte", "promu"]);
 
-type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string; fiche?: string; filtre?: string }>;
+type ProspectionSearchParams = Promise<{ statut?: string; page?: string; tri?: string; q?: string; fiche?: string; filtre?: string; chasse?: string; profil?: string }>;
 
 async function Content({ searchParams }: { searchParams: ProspectionSearchParams }) {
-  const { statut, page: pageParam, tri, q: qParam, fiche: ficheParam, filtre } = await searchParams;
+  const { statut, page: pageParam, tri, q: qParam, fiche: ficheParam, filtre, chasse, profil } = await searchParams;
   const supabase = await createClient();
 
   const activeStatut = statut && VALID_STATUTS.has(statut) ? statut : null;
+  // ?chasse=<profileId> : l'univers se restreint aux fiches trouvées par cette
+  // chasse (source_profile_id). C'est la réponse à « où sont mes 78 cibles ? » :
+  // les résultats d'une chasse se consultent isolés, plus noyés dans l'univers.
+  const chasseParam = chasse && /^[0-9a-f][0-9a-f-]{8,}$/i.test(chasse) ? chasse : null;
   // Filtres du bandeau KPI : le clic sur une tuile doit montrer EXACTEMENT la
   // population comptée (audit 2026-07-31 : chiffre 0 face à une liste de 74).
   const activeFiltre = filtre === "chaudes" || filtre === "entrees7j" ? filtre : null;
@@ -36,6 +40,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     ? universQuery.order("cedabilite_score", { ascending: false, nullsFirst: false })
     : universQuery.order("last_seen_at", { ascending: false });
   universQuery = universQuery.order("siren", { ascending: true }).range(from, from + PAGE_SIZE - 1);
+  if (chasseParam) universQuery = universQuery.eq("source_profile_id", chasseParam);
   if (activeStatut) universQuery = universQuery.eq("statut", activeStatut);
   if (q) {
     universQuery = /^\d{9}$/.test(q)
@@ -49,8 +54,13 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     universQuery = universQuery.gte("first_seen_at", sevenDaysAgoIso);
   }
 
-  const countByStatut = (s: string) =>
-    supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", s);
+  // Compteurs des pastilles de statut : scopés à la chasse active quand il y en
+  // a une, pour que chaque chiffre compte EXACTEMENT la liste affichée.
+  const countByStatut = (s: string) => {
+    let q = supabase.from("univers_entreprises").select("siren", { count: "exact", head: true }).eq("statut", s);
+    if (chasseParam) q = q.eq("source_profile_id", chasseParam);
+    return q;
+  };
 
   // Bandeau de flux (audit 2026-07-30 : « il me faut des KPI, du flux ») :
   // l'écran dit ce qui entre, ce qui chauffe, ce qui attend une décision.
@@ -112,6 +122,15 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     if (f) initialFiche = { siren: f.siren, nom: f.nom, statut: f.statut };
   }
 
+  // Chasse active (?chasse=) : nom retrouvé dans les profils ; une chasse
+  // supprimée reste filtrable (ses fiches portent toujours son id).
+  const activeChasse = chasseParam
+    ? { id: chasseParam, name: (profilesRes.data ?? []).find((p) => p.id === chasseParam)?.name ?? null }
+    : null;
+  // Deep-link ?profil= : ouvre le composeur avec cette chasse chargée
+  // (critères éditables), utilisé par la fiche mandat.
+  const initialProfileId = profil && (profilesRes.data ?? []).some((p) => p.id === profil) ? profil : null;
+
   const flux = {
     total: totalAll.count ?? 0,
     chaudes: chaudes.count ?? 0,
@@ -131,6 +150,8 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
       flux={flux}
       activeStatut={activeStatut}
       activeFiltre={activeFiltre}
+      activeChasse={activeChasse}
+      initialProfileId={initialProfileId}
       sortRadar={sortRadar}
       searchQ={q}
       initialFiche={initialFiche}

@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Crosshair, Play, Save, Trash2, ArrowUpRight, Building2,
-  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge, Bell, BellOff, Search, X,
+  ChevronLeft, ChevronRight, Loader2, AlertTriangle, Gauge, Bell, BellOff, Search, X, ListFilter,
 } from "lucide-react";
 import {
   countScreeningAction, saveScreeningProfile, deleteScreeningProfile,
@@ -148,7 +148,7 @@ function toApiFilters(ui: UiState): ScreeningFilters {
 
 // ── Composant ────────────────────────────────────────────────────────────────
 
-export function ProspectionClient({ profiles, buyMandates, univers, universTotal, statCounts, flux, activeStatut, activeFiltre, sortRadar, searchQ, initialFiche, page, pageSize }: {
+export function ProspectionClient({ profiles, buyMandates, univers, universTotal, statCounts, flux, activeStatut, activeFiltre, activeChasse, initialProfileId, sortRadar, searchQ, initialFiche, page, pageSize }: {
   profiles: ProfileRow[];
   buyMandates: { id: string; name: string }[];
   univers: UniversRow[];
@@ -157,6 +157,10 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
   flux: FluxKpis;
   activeStatut: string | null;
   activeFiltre: "chaudes" | "entrees7j" | null;
+  /** Filtre ?chasse= : l'univers affiché est restreint aux fiches de cette chasse. */
+  activeChasse: { id: string; name: string | null } | null;
+  /** Deep-link ?profil= : ouvre le composeur avec cette chasse chargée. */
+  initialProfileId: string | null;
   sortRadar: boolean;
   searchQ: string | null;
   initialFiche: { siren: string; nom: string; statut: string } | null;
@@ -170,6 +174,10 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   // Mandat ma_buy servi par la chasse (buy-side v75) ; null = veille cédants.
   const [profileDealId, setProfileDealId] = useState<string | null>(null);
+  // Mission de la chasse : le MÊME moteur sert deux métiers. « veille » =
+  // détecter des cédants à approcher (sell), « mandat » = trouver des cibles
+  // pour un mandat d'acquisition (buy). La mission est portée par deal_id.
+  const [mission, setMission] = useState<"veille" | "mandat">("veille");
 
   const [total, setTotal] = useState<number | null>(null);
   const [counting, setCounting] = useState(false);
@@ -224,10 +232,21 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(apiFilters)]);
 
+  // Deep-link ?profil= (depuis la fiche mandat) : le composeur s'ouvre avec la
+  // chasse chargée, critères éditables sur place.
+  const loadedInitialProfile = useRef(false);
+  useEffect(() => {
+    if (!initialProfileId || loadedInitialProfile.current) return;
+    const p = profiles.find(x => x.id === initialProfileId);
+    if (p) { loadedInitialProfile.current = true; loadProfile(p); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProfileId]);
+
   function loadProfile(p: ProfileRow) {
     setSelectedProfileId(p.id);
     setProfileName(p.name);
     setProfileDealId(p.deal_id ?? null);
+    setMission(p.deal_id ? "mandat" : "veille");
     if (p.filters._ui) {
       setUi({ ...EMPTY_UI, ...p.filters._ui });
     } else {
@@ -264,7 +283,7 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
   async function handleDeleteProfile(id: string) {
     if (!confirm("Supprimer ce profil de chasse ?")) return;
     await deleteScreeningProfile(id);
-    if (selectedProfileId === id) { setSelectedProfileId(null); setProfileName(""); setProfileDealId(null); }
+    if (selectedProfileId === id) { setSelectedProfileId(null); setProfileName(""); setProfileDealId(null); setMission("veille"); }
   }
 
   async function handleRun() {
@@ -283,6 +302,11 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
         kind: "ok",
         text: `${d.imported.toLocaleString("fr-FR")} fiches dans l'univers (${d.queries} requêtes${d.filtered_out > 0 ? `, ${d.filtered_out} écartées par le post-filtre dirigeant` : ""}${d.truncated ? ", résultat tronqué" : ""}).`,
       });
+      // Une chasse sauvegardée qui vient de tourner : on montre SES résultats,
+      // pas l'univers entier (retour 2026-08-10 : « les 78 cibles sont noyées »).
+      if (selectedProfileId) {
+        router.push(buildHref({ chasse: selectedProfileId, statut: null, q: null, filtre: null, page: 1 }));
+      }
     } else {
       setBanner({ kind: "err", text: res.error });
     }
@@ -364,7 +388,7 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
 
   // Tri radar par défaut : l'URL ne porte un paramètre que pour y déroger.
   // Un seul constructeur d'URL : statut, tri et recherche se préservent.
-  const buildHref = (over: { statut?: string | null; radar?: boolean; q?: string | null; page?: number; filtre?: string | null } = {}) => {
+  const buildHref = (over: { statut?: string | null; radar?: boolean; q?: string | null; page?: number; filtre?: string | null; chasse?: string | null } = {}) => {
     const p = new URLSearchParams();
     const s = over.statut !== undefined ? over.statut : activeStatut;
     const radar = over.radar !== undefined ? over.radar : sortRadar;
@@ -372,16 +396,22 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
     // Filtre KPI (chaudes, entrées 7 j) : préservé en pagination/tri, mais un
     // clic explicite sur un statut en sort, les deux populations s'excluent.
     const f = over.filtre !== undefined ? over.filtre : (over.statut !== undefined ? null : activeFiltre);
+    // Filtre chasse (?chasse=) : préservé partout, retiré explicitement.
+    const c = over.chasse !== undefined ? over.chasse : activeChasse?.id ?? null;
     if (s) p.set("statut", s);
     if (!radar) p.set("tri", "recent");
     if (qv) p.set("q", qv);
     if (f) p.set("filtre", f);
+    if (c) p.set("chasse", c);
     if (over.page && over.page > 1) p.set("page", String(over.page));
     const qs = p.toString();
     return `/protected/prospection${qs ? `?${qs}` : ""}`;
   };
   const applySearch = () => router.push(buildHref({ q: search.trim() || null }));
   const totalPages = Math.max(1, Math.ceil(universTotal / pageSize));
+  // Population totale du périmètre courant (chasse active ou univers entier),
+  // indépendante du statut filtré : les statCounts sont déjà scopés côté page.
+  const scopeTotal = Object.values(statCounts).reduce((s, n) => s + n, 0);
 
   const [scoring, setScoring] = useState(false);
   async function handleRecompute() {
@@ -459,6 +489,11 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
                     <span style={{ opacity: 0.6, marginLeft: 5 }}>{p.last_total_results.toLocaleString("fr-FR")}</span>
                   )}
                 </button>
+                <Link href={buildHref({ chasse: p.id, statut: null, q: null, filtre: null, page: 1 })}
+                  title="Voir les fiches trouvées par cette chasse (l'univers se restreint à ses résultats)"
+                  style={{ display: "flex", color: "inherit", opacity: activeChasse?.id === p.id ? 1 : 0.55 }}>
+                  <ListFilter size={11} />
+                </Link>
                 <button onClick={() => toggleProfileWatch(p.id, !p.watch_enabled)}
                   title={p.watch_enabled ? "Veille hebdo active : les nouvelles cibles remonteront en signaux. Cliquer pour désactiver." : "Activer la veille hebdo de ce profil"}
                   style={{ all: "unset", cursor: "pointer", display: "flex", opacity: p.watch_enabled ? 1 : 0.45, color: p.watch_enabled ? "#B45309" : undefined }}>
@@ -475,6 +510,56 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
 
         {/* ── Composeur ── */}
         <div style={{ ...card, padding: "16px 18px" }}>
+          {/* Mission : le même moteur sert la veille cédants (sell) et la
+              recherche de cibles pour un mandat d'acquisition (buy). Le choix
+              est structurel, plus un petit select noyé dans les actions. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-5)" }}>Mission</span>
+            <button type="button" onClick={() => { setMission("veille"); setProfileDealId(null); }}
+              style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                border: "1px solid " + (mission === "veille" ? "var(--text-1)" : "var(--border)"),
+                background: mission === "veille" ? "var(--text-1)" : "var(--surface-2)",
+                color: mission === "veille" ? "var(--bg)" : "var(--text-3)",
+              }}>
+              Détecter des cédants
+            </button>
+            <button type="button" onClick={() => setMission("mandat")}
+              style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                border: "1px solid " + (mission === "mandat" ? "#0F766E" : "var(--border)"),
+                background: mission === "mandat" ? "#0F766E" : "var(--surface-2)",
+                color: mission === "mandat" ? "#fff" : "var(--text-3)",
+              }}>
+              Trouver des cibles pour un mandat
+            </button>
+            {mission === "mandat" && (
+              <>
+                <select
+                  value={profileDealId ?? ""}
+                  onChange={e => setProfileDealId(e.target.value || null)}
+                  style={{ ...inp, width: 230, cursor: "pointer" }}>
+                  <option value="">Choisir le mandat d&apos;acquisition…</option>
+                  {buyMandates.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                {profileDealId && (
+                  <Link href={`/protected/dossiers/${profileDealId}?tab=sourcing`}
+                    title="Ouvrir le mandat servi par cette chasse (onglet Cibles)"
+                    style={{ fontSize: 12, fontWeight: 600, color: "#0F766E", textDecoration: "none" }}>
+                    Voir le mandat →
+                  </Link>
+                )}
+              </>
+            )}
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 11.5, color: "var(--text-5)" }}>
+              {mission === "veille"
+                ? "Les fiches alimentent le funnel cédants (radar, approche)."
+                : "Les fiches de la chasse apparaissent aussi dans l'onglet Cibles du mandat."}
+            </span>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
             {/* Secteurs */}
             <div>
@@ -579,25 +664,6 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
 
             <input style={{ ...inp, width: 220 }} placeholder="Nom du profil (ex : BTP AURA cédants)"
               value={profileName} onChange={e => setProfileName(e.target.value)} />
-            {buyMandates.length > 0 && (
-              <select
-                value={profileDealId ?? ""}
-                onChange={e => setProfileDealId(e.target.value || null)}
-                title="Rattacher cette chasse à un mandat d'acquisition (buy-side) : elle cherche alors des cibles pour ce client. Par défaut, veille cédants globale."
-                style={{ ...inp, width: 210, cursor: "pointer" }}>
-                <option value="">Veille cédants (défaut)</option>
-                {buyMandates.map(m => (
-                  <option key={m.id} value={m.id}>Pour mandat : {m.name}</option>
-                ))}
-              </select>
-            )}
-            {profileDealId && (
-              <Link href={`/protected/dossiers/${profileDealId}?tab=sourcing`}
-                title="Ouvrir le mandat servi par cette chasse (onglet Cibles)"
-                style={{ fontSize: 12, fontWeight: 600, color: "#1a56db", textDecoration: "none" }}>
-                Voir le mandat →
-              </Link>
-            )}
             <button onClick={handleSaveProfile} disabled={!profileName.trim()}
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-2)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: profileName.trim() ? 1 : 0.5 }}>
               <Save size={13} /> {selectedProfileId ? "Mettre à jour" : "Sauvegarder"}
@@ -608,7 +674,7 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
               {running ? "Chasse en cours…" : "Lancer la chasse"}
             </button>
             {selectedProfileId && (
-              <button onClick={() => { setSelectedProfileId(null); setProfileName(""); setUi(EMPTY_UI); }}
+              <button onClick={() => { setSelectedProfileId(null); setProfileName(""); setProfileDealId(null); setMission("veille"); setUi(EMPTY_UI); }}
                 style={{ all: "unset", cursor: "pointer", fontSize: 12, color: "var(--text-5)" }}>
                 Nouveau profil
               </button>
@@ -618,8 +684,18 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
 
         {/* ── Univers ── */}
         <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {activeChasse && (
+            <Link href={buildHref({ chasse: null })}
+              title="L'univers est restreint aux fiches de cette chasse. Cliquer pour revenir à tout l'univers."
+              style={{
+                ...toggleChip(true), display: "inline-flex", alignItems: "center", gap: 5,
+                background: "#0F766E", border: "1px solid #0F766E", color: "#fff",
+              }}>
+              <ListFilter size={11} /> Chasse : {activeChasse.name ?? "supprimée"} ✕
+            </Link>
+          )}
           <Link href={buildHref({ statut: null })} style={toggleChip(activeStatut === null)}>
-            Tout l&apos;univers ({universTotal.toLocaleString("fr-FR")})
+            {activeChasse ? "Toutes ses fiches" : "Tout l'univers"} ({scopeTotal.toLocaleString("fr-FR")})
           </Link>
           {Object.entries(STATUT_META).map(([key, meta]) => (
             <Link key={key} href={buildHref({ statut: key })} style={toggleChip(activeStatut === key)}>
