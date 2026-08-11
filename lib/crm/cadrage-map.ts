@@ -13,7 +13,7 @@
 
 import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 import type { ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
-import { normalizeSectorText, normalizeGeoText } from "@/lib/crm/investor-parsers";
+import { normalizeSectorText, normalizeGeoText, normalizeRegionValue } from "@/lib/crm/investor-parsers";
 
 /** Filtres de chasse dérivés de la fiche (NAF, CA, géo, âge dirigeant).
  * Les régions IA (libellés libres) sont rabattues sur les slugs du
@@ -26,7 +26,7 @@ export function cadrageToChasseFilters(c: CadrageContent): ScreeningFilters {
   if (c.dirigeant_age_min != null) f.age_dirigeant_min = c.dirigeant_age_min;
   if (c.dirigeant_age_max != null) f.age_dirigeant_max = c.dirigeant_age_max;
   if (c.departements.length) f.departements = c.departements;
-  if (c.regions.length) f.regions = c.regions.map((r) => normalizeGeoText(r) ?? r);
+  if (c.regions.length) f.regions = c.regions.map(normalizeRegionValue);
   return f;
 }
 
@@ -38,7 +38,7 @@ export function cadrageToDealPatch(c: CadrageContent): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   if (c.secteurs.length) patch.target_sectors = c.secteurs;
   // Régions rabattues sur les slugs du référentiel (scoring géo, affichage).
-  const geos = [...c.departements, ...c.regions.map((r) => normalizeGeoText(r) ?? r)];
+  const geos = [...c.departements, ...c.regions.map(normalizeRegionValue)];
   if (geos.length) patch.target_geographies = geos;
   if (c.ca_min != null) patch.target_revenue_min = c.ca_min;
   if (c.ca_max != null) patch.target_revenue_max = c.ca_max;

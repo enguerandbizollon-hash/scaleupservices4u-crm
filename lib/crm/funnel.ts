@@ -81,8 +81,15 @@ export function defaultNextFollowup(stage: FunnelStage, from: Date): string | nu
   return d.toISOString().slice(0, 10);
 }
 
-/** L'étape est-elle un geste SORTANT (alimente last_outreach_at) ? */
-export function isOutboundStep(step: FunnelStepKey): boolean {
+/**
+ * L'étape est-elle un geste SORTANT (alimente last_outreach_at) ? Le sens
+ * dépend du rôle : côté acquéreur (cession), teaser et IM PARTENT de nous et
+ * l'offre ARRIVE ; côté cible (acquisition), l'approche part de nous, les
+ * infos ARRIVENT de la cible (im_sent_at = « infos reçues ») et l'offre
+ * PART de nous (offer_received_at = « offre envoyée, LOI »).
+ */
+export function isOutboundStep(step: FunnelStepKey, role: "acquirer" | "target" = "acquirer"): boolean {
+  if (role === "target") return step === "teaser_envoye" || step === "offre_recue";
   return step === "teaser_envoye" || step === "im_envoye";
 }
 

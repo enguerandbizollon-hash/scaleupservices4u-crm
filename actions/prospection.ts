@@ -216,12 +216,17 @@ export async function getBuyMandateTargets(dealId: string): Promise<BuyTarget[]>
   // Bornage à 200 : ORDER BY radar décroissant pour que la coupe garde les
   // fiches les plus cédables (sans order, les 200 lignes seraient arbitraires
   // et le tri par fit ne s'appliquerait qu'à un sous-ensemble aléatoire).
-  const { data: fiches } = await supabase
+  const { data: fiches, error: fichesErr } = await supabase
     .from("univers_entreprises")
     .select("siren, nom, secteur, ville, cedabilite_score, statut, source_profile_id, finances, univers_chasse_hits!inner(profile_id)")
     .in("univers_chasse_hits.profile_id", chasseIds)
     .order("cedabilite_score", { ascending: false, nullsFirst: false })
     .limit(200);
+  // Un schéma manquant doit se VOIR (bannière côté composant), pas produire
+  // un onglet Cibles silencieusement vide.
+  if (fichesErr) {
+    throw new Error(`Cibles indisponibles : ${fichesErr.message}. La migration v77 est-elle appliquée ?`);
+  }
 
   const dealProfile: MaDealProfile | null = deal
     ? {
@@ -323,11 +328,23 @@ export async function promoteTargetToFunnel(
     .update({ organization_id: orgId, updated_at: new Date().toISOString() })
     .eq("siren", siren);
 
-  // Le dirigeant principal devient un contact : l'approche a besoin d'un
-  // destinataire (resolveRecipient). Best-effort : sans prénom exploitable,
-  // la cible est quand même suivie, l'enrichissement coordonnées viendra.
-  const dirigeants = (fiche.dirigeants ?? []) as { nom?: string | null; prenoms?: string | null }[];
-  const idxDirigeant = dirigeants.findIndex((d) => d?.nom?.trim() && d?.prenoms?.trim());
+  // Le dirigeant PRINCIPAL devient un contact : même sélection que le radar
+  // (findDirigeantPrincipal : exclut commissaires aux comptes et personnes
+  // morales, garde le plus âgé des dirigeants exerçants), pour ne jamais
+  // approcher le CAC à la place du président. Best-effort : sans dirigeant
+  // exploitable, la cible est quand même suivie, l'enrichissement viendra.
+  const dirigeants = (fiche.dirigeants ?? []) as { nom?: string | null; prenoms?: string | null; qualite?: string | null; date_de_naissance?: string | null }[];
+  const principal = findDirigeantPrincipal({
+    dirigeants: dirigeants.map((d) => ({
+      nom: d.nom ?? undefined,
+      prenoms: d.prenoms ?? undefined,
+      qualite: d.qualite ?? undefined,
+      date_de_naissance: d.date_de_naissance ?? undefined,
+    })),
+  });
+  const idxDirigeant = principal
+    ? dirigeants.findIndex((d) => d?.nom === principal.nom && (d?.prenoms ?? null) === principal.prenoms && d?.prenoms?.trim())
+    : -1;
   let contactWarning: string | null = null;
   let contactId: string | null = null;
   if (idxDirigeant >= 0) {
@@ -335,15 +352,16 @@ export async function promoteTargetToFunnel(
     if (promoted.success) contactId = promoted.data.contact_id;
     else contactWarning = promoted.error;
   } else {
-    contactWarning = "Dirigeant sans prénom dans la source : créez le contact depuis la fiche organisation.";
+    contactWarning = "Aucun dirigeant exploitable dans la source : créez le contact depuis la fiche organisation.";
   }
 
   // Dédup : une suggestion pour (deal, org) existe déjà. On complète son
-  // contact_id si la promotion vient de le fournir (le funnel et le brouillon
-  // Gmail visent le dirigeant, pas un contact quelconque de l'organisation).
+  // contact_id si la promotion vient de le fournir, et on RÉACTIVE une
+  // suggestion écartée (re-suivre une cible est un geste délibéré : elle doit
+  // réapparaître dans le funnel, qui exclut les rejected).
   const { data: existing } = await supabase
     .from("deal_target_suggestions")
-    .select("id, contact_id")
+    .select("id, contact_id, status")
     .eq("deal_id", dealId)
     .eq("organization_id", orgId)
     .eq("user_id", user.id)
@@ -351,10 +369,13 @@ export async function promoteTargetToFunnel(
     .limit(1)
     .maybeSingle();
   if (existing) {
-    if (contactId && !existing.contact_id) {
+    const patch: Record<string, unknown> = {};
+    if (contactId && !existing.contact_id) patch.contact_id = contactId;
+    if (existing.status === "rejected") patch.status = "suggested";
+    if (Object.keys(patch).length > 0) {
       await supabase
         .from("deal_target_suggestions")
-        .update({ contact_id: contactId })
+        .update(patch)
         .eq("id", existing.id)
         .eq("user_id", user.id);
     }

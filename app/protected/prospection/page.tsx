@@ -112,7 +112,7 @@ async function Content({ searchParams }: { searchParams: ProspectionSearchParams
     return (
       <div style={{ padding: 32 }}>
         <div style={{ padding: "16px 20px", background: "#FEE2E2", color: "#991B1B", borderRadius: 12, fontSize: 13.5 }}>
-          Univers indisponible : {universRes.error.message}. La migration v66 est-elle appliquée ?
+          Univers indisponible : {universRes.error.message}. Une migration est-elle manquante (v66, v77) ?
         </div>
       </div>
     );

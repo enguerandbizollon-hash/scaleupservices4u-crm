@@ -122,20 +122,25 @@ export async function GET(req: Request) {
       const typesBySiren = await fetchSignalTypesBySiren(supabase, fusionnes.map((r) => r.siren));
       const rows = scoreUniversRows(fusionnes, typesBySiren);
       for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
         const { error } = await supabase
           .from("univers_entreprises")
-          .upsert(rows.slice(i, i + BATCH), { onConflict: "siren" });
-        if (error) errors.push(`${profile.name} univers: ${error.message}`);
-      }
-
-      // Attribution durable (v77) : la veille rattache aussi ses fiches à la
-      // chasse, l'onglet Cibles d'un mandat voit les nouvelles entrées.
-      const hitRows = rows.map((r) => ({ siren: r.siren, profile_id: profile.id, last_seen_at: nowIso }));
-      for (let i = 0; i < hitRows.length; i += BATCH) {
-        const { error } = await supabase
+          .upsert(batch, { onConflict: "siren" });
+        if (error) {
+          errors.push(`${profile.name} univers: ${error.message}`);
+          // Pas de hit sans fiche : la FK ferait échouer le batch entier.
+          continue;
+        }
+        // Attribution durable (v77), appariée au batch univers qui a réussi :
+        // la veille rattache ses fiches à la chasse, l'onglet Cibles du
+        // mandat voit les nouvelles entrées.
+        const { error: hitErr } = await supabase
           .from("univers_chasse_hits")
-          .upsert(hitRows.slice(i, i + BATCH), { onConflict: "siren,profile_id" });
-        if (error) errors.push(`${profile.name} attribution: ${error.message}`);
+          .upsert(
+            batch.map((r) => ({ siren: r.siren, profile_id: profile.id, last_seen_at: nowIso })),
+            { onConflict: "siren,profile_id" },
+          );
+        if (hitErr) errors.push(`${profile.name} attribution: ${hitErr.message}`);
       }
 
       // 1 bis. Passages à chaud : fiches EXISTANTES qui franchissent le seuil

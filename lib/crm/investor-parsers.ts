@@ -2,6 +2,7 @@
 // Utilisé par : actions/matching.ts (fallback scoring) et actions/import/organisations.ts (import CSV)
 
 import { isDepartementCode } from "@/lib/crm/departements";
+import { GEO_REGIONS_FRANCE } from "@/lib/crm/matching-maps";
 
 /** Parse "< 500k€", "1M – 3M€", "> 25M€" → {min, max} en euros */
 export function parseTicketText(text: string | null): { min: number | null; max: number | null } | null {
@@ -170,4 +171,21 @@ export function normalizeGeoText(text: string | null): string | null {
   // France (générique, après régions et départements).
   if (t.includes("france") || t.includes("national") || t.includes("hexagone")) return "france";
   return null;
+}
+
+// Les slugs du référentiel (avec underscores : "ile_de_france") ne matchent
+// pas les motifs texte ci-dessus (tirets/espaces) et retomberaient sur le
+// fourre-tout "france" : une valeur déjà normalisée ne doit JAMAIS repasser
+// par la normalisation texte.
+const REGION_SLUGS = new Set<string>(GEO_REGIONS_FRANCE);
+
+/**
+ * Normalise une valeur de région : un slug du référentiel (ou "france", ou un
+ * code département) est conservé tel quel, un libellé libre est rabattu via
+ * normalizeGeoText, sinon la valeur brute est gardée (rien ne se perd).
+ */
+export function normalizeRegionValue(v: string): string {
+  const trimmed = v.trim();
+  if (REGION_SLUGS.has(trimmed) || trimmed === "france" || isDepartementCode(trimmed)) return trimmed;
+  return normalizeGeoText(trimmed) ?? trimmed;
 }

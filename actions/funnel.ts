@@ -97,6 +97,7 @@ interface SuggestionRow {
   deal_id: string;
   organization_id: string;
   status: string;
+  role_suggested: string | null;
   teaser_sent_at: string | null;
   nda_signed_at: string | null;
   im_sent_at: string | null;
@@ -107,7 +108,12 @@ interface SuggestionRow {
 }
 
 const SUGGESTION_COLS =
-  "id, deal_id, organization_id, status, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, next_followup_at, last_outreach_at, gmail_thread_id";
+  "id, deal_id, organization_id, status, role_suggested, teaser_sent_at, nda_signed_at, im_sent_at, offer_received_at, next_followup_at, last_outreach_at, gmail_thread_id";
+
+/** Sens des gestes selon le rôle de la suggestion (défaut : acquéreur). */
+function roleOf(s: SuggestionRow): "acquirer" | "target" {
+  return s.role_suggested === "target" ? "target" : "acquirer";
+}
 
 type FunnelContext =
   | { ok: false; error: string }
@@ -183,7 +189,7 @@ export async function markFunnelStep(suggestionId: string, step: FunnelStepKey):
     status: "contacted",
     next_followup_at: nextFollowup,
   };
-  if (isOutboundStep(step)) updates.last_outreach_at = nowIso;
+  if (isOutboundStep(step, roleOf(s))) updates.last_outreach_at = nowIso;
 
   const { error } = await supabase
     .from("deal_target_suggestions")
@@ -201,7 +207,7 @@ export async function markFunnelStep(suggestionId: string, step: FunnelStepKey):
   // Recalcul du score d'intention avec l'état à jour (étape + last_outreach).
   await computeAndPersistIntent(supabase, userId, {
     ...merged,
-    last_outreach_at: isOutboundStep(step) ? nowIso : s.last_outreach_at,
+    last_outreach_at: isOutboundStep(step, roleOf(s)) ? nowIso : s.last_outreach_at,
   });
 
   revalidateFunnel(s.deal_id);
@@ -240,7 +246,7 @@ export async function undoFunnelStep(suggestionId: string, step: FunnelStepKey):
 
   const plusAucuneEtape = FUNNEL_STEPS.every(x => !merged[x.field]);
   const plusAucunGesteSortant = FUNNEL_STEPS
-    .filter(x => isOutboundStep(x.key))
+    .filter(x => isOutboundStep(x.key, roleOf(s)))
     .every(x => !merged[x.field]);
 
   if (plusAucunGesteSortant) updates.last_outreach_at = null;

@@ -20,7 +20,7 @@ import {
 import { cedabiliteBand } from "@/lib/crm/cedabilite";
 import { EFFECTIF_OPTIONS, type ScreeningFilters } from "@/lib/connectors/recherche-entreprises";
 import { NAF_DIVISION_TO_SECTOR, GEO_REGIONS_FRANCE, GEO_LABELS } from "@/lib/crm/matching-maps";
-import { normalizeGeoText } from "@/lib/crm/investor-parsers";
+import { normalizeRegionValue } from "@/lib/crm/investor-parsers";
 import { nafCodesForDivisions } from "@/lib/crm/naf-codes";
 import { FicheUniversDrawer } from "@/components/prospection/FicheUniversDrawer";
 import { STATUT_META } from "@/components/prospection/statut-meta";
@@ -254,9 +254,9 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
         ageMax: p.filters.age_dirigeant_max != null ? String(p.filters.age_dirigeant_max) : "",
         rentables: p.filters.resultat_net_min != null,
         departements: (p.filters.departements ?? []).join(","),
-        // Régions : slugs du référentiel ; un libellé legacy est normalisé
-        // (sinon conservé tel quel pour ne pas le perdre à l'enregistrement).
-        regions: (p.filters.regions ?? []).map(r => normalizeGeoText(r) ?? r),
+        // Régions : slugs du référentiel conservés tels quels, libellés
+        // legacy normalisés, valeur inconnue gardée (rien ne se perd).
+        regions: (p.filters.regions ?? []).map(normalizeRegionValue),
         effectifs: p.filters.effectif_tranches ?? [],
         categorie: p.filters.categorie ?? "",
         actives: p.filters.actives_seulement !== false,
@@ -723,11 +723,11 @@ export function ProspectionClient({ profiles, buyMandates, univers, universTotal
               <ListFilter size={11} /> Chasse : {activeChasse.name} ✕
             </Link>
           )}
-          {/* Sans statut actif, universTotal colle à la liste (il inclut q et
-              le filtre chasse) ; avec un statut, scopeTotal donne la population
-              du périmètre hors statut. */}
-          <Link href={buildHref({ statut: null })} style={toggleChip(activeStatut === null)}>
-            {activeChasse ? "Toutes ses fiches" : "Tout l'univers"} ({(activeStatut === null ? universTotal : scopeTotal).toLocaleString("fr-FR")})
+          {/* scopeTotal = population du périmètre (chasse ou univers entier),
+              et le clic efface statut, recherche et filtre KPI : le chiffre
+              annoncé est EXACTEMENT la liste obtenue. */}
+          <Link href={buildHref({ statut: null, q: null, filtre: null })} style={toggleChip(activeStatut === null)}>
+            {activeChasse ? "Toutes ses fiches" : "Tout l'univers"} ({scopeTotal.toLocaleString("fr-FR")})
           </Link>
           {Object.entries(STATUT_META).map(([key, meta]) => (
             <Link key={key} href={buildHref({ statut: key })} style={toggleChip(activeStatut === key)}>

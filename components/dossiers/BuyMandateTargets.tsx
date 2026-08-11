@@ -20,7 +20,14 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
 
   useEffect(() => {
     let alive = true;
-    getBuyMandateTargets(dealId).then((t) => { if (alive) setTargets(t); });
+    // Un schéma manquant (v77) se voit en bannière, jamais en liste vide muette.
+    getBuyMandateTargets(dealId)
+      .then((t) => { if (alive) setTargets(t); })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        setTargets([]);
+        setBanner({ kind: "err", text: e instanceof Error ? e.message : "Cibles indisponibles." });
+      });
     getDealChasses(dealId).then((c) => { if (alive) setChasses(c); });
     // Hydrate « Suivie » depuis les suggestions existantes : après un
     // rechargement, une cible déjà promue ne réaffiche plus « Suivre ».
@@ -62,16 +69,22 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
 
   async function suivre(t: BuyTarget) {
     setPromoting(t.siren);
-    const res = await promoteTargetToFunnel(dealId, t.siren, t.fit_score);
-    setPromoting(null);
-    if (res.success) {
-      setSuivies((prev) => new Set(prev).add(t.siren));
-      setBanner(res.data.contact_warning
-        ? { kind: "err", text: `Cible suivie, mais sans contact : ${res.data.contact_warning}` }
-        : { kind: "ok", text: `${t.nom} suivie : dirigeant promu en contact, l'approche se pilote dans le bloc ci-dessous.` });
-      onPromoted?.();
-    } else {
-      setBanner({ kind: "err", text: res.error });
+    // finally : un échec réseau ne doit pas laisser le bouton en spinner.
+    try {
+      const res = await promoteTargetToFunnel(dealId, t.siren, t.fit_score);
+      if (res.success) {
+        setSuivies((prev) => new Set(prev).add(t.siren));
+        setBanner(res.data.contact_warning
+          ? { kind: "err", text: `Cible suivie, mais sans contact : ${res.data.contact_warning}` }
+          : { kind: "ok", text: `${t.nom} suivie : dirigeant promu en contact, l'approche se pilote dans le bloc ci-dessous.` });
+        onPromoted?.();
+      } else {
+        setBanner({ kind: "err", text: res.error });
+      }
+    } catch {
+      setBanner({ kind: "err", text: "Le suivi a échoué (réseau). Réessayez." });
+    } finally {
+      setPromoting(null);
     }
   }
 
@@ -154,7 +167,7 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
 
       {targets.length === 0 ? (
         <p style={{ fontSize: 12.5, color: "var(--text-4)", margin: 0, lineHeight: 1.6 }}>
-          Aucune cible pour l&apos;instant. Dans la fiche de cadrage ci-dessus, cliquez « Appliquer au dossier et préparer la chasse » (c&apos;est ce geste qui crée la chasse), puis « Lancer la chasse » : les résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord. Les chasses se rattachent et s&apos;affinent aussi depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link>.
+          Aucune cible pour l&apos;instant. Dans la fiche de cadrage ci-dessus, cliquez « Appliquer au dossier et préparer la chasse » (c&apos;est ce geste qui crée la chasse), puis « Lancer » sur sa carte : les résultats apparaîtront ici, les mieux alignés à la fiche d&apos;abord. Les chasses se rattachent et s&apos;affinent aussi depuis <Link href="/protected/prospection" style={{ color: "#1a56db", fontWeight: 600 }}>Prospection</Link>.
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

@@ -52,8 +52,9 @@ describe("référentiel départements", () => {
     }
     expect(regionsToInseeCodes(["auvergne_rhone_alpes", "pays_de_la_loire"])).toEqual(["84", "52"]);
     expect(regionsToInseeCodes(["dom_tom"])).toEqual(["01", "02", "03", "04", "06"]);
-    // Un code déjà INSEE passe, un libellé inconnu est écarté (pas de filtre fantôme).
-    expect(regionsToInseeCodes(["84", "Auvergne-Rhône-Alpes"])).toEqual(["84"]);
+    // Tout ce qui n'est pas un slug du référentiel est écarté, y compris un
+    // code numérique (les codes INSEE régions et départements se recouvrent).
+    expect(regionsToInseeCodes(["84", "Auvergne-Rhône-Alpes"])).toEqual([]);
     expect(regionsToInseeCodes([])).toEqual([]);
   });
 });

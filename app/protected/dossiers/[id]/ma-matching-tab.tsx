@@ -9,7 +9,6 @@ import { markFunnelStep, undoFunnelStep, setNextFollowup, markFollowupDone } fro
 import { createOutreachDraftForSuggestion, createFollowupDraftForSuggestion } from "@/actions/outreach";
 import type { FunnelStepKey } from "@/lib/crm/funnel";
 import { updateDealField } from "@/actions/deals";
-import type { MaMatchResult } from "@/lib/crm/ma-scoring";
 import { OPERATION_TYPES, DEAL_STANCES, DEAL_CONTEXTS } from "@/lib/crm/matching-maps";
 import { organizationTypeLabels } from "@/lib/crm/labels";
 import Link from "next/link";
@@ -564,96 +563,6 @@ function AcquirerMatchesView({ dealId }: { dealId: string }) {
           {filtered.map(m => (
             <AcquirerCard key={m.org.id} dealId={dealId} match={m} onStatusChange={handleStatusChange} />
           ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Vue LEGACY (ma_buy : deal → cibles) ──────────────────────────────────────
-
-function MaMatchCard({ match }: { match: MaMatchResult }) {
-  const [expanded, setExpanded] = useState(false);
-  const { bg, tx } = scoreColor(match.score);
-
-  return (
-    <div style={{
-      background: "var(--surface)", border: "1px solid var(--border)",
-      borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10,
-    }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Link href={`/protected/organisations/${match.org.id}`}
-              style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", textDecoration: "none" }}>
-              {match.org.name}
-            </Link>
-            <ExternalLink size={11} color="var(--text-5)" />
-          </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-            {match.org.organization_type && (
-              <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 20, background: "var(--surface-2)", color: "var(--text-4)", border: "1px solid var(--border)" }}>
-                {ORG_TYPE_LABELS[match.org.organization_type] ?? match.org.organization_type}
-              </span>
-            )}
-            {match.org.location && <span style={{ fontSize: 11, color: "var(--text-5)" }}>📍 {match.org.location}</span>}
-            {match.org.sector && <span style={{ fontSize: 11, color: "var(--text-5)" }}>{match.org.sector}</span>}
-          </div>
-        </div>
-        <div style={{ textAlign: "center", flexShrink: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: tx, background: bg, borderRadius: 10, padding: "4px 12px", minWidth: 48 }}>
-            {match.score !== null ? match.score : "✕"}
-          </div>
-          <div style={{ fontSize: 10, color: "var(--text-5)", marginTop: 2 }}>score</div>
-        </div>
-      </div>
-
-      {match.dealBreaker && (
-        <div style={{ fontSize: 12, color: "#991B1B", background: "#FEE2E2", borderRadius: 8, padding: "6px 10px" }}>
-          ✕ {match.dealBreaker}
-        </div>
-      )}
-
-      {match.score !== null && (
-        <div style={{ display: "flex", gap: 8 }}>
-          <div style={{ flex: 1, background: "var(--surface-2)", borderRadius: 8, padding: "7px 10px", textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{match.strategicScore}</div>
-            <div style={{ fontSize: 10.5, color: "var(--text-5)" }}>Stratégique</div>
-          </div>
-          {match.financialScore !== null && (
-            <div style={{ flex: 1, background: "var(--surface-2)", borderRadius: 8, padding: "7px 10px", textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{match.financialScore}</div>
-              <div style={{ fontSize: 10.5, color: "var(--text-5)" }}>Financier</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {match.score !== null && (
-        <button onClick={() => setExpanded(p => !p)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-4)", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
-          {expanded ? "▲ Masquer le détail" : "▼ Voir le détail"}
-        </button>
-      )}
-
-      {expanded && (
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".05em" }}>Critères stratégiques</div>
-          <CriterionBar label="Secteur"    earned={match.breakdown.sector.earned}    max={match.breakdown.sector.max}    reason={match.breakdown.sector.reason} />
-          <CriterionBar label="Taille"     earned={match.breakdown.size.earned}      max={match.breakdown.size.max}      reason={match.breakdown.size.reason} />
-          <CriterionBar label="Géographie" earned={match.breakdown.geography.earned} max={match.breakdown.geography.max} reason={match.breakdown.geography.reason} />
-          <CriterionBar label="Profil"     earned={match.breakdown.profile.earned}   max={match.breakdown.profile.max}   reason={match.breakdown.profile.reason} />
-          <CriterionBar label="Timing"     earned={match.breakdown.timing.earned}    max={match.breakdown.timing.max}    reason={match.breakdown.timing.reason} />
-
-          {match.financialBreakdown && (
-            <>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-3)", margin: "10px 0 8px", textTransform: "uppercase", letterSpacing: ".05em" }}>Critères financiers</div>
-              <CriterionBar label="Croissance"   earned={match.financialBreakdown.growth.earned}      max={match.financialBreakdown.growth.max}      reason={match.financialBreakdown.growth.reason} />
-              <CriterionBar label="Marge EBITDA" earned={match.financialBreakdown.margin.earned}      max={match.financialBreakdown.margin.max}      reason={match.financialBreakdown.margin.reason} />
-              <CriterionBar label="Bilan"        earned={match.financialBreakdown.balance.earned}     max={match.financialBreakdown.balance.max}     reason={match.financialBreakdown.balance.reason} />
-              <CriterionBar label="Comparables"  earned={match.financialBreakdown.comparables.earned} max={match.financialBreakdown.comparables.max} reason={match.financialBreakdown.comparables.reason} />
-            </>
-          )}
         </div>
       )}
     </div>

@@ -226,17 +226,15 @@ function buildOutreachPrompt(input: OutreachDraftInput): string {
   const c = input.contact;
   const parts: string[] = [];
 
-  // La mission dépend du sens de l'approche : vendre un dossier à un
-  // acquéreur (cession) ou approcher le dirigeant d'une cible pour le compte
-  // d'un repreneur (acquisition, discrétion et confidentialité).
+  // Sens buy uniquement : approcher le dirigeant d'une cible pour le compte
+  // d'un repreneur exige un cadrage explicite (discrétion, confidentialité).
+  // Le sens acquéreur (cession) garde son prompt historique inchangé.
   if (input.role_suggested === "target") {
     parts.push(
       "Mission : tu écris au dirigeant d'une entreprise CIBLE pour le compte d'un repreneur sous mandat. " +
       "Approche discrète et confidentielle : un acquéreur qualifié souhaite étudier une reprise, son identité n'est pas révélée à ce stade. " +
       "Ne présente pas l'entreprise du destinataire comme étant à vendre : demande un échange exploratoire.",
     );
-  } else {
-    parts.push("Mission : tu écris à un acquéreur potentiel pour lui présenter une opportunité de reprise (cession sous mandat).");
   }
 
   parts.push(`Rôle recherché : ${input.role_suggested}`);

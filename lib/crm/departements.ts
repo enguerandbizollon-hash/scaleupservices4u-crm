@@ -118,17 +118,16 @@ export const REGION_INSEE_CODES: Record<string, string[]> = {
 };
 
 /**
- * Convertit des valeurs de régions (slugs du référentiel, ou déjà des codes
- * INSEE à 2 chiffres) en codes INSEE dédupliqués. Les valeurs inconnues
- * (libellé IA non normalisé) sont écartées : mieux vaut ne pas filtrer que
- * d'envoyer un paramètre que l'API ignore en silence.
+ * Convertit des slugs de régions du référentiel en codes INSEE dédupliqués.
+ * Toute autre valeur est écartée, y compris un code à 2 chiffres : les codes
+ * INSEE de régions et de départements se recouvrent (11, 44, 75...), un
+ * passe-droit numérique enverrait un filtre régional FAUX en silence.
  */
 export function regionsToInseeCodes(values: string[]): string[] {
   const out = new Set<string>();
   for (const v of values) {
     const codes = REGION_INSEE_CODES[v];
     if (codes) codes.forEach((c) => out.add(c));
-    else if (/^\d{2}$/.test(v)) out.add(v);
   }
   return [...out];
 }
