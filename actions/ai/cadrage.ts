@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { extractCadrageFromPdf, type CadrageContent } from "@/lib/ai/cadrage-engine";
 import { cadrageToDealPatch, cadrageToChasseFilters, cadrageChasseName } from "@/lib/crm/cadrage-map";
 import { refreshBuyQualificationScore } from "@/actions/screening";
+import { syncChasseFromDeal } from "@/actions/prospection";
 
 const STORAGE_BUCKET = "deal-documents";
 
@@ -177,6 +178,10 @@ export async function applyCadrageToMandate(dealId: string): Promise<ApplyCadrag
     if (error || !created) return { success: false, error: error?.message ?? "Création de la chasse échouée." };
     chasseId = created.id as string;
   }
+
+  // Source unique : les critères viennent d'être écrits sur le DOSSIER, la
+  // chasse principale s'aligne dessus (CA, géo, NAF étendus aux secteurs).
+  await syncChasseFromDeal(dealId);
 
   revalidatePath(`/protected/dossiers/${dealId}`);
   revalidatePath("/protected/prospection");

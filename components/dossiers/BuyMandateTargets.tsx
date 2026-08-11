@@ -96,11 +96,20 @@ export function BuyMandateTargets({ dealId, onPromoted }: { dealId: string; onPr
       </div>
 
       {/* Cartes chasses : critères visibles, veille, lancement et édition par
-          chasse, sans quitter la fiche (deep-links ?profil= et ?chasse=). */}
-      {chasses.map((c) => (
+          chasse, sans quitter la fiche (deep-links ?profil= et ?chasse=).
+          La PREMIÈRE chasse (celle du cadrage) est une projection des
+          critères du dossier, resynchronisée à chaque modification et à
+          chaque lancement : une seule source de vérité. */}
+      {chasses.map((c, idx) => (
         <div key={c.id} style={{ marginBottom: 10, padding: "10px 13px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-2)" }}>{c.name}</span>
+            {idx === 0 && (
+              <span title="CA, géographie et secteurs suivent les critères du dossier (modifiables dans Exécution, Dossier). L'âge dirigeant, les effectifs et la catégorie s'affinent via Modifier."
+                style={{ fontSize: 10.5, fontWeight: 700, color: "#0F766E", background: "rgba(15,118,110,.1)", borderRadius: 6, padding: "2px 7px" }}>
+                suit les critères du dossier
+              </span>
+            )}
             {c.last_total_results != null && (
               <span style={{ fontSize: 11.5, color: "var(--text-5)" }}>{c.last_total_results.toLocaleString("fr-FR")} cibles au dernier comptage</span>
             )}

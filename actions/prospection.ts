@@ -19,6 +19,8 @@ import {
   type ScreeningFilters,
 } from "@/lib/connectors/recherche-entreprises";
 import { geoLabel } from "@/lib/crm/geo-match";
+import { deriveChasseFiltersFromDeal } from "@/lib/crm/buy-criteria-sync";
+import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 import { computeCedabilite } from "@/lib/crm/cedabilite";
 import { fetchSignalTypesBySiren, scoreUniversRows, recomputeCedabiliteForSirens } from "@/lib/crm/cedabilite-ingest";
 import { universRowFromHit, mergeFinancesReingest } from "@/lib/crm/univers-ingest";
@@ -472,10 +474,67 @@ export interface ProspectionRunSummary {
 }
 
 /**
+ * Synchronise la chasse PRINCIPALE d'un mandat (la plus ancienne, celle du
+ * cadrage) depuis les critères du DOSSIER : une seule source de vérité.
+ * CA et géographie suivent le dossier, les NAF s'étendent aux secteurs du
+ * référentiel, les affinages propres à la chasse (âge dirigeant, effectifs,
+ * catégorie) sont préservés. Les autres chasses rattachées (manuelles)
+ * ne sont pas touchées. No-op sans chasse rattachée ou sur une cession.
+ */
+export async function syncChasseFromDeal(dealId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("deal_type, target_sectors, target_geographies, target_revenue_min, target_revenue_max, cadrage_content")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!deal || deal.deal_type !== "ma_buy") return;
+
+  const { data: primary } = await supabase
+    .from("screening_profiles")
+    .select("id, filters")
+    .eq("deal_id", dealId)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!primary) return;
+
+  const { _ui, ...previous } = (primary.filters ?? {}) as ScreeningFilters & { _ui?: unknown };
+  void _ui;
+  const filters = deriveChasseFiltersFromDeal(
+    {
+      target_sectors: deal.target_sectors,
+      target_geographies: deal.target_geographies,
+      target_revenue_min: deal.target_revenue_min,
+      target_revenue_max: deal.target_revenue_max,
+    },
+    (deal.cadrage_content ?? null) as CadrageContent | null,
+    previous,
+  );
+
+  // _ui volontairement retiré : l'état du composeur se reconstruit depuis
+  // les filtres à jour (loadProfile best-effort).
+  await supabase
+    .from("screening_profiles")
+    .update({ filters, updated_at: new Date().toISOString() })
+    .eq("id", primary.id)
+    .eq("user_id", user.id);
+
+  revalidatePath("/protected/prospection");
+  revalidatePath(`/protected/dossiers/${dealId}`);
+}
+
+/**
  * Lance une chasse rattachée à un mandat d'acquisition DEPUIS la fiche
  * dossier. profileId cible une chasse précise (carte multi-chasses) ; sans
- * lui, la plus ancienne (celle du cadrage). Réutilise runScreeningIngest avec
- * les filtres stockés du profil, débarrassés de l'état UI (_ui).
+ * lui, la plus ancienne (celle du cadrage). La chasse principale est
+ * resynchronisée depuis les critères du dossier AVANT de partir : modifier
+ * les critères modifie la recherche. Filtres débarrassés de l'état UI (_ui).
  */
 export async function runChasseForDeal(
   dealId: string,
@@ -484,6 +543,10 @@ export async function runChasseForDeal(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autorisé" };
+
+  // Une seule source de critères : le dossier. La chasse principale est
+  // resynchronisée avant chaque lancement depuis la fiche.
+  await syncChasseFromDeal(dealId);
 
   let query = supabase
     .from("screening_profiles")

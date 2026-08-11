@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { syncToGCal } from "@/lib/gcal/sync-helper";
 import { refreshBuyQualificationScore } from "@/actions/screening";
+import { syncChasseFromDeal } from "@/actions/prospection";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -520,6 +521,10 @@ export async function updateDealField(
   if (BUY_QUALIFICATION_FIELDS.has(field)) {
     await refreshBuyQualificationScore(dealId);
   }
+  // Le CA cible pilote aussi la chasse rattachée (source unique : le dossier).
+  if (field === "target_revenue_min" || field === "target_revenue_max") {
+    await syncChasseFromDeal(dealId);
+  }
 
   revalidatePath("/protected/dossiers");
   revalidatePath(`/protected/dossiers/${dealId}`);
@@ -573,6 +578,8 @@ export async function updateBuyCriteriaAction(
 
   // Les critères comptent dans la qualification : le score persisté suit.
   await refreshBuyQualificationScore(dealId);
+  // Et ils pilotent la chasse rattachée (source unique : le dossier).
+  await syncChasseFromDeal(dealId);
 
   revalidatePath("/protected/dossiers");
   revalidatePath(`/protected/dossiers/${dealId}`);
