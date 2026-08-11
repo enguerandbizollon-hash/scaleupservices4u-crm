@@ -327,17 +327,21 @@ export async function promoteTargetToFunnel(
   const dirigeants = (fiche.dirigeants ?? []) as { nom?: string | null; prenoms?: string | null }[];
   const idxDirigeant = dirigeants.findIndex((d) => d?.nom?.trim() && d?.prenoms?.trim());
   let contactWarning: string | null = null;
+  let contactId: string | null = null;
   if (idxDirigeant >= 0) {
     const promoted = await promoteDirigeantToContact(siren, idxDirigeant);
-    if (!promoted.success) contactWarning = promoted.error;
+    if (promoted.success) contactId = promoted.data.contact_id;
+    else contactWarning = promoted.error;
   } else {
     contactWarning = "Dirigeant sans prénom dans la source : créez le contact depuis la fiche organisation.";
   }
 
-  // Dédup : une suggestion pour (deal, org) existe déjà.
+  // Dédup : une suggestion pour (deal, org) existe déjà. On complète son
+  // contact_id si la promotion vient de le fournir (le funnel et le brouillon
+  // Gmail visent le dirigeant, pas un contact quelconque de l'organisation).
   const { data: existing } = await supabase
     .from("deal_target_suggestions")
-    .select("id")
+    .select("id, contact_id")
     .eq("deal_id", dealId)
     .eq("organization_id", orgId)
     .eq("user_id", user.id)
@@ -345,6 +349,13 @@ export async function promoteTargetToFunnel(
     .limit(1)
     .maybeSingle();
   if (existing) {
+    if (contactId && !existing.contact_id) {
+      await supabase
+        .from("deal_target_suggestions")
+        .update({ contact_id: contactId })
+        .eq("id", existing.id)
+        .eq("user_id", user.id);
+    }
     revalidatePath(`/protected/dossiers/${dealId}`);
     return { success: true, data: { suggestion_id: existing.id as string, organization_id: orgId, contact_warning: contactWarning } };
   }
@@ -355,6 +366,7 @@ export async function promoteTargetToFunnel(
       user_id: user.id,
       deal_id: dealId,
       organization_id: orgId,
+      contact_id: contactId,
       role_suggested: "target",
       source_connector: "matching",
       status: "suggested",
