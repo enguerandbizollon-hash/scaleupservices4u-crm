@@ -118,14 +118,16 @@ export function forbiddenTokens(companyName: string, siren: string | null): stri
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Remplace toute occurrence d'un token interdit par « la Société ». */
-export function anonymizeText(text: string, tokens: string[]): string {
+/** Remplace toute occurrence d'un token interdit par un libellé neutre
+ * (« la Société » par défaut ; « le Repreneur » côté profil de reprise). */
+export function anonymizeText(text: string, tokens: string[], replacement = "la Société"): string {
   let out = text;
   for (const t of tokens) {
-    out = out.replace(new RegExp(escapeRe(t), "gi"), "la Société");
+    out = out.replace(new RegExp(escapeRe(t), "gi"), replacement);
   }
   // Nettoyage des doublons créés par le scrub.
-  return out.replace(/(la Société)(\s+la Société)+/g, "$1").replace(/\s{2,}/g, " ").trim();
+  const rep = escapeRe(replacement);
+  return out.replace(new RegExp(`(${rep})(\\s+${rep})+`, "g"), "$1").replace(/\s{2,}/g, " ").trim();
 }
 
 export function anonymizeTeaser(content: TeaserContent, tokens: string[]): TeaserContent {

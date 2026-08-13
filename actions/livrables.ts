@@ -9,6 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { generateTeaserContent, type TeaserContent } from "@/lib/ai/teaser-engine";
 import { generateIMContent, type IMContent } from "@/lib/ai/im-engine";
+import { generateProfilRepriseContent, type ProfilRepriseContent } from "@/lib/ai/profil-reprise-engine";
+import type { CadrageContent } from "@/lib/ai/cadrage-engine";
+import { geoLabel } from "@/lib/crm/geo-match";
+import { DEAL_TIMING_OPTIONS } from "@/lib/crm/matching-maps";
 
 export type LivrableResult<T = undefined> =
   | { success: true; data: T }
@@ -78,6 +82,64 @@ export async function generateTeaser(
   revalidatePath(`/protected/dossiers/${dealId}/teaser`);
   revalidatePath(`/protected/dossiers/${dealId}`);
   return { success: true, data: { teaser } };
+}
+
+/**
+ * Profil de reprise anonyme (livrable buy, pendant du teaser) : présente le
+ * repreneur et son projet au dirigeant d'une cible approchée, identité
+ * scrubbée par le code. Matière : critères du dossier + fiche de cadrage.
+ */
+export async function generateProfilReprise(
+  dealId: string,
+): Promise<LivrableResult<{ profil: ProfilRepriseContent }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autorisé" };
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select(`
+      id, deal_type, dirigeant_nom, strategic_rationale, deal_timing,
+      target_sectors, target_geographies, target_revenue_min, target_revenue_max,
+      acquisition_budget_min, acquisition_budget_max, full_acquisition_required,
+      management_retention, cadrage_content
+    `)
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!deal) return { success: false, error: "Dossier introuvable" };
+  if (deal.deal_type !== "ma_buy") return { success: false, error: "Le profil de reprise se génère sur un mandat d'acquisition" };
+
+  const cadrage = (deal.cadrage_content ?? null) as CadrageContent | null;
+  const timingLabel = deal.deal_timing
+    ? DEAL_TIMING_OPTIONS.find((t) => t.value === deal.deal_timing)?.label ?? deal.deal_timing
+    : null;
+
+  const profil = await generateProfilRepriseContent({
+    repreneur_nom: deal.dirigeant_nom ?? cadrage?.repreneur_nom ?? null,
+    projet: deal.strategic_rationale ?? cadrage?.projet ?? null,
+    secteurs: deal.target_sectors ?? [],
+    geographies: (deal.target_geographies ?? []).map((g: string) => geoLabel(g)),
+    ca_min: deal.target_revenue_min ?? null,
+    ca_max: deal.target_revenue_max ?? null,
+    apport: deal.acquisition_budget_min ?? cadrage?.apport ?? null,
+    budget_max: deal.acquisition_budget_max ?? null,
+    full_acquisition: deal.full_acquisition_required ?? cadrage?.full_acquisition ?? null,
+    management_retention: deal.management_retention ?? cadrage?.management_retention ?? null,
+    deal_timing: timingLabel,
+  });
+  if (!profil) return { success: false, error: "Génération impossible : clé API absente, crédits Anthropic épuisés, ou réponse invalide (détail dans les logs serveur)" };
+
+  const { error } = await supabase
+    .from("deals")
+    .update({ profil_reprise_content: profil, profil_reprise_generated_at: new Date().toISOString() })
+    .eq("id", dealId)
+    .eq("user_id", user.id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/protected/dossiers/${dealId}/profil-reprise`);
+  revalidatePath(`/protected/dossiers/${dealId}`);
+  return { success: true, data: { profil } };
 }
 
 export async function generateIM(

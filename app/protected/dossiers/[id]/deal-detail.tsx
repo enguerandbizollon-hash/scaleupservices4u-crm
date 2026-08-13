@@ -462,6 +462,31 @@ export function DealDetail({ deal, initialOrgs, initialContacts, initialFinancia
                   </a>
                 </>
               )}
+              {/* Livrables buy : parité avec la cession (profil de reprise =
+                  pendant du teaser, liste de cibles = pendant de la liste
+                  acquéreurs). */}
+              {deal.deal_type === "ma_buy" && (
+                <>
+                  <a
+                    href={`/protected/dossiers/${deal.id}/profil-reprise`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Profil de reprise anonyme : présente le repreneur et son projet aux cédants approchés (généré par l'IA, contrôlé par vous)"
+                    style={{ padding:"8px 16px", borderRadius:9, background:"#0F766E", border:"1px solid #0F766E", fontSize:13, color:"#fff", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}
+                  >
+                    Profil de reprise
+                  </a>
+                  <a
+                    href={`/protected/dossiers/${deal.id}/liste-cibles`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Liste des cibles suivies avec leur étape d'approche, imprimable, à partager avec le repreneur"
+                    style={{ padding:"8px 16px", borderRadius:9, background:"var(--surface-2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text-2)", textDecoration:"none", fontWeight:500, whiteSpace:"nowrap" }}
+                  >
+                    Liste de cibles
+                  </a>
+                </>
+              )}
               <a
                 href={`/protected/dossiers/${deal.id}/export?print=1`}
                 target="_blank"
