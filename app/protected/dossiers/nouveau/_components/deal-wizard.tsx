@@ -22,6 +22,8 @@ import { SECTOR_FACET_GROUPS, GEO_FACET_GROUPS } from "@/components/ui/referenti
 import { extractCadrageFromUploadAction } from "@/actions/ai/cadrage";
 import { cadrageToWizardPrefill } from "@/lib/crm/cadrage-map";
 import type { CadrageContent } from "@/lib/ai/cadrage-engine";
+import { uploadDealDocument } from "@/lib/storage/documents";
+import { createDealDocument } from "@/actions/documents";
 
 // Options {value,label} pour les selects de l'étape 1 (France + régions).
 const GEO_OPTIONS = GEO_ALL.map(v => ({ value: v, label: GEO_LABELS[v] ?? v }));
@@ -154,6 +156,9 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
 
   // Step 2 — Fiche de cadrage (cadrage-first) : upload PDF -> IA -> pré-remplissage.
   const [cadrageContent, setCadrageContent] = useState<CadrageContent | null>(null);
+  // Le PDF est conservé pour être ARCHIVÉ dans les Documents du mandat à la
+  // création (la pièce fondatrice ne doit pas être jetée après extraction).
+  const [cadrageFile, setCadrageFile] = useState<File | null>(null);
   const [cadrageLoading, setCadrageLoading] = useState(false);
   const [cadrageMsg, setCadrageMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -220,6 +225,7 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
     }
     const c = res.content;
     setCadrageContent(c);
+    setCadrageFile(file);
     const p = cadrageToWizardPrefill(c);
     setTargetSectors(p.targetSectors);
     setTargetGeographies(p.targetGeographies);
@@ -397,12 +403,36 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
     };
 
     const res = await createDealWizardAction(payload);
-    setSaving(false);
-    if (!res.success) { setError(res.error); return; }
+    if (!res.success) { setSaving(false); setError(res.error); return; }
     if (res.warnings.length > 0) {
       // Affichage non bloquant
       console.warn("Wizard warnings:", res.warnings);
     }
+
+    // Archive du PDF de cadrage dans les Documents du mandat (type dédié) :
+    // la pièce fondatrice reste consultable et ré-analysable. Non bloquant,
+    // le dossier est déjà créé.
+    if (dealType === "ma_buy" && cadrageFile) {
+      try {
+        const up = await uploadDealDocument(cadrageFile, res.id);
+        if (up.success) {
+          await createDealDocument({
+            deal_id: res.id,
+            document_type: "cadrage",
+            file_name: cadrageFile.name,
+            file_size: up.size,
+            mime_type: up.mime,
+            storage_path: up.path,
+            file_url: up.path, // le signed URL est généré à la demande
+          });
+        } else {
+          console.warn("Archivage fiche de cadrage échoué:", up.error);
+        }
+      } catch (e) {
+        console.warn("Archivage fiche de cadrage échoué:", e);
+      }
+    }
+    setSaving(false);
     // Acquisition : on atterrit sur le sourcing (fiche de cadrage + cibles),
     // le cœur du mandat buy-side. Cession : la fiche dossier standard.
     router.push(`/protected/dossiers/${res.id}${dealType === "ma_buy" ? "?tab=sourcing" : ""}`);

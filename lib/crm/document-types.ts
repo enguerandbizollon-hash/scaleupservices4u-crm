@@ -4,7 +4,7 @@
 
 export const DOCUMENT_TYPES = [
   "bilan", "pl", "business_plan", "organigramme", "teaser",
-  "nda", "im", "dataroom", "presentation", "rapport", "autre",
+  "nda", "im", "cadrage", "dataroom", "presentation", "rapport", "autre",
 ] as const;
 
 export type DocumentType = typeof DOCUMENT_TYPES[number];
@@ -22,6 +22,7 @@ export const TYPE_TO_CATEGORY: Record<DocumentType, DocumentCategory> = {
   teaser: "operation",
   nda: "operation",
   im: "operation",
+  cadrage: "operation",
   dataroom: "operation",
   autre: "operation",
 };
@@ -34,6 +35,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   teaser: "Teaser",
   nda: "NDA",
   im: "Information memorandum (IM)",
+  cadrage: "Fiche de cadrage",
   dataroom: "Dataroom",
   presentation: "Présentation",
   rapport: "Rapport",

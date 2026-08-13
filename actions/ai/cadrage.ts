@@ -21,19 +21,21 @@ import { syncChasseFromDeal } from "@/actions/prospection";
 
 const STORAGE_BUCKET = "deal-documents";
 
-/** PDF du mandat, candidats à l'analyse comme fiche de cadrage. */
+/** PDF du mandat, candidats à l'analyse comme fiche de cadrage. Le document
+ * archivé avec le type dédié « cadrage » passe en tête (candidat naturel). */
 export async function listCadrageCandidates(dealId: string): Promise<{ id: string; file_name: string | null }[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data } = await supabase
     .from("ma_documents")
-    .select("id, file_name, mime_type")
+    .select("id, file_name, mime_type, document_type")
     .eq("user_id", user.id)
     .eq("deal_id", dealId)
     .order("created_at", { ascending: false });
   return (data ?? [])
     .filter((d) => !d.mime_type || d.mime_type === "application/pdf")
+    .sort((a, b) => Number(b.document_type === "cadrage") - Number(a.document_type === "cadrage"))
     .map((d) => ({ id: d.id as string, file_name: (d.file_name as string | null) ?? null }));
 }
 
