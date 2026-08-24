@@ -9,7 +9,12 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { generateTeaserContent, type TeaserContent } from "@/lib/ai/teaser-engine";
 import { generateIMContent, type IMContent } from "@/lib/ai/im-engine";
-import { generateProfilRepriseContent, type ProfilRepriseContent } from "@/lib/ai/profil-reprise-engine";
+import {
+  generateProfilRepriseContent,
+  profilRepriseMissingMatter,
+  type ProfilRepriseContent,
+  type ProfilRepriseInput,
+} from "@/lib/ai/profil-reprise-engine";
 import type { CadrageContent } from "@/lib/ai/cadrage-engine";
 import { geoLabel } from "@/lib/crm/geo-match";
 import { DEAL_TIMING_OPTIONS } from "@/lib/crm/matching-maps";
@@ -102,7 +107,7 @@ export async function generateProfilReprise(
       id, deal_type, dirigeant_nom, strategic_rationale, deal_timing,
       target_sectors, target_geographies, target_revenue_min, target_revenue_max,
       acquisition_budget_min, acquisition_budget_max, full_acquisition_required,
-      management_retention, cadrage_content
+      management_retention, cadrage_content, organization_id
     `)
     .eq("id", dealId)
     .eq("user_id", user.id)
@@ -110,13 +115,21 @@ export async function generateProfilReprise(
   if (!deal) return { success: false, error: "Dossier introuvable" };
   if (deal.deal_type !== "ma_buy") return { success: false, error: "Le profil de reprise se génère sur un mandat d'acquisition" };
 
+  // Société du repreneur (organisation cliente) : second vecteur d'identité,
+  // scrubbée comme le nom (le teaser cession scrubbe société + SIREN).
+  const { data: org } = deal.organization_id
+    ? await supabase.from("organizations").select("name, siren").eq("id", deal.organization_id).maybeSingle()
+    : { data: null };
+
   const cadrage = (deal.cadrage_content ?? null) as CadrageContent | null;
   const timingLabel = deal.deal_timing
     ? DEAL_TIMING_OPTIONS.find((t) => t.value === deal.deal_timing)?.label ?? deal.deal_timing
     : null;
 
-  const profil = await generateProfilRepriseContent({
+  const input: ProfilRepriseInput = {
     repreneur_nom: deal.dirigeant_nom ?? cadrage?.repreneur_nom ?? null,
+    repreneur_societe: (org?.name as string | null) ?? null,
+    repreneur_siren: (org?.siren as string | null) ?? null,
     projet: deal.strategic_rationale ?? cadrage?.projet ?? null,
     secteurs: deal.target_sectors ?? [],
     geographies: (deal.target_geographies ?? []).map((g: string) => geoLabel(g)),
@@ -127,7 +140,14 @@ export async function generateProfilReprise(
     full_acquisition: deal.full_acquisition_required ?? cadrage?.full_acquisition ?? null,
     management_retention: deal.management_retention ?? cadrage?.management_retention ?? null,
     deal_timing: timingLabel,
-  });
+  };
+
+  // Garde de matière : sans projet/critères et sans capacité financière, le
+  // modèle (tool forcé) inventerait un repreneur dans un document client.
+  const missing = profilRepriseMissingMatter(input);
+  if (missing) return { success: false, error: missing };
+
+  const profil = await generateProfilRepriseContent(input);
   if (!profil) return { success: false, error: "Génération impossible : clé API absente, crédits Anthropic épuisés, ou réponse invalide (détail dans les logs serveur)" };
 
   const { error } = await supabase

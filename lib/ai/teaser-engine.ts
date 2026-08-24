@@ -106,28 +106,40 @@ export function buildTeaserPrompt(input: TeaserInput): string {
 
 // ── Anonymisation par code (jamais de confiance aveugle au modèle) ───────────
 
-/** Mots identifiants à scrubber : nom de société (mots > 2 lettres) + SIREN. */
-export function forbiddenTokens(companyName: string, siren: string | null): string[] {
+/**
+ * Mots identifiants à scrubber : nom de société (mots > 2 lettres) + SIREN.
+ * `minLength` : 3 par défaut (raisons sociales) ; passer 2 pour un nom de
+ * PERSONNE, où des patronymes réels font deux lettres (Ba, Ly, Vo).
+ */
+export function forbiddenTokens(companyName: string, siren: string | null, minLength = 3): string[] {
   const STOP = new Set(["sarl", "sas", "sasu", "sa", "eurl", "sci", "ets", "etablissements", "établissements", "societe", "société", "groupe", "les", "des", "de", "du", "la", "le", "et"]);
   const words = companyName
     .split(/[\s\-']+/)
     .map((w) => w.trim())
-    .filter((w) => w.length > 2 && !STOP.has(w.toLowerCase()));
+    .filter((w) => w.length >= minLength && !STOP.has(w.toLowerCase()));
   return [...words, ...(siren ? [siren] : [])];
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Remplace toute occurrence d'un token interdit par un libellé neutre
- * (« la Société » par défaut ; « le Repreneur » côté profil de reprise). */
+/**
+ * Remplace toute occurrence d'un token interdit par un libellé neutre
+ * (« la Société » par défaut ; « le Repreneur » côté profil de reprise).
+ * Frontières de mot Unicode : « Boulanger » ne touche plus « Boulangerie »,
+ * « Marchand » ne touche plus « marchandises » (patronymes-métiers, revue
+ * 2026-08-15). Le libellé prend une majuscule en tête de phrase.
+ */
 export function anonymizeText(text: string, tokens: string[], replacement = "la Société"): string {
   let out = text;
   for (const t of tokens) {
-    out = out.replace(new RegExp(escapeRe(t), "gi"), replacement);
+    out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(t)}(?![\\p{L}\\p{N}])`, "giu"), replacement);
   }
   // Nettoyage des doublons créés par le scrub.
   const rep = escapeRe(replacement);
-  return out.replace(new RegExp(`(${rep})(\\s+${rep})+`, "g"), "$1").replace(/\s{2,}/g, " ").trim();
+  out = out.replace(new RegExp(`(${rep})(\\s+${rep})+`, "g"), "$1").replace(/\s{2,}/g, " ").trim();
+  // Majuscule contextuelle : en début de texte ou après une fin de phrase.
+  const capitalized = replacement.charAt(0).toUpperCase() + replacement.slice(1);
+  return out.replace(new RegExp(`(^|[.!?…]\\s+)${rep}`, "g"), `$1${capitalized}`);
 }
 
 export function anonymizeTeaser(content: TeaserContent, tokens: string[]): TeaserContent {

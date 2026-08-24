@@ -28,11 +28,14 @@ async function Content({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: deal } = await supabase
+  const { data: deal, error } = await supabase
     .from("deals")
     .select("id, name, deal_type, profil_reprise_content, profil_reprise_generated_at")
     .eq("id", id)
     .maybeSingle();
+  // Une erreur base (colonnes v78 absentes) n'est pas un dossier introuvable :
+  // la dire, plutôt qu'un 404 trompeur.
+  if (error) throw new Error(`Profil de reprise indisponible : ${error.message}. La migration v78 est-elle appliquée ?`);
   if (!deal || deal.deal_type !== "ma_buy") notFound();
 
   const profil = deal.profil_reprise_content as ProfilRepriseContent | null;

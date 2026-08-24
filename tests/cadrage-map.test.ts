@@ -145,7 +145,7 @@ describe("cadrageToWizardPrefill", () => {
     expect(p.targetSectors).toEqual([]);
     expect(p.targetGeographies).toEqual([]);
     expect(p.targetRevenueMin).toBe("");
-    expect(p.fullAcquisitionRequired).toBe(false);
+    expect(p.fullAcquisitionRequired).toBeNull();
     expect(p.managementRetention).toBe(true);
   });
 });

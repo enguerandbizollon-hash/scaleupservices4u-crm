@@ -27,6 +27,10 @@ export interface ProfilRepriseContent {
 export interface ProfilRepriseInput {
   // Identité RÉELLE (sert au prompt et à la liste d'interdits, jamais au rendu)
   repreneur_nom: string | null;
+  // Société du repreneur (organisation cliente du mandat) : scrubbée aussi,
+  // c'est le second vecteur d'identification (revue 2026-08-15).
+  repreneur_societe: string | null;
+  repreneur_siren: string | null;
   // Matière
   projet: string | null;                            // strategic_rationale ou cadrage.projet
   secteurs: string[];                               // target_sectors (labels)
@@ -83,6 +87,9 @@ export function buildProfilReprisePrompt(input: ProfilRepriseInput): string {
     input.repreneur_nom
       ? `Repreneur réel (pour ton contexte seulement, INTERDIT dans le rendu) : ${input.repreneur_nom}`
       : "Repreneur : personne physique accompagnée par Vectis Finance",
+    input.repreneur_societe
+      ? `Société du repreneur (INTERDITE dans le rendu, ne pas la nommer ni la décrire de façon identifiable) : ${input.repreneur_societe}`
+      : "",
     input.projet ? `Projet de reprise : ${input.projet}` : "",
     input.secteurs.length ? `Secteurs visés : ${input.secteurs.join(" · ")}` : "",
     input.geographies.length ? `Zones visées : ${input.geographies.join(", ")}` : "",
@@ -155,6 +162,33 @@ export async function generateProfilRepriseContent(input: ProfilRepriseInput): P
   const validated = validateProfilRepriseContent(toolUse?.input);
   if (!validated) return null;
 
-  const tokens = input.repreneur_nom ? forbiddenTokens(input.repreneur_nom, null) : [];
-  return tokens.length ? anonymizeProfilReprise(validated, tokens) : validated;
+  return anonymizeProfilReprise(validated, profilRepriseForbiddenTokens(input));
+}
+
+/**
+ * Liste d'interdits du profil : nom de PERSONNE (mots dès 2 lettres) + société
+ * du repreneur et son SIREN. Le filet mécanique ne dépend pas du modèle.
+ */
+export function profilRepriseForbiddenTokens(input: Pick<ProfilRepriseInput, "repreneur_nom" | "repreneur_societe" | "repreneur_siren">): string[] {
+  return [
+    ...(input.repreneur_nom ? forbiddenTokens(input.repreneur_nom, null, 2) : []),
+    ...(input.repreneur_societe ? forbiddenTokens(input.repreneur_societe, input.repreneur_siren) : []),
+  ];
+}
+
+/**
+ * Le profil se génère UNIQUEMENT avec de la matière : sans projet ni critères,
+ * et sans apport ni budget, le modèle (tool forcé, champs obligatoires) serait
+ * contraint d'inventer un repreneur. Retourne le message à afficher, ou null.
+ */
+export function profilRepriseMissingMatter(input: ProfilRepriseInput): string | null {
+  const hasProjet = !!input.projet?.trim() || input.secteurs.length > 0 || input.geographies.length > 0
+    || input.ca_min != null || input.ca_max != null;
+  const hasCapacite = input.apport != null || input.budget_max != null;
+  if (!hasProjet && !hasCapacite) {
+    return "Complétez d'abord le cadrage du mandat (projet ou critères, et apport ou budget) : sans matière, le profil serait inventé.";
+  }
+  if (!hasProjet) return "Renseignez le projet ou les critères de cible (secteurs, géographie, CA) avant de générer le profil.";
+  if (!hasCapacite) return "Renseignez l'apport ou le budget d'acquisition (onglet Budget) : la capacité financière ne s'invente pas.";
+  return null;
 }

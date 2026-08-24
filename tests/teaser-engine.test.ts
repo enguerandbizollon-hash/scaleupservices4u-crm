@@ -38,13 +38,34 @@ describe("anonymizeText", () => {
     expect(anonymizeText("SIREN 320584279 immatriculée.", tokens)).not.toContain("320584279");
   });
 
-  it("les doublons du scrub se compactent", () => {
+  it("les doublons du scrub se compactent (et prennent la majuscule en tête de phrase)", () => {
     const out = anonymizeText("SCIERIE FOREST propose...", tokens);
-    expect(out).toBe("la Société propose...");
+    expect(out).toBe("La Société propose...");
+    expect(anonymizeText("Fondée en 1980, SCIERIE FOREST propose...", tokens)).toBe("Fondée en 1980, la Société propose...");
   });
 
   it("texte sans occurrence : inchangé", () => {
     expect(anonymizeText("Une belle entreprise régionale.", tokens)).toBe("Une belle entreprise régionale.");
+  });
+
+  it("frontières de mot : un patronyme-métier ne corrompt pas le vocabulaire", () => {
+    const t = forbiddenTokens("Marc Boulanger", null, 2);
+    expect(anonymizeText("Boulangerie / pâtisserie", t, "le Repreneur")).toBe("Boulangerie / pâtisserie");
+    expect(anonymizeText("Transport routier de marchandises", forbiddenTokens("Transports MARCHAND", null))).toBe("Transport routier de marchandises");
+    expect(anonymizeText("Marc Boulanger reprend une boulangerie.", t, "le Repreneur")).toBe("Le Repreneur reprend une boulangerie.");
+  });
+
+  it("majuscule en tête de phrase et après un point", () => {
+    const t = forbiddenTokens("Damien ROUSSON", null, 2);
+    expect(anonymizeText("Damien ROUSSON reprend. ROUSSON vise le BTP.", t, "le Repreneur"))
+      .toBe("Le Repreneur reprend. Le Repreneur vise le BTP.");
+  });
+
+  it("un nom de personne de deux lettres est scrubbé avec minLength 2, sans toucher les mots voisins", () => {
+    const t = forbiddenTokens("Amadou Ba", null, 2);
+    expect(t).toContain("Ba");
+    expect(anonymizeText("Amadou Ba dirige un bateau-école basé à Bastia.", t, "le Repreneur"))
+      .toBe("Le Repreneur dirige un bateau-école basé à Bastia.");
   });
 });
 

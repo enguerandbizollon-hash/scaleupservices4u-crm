@@ -151,7 +151,9 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
   const [targetRevenueMax, setTargetRevenueMax] = useState("");
   const [targetStage, setTargetStage] = useState("");
   const [acquisitionBudgetMin, setAcquisitionBudgetMin] = useState("");
-  const [fullAcquisitionRequired, setFullAcquisitionRequired] = useState(false);
+  // Tri-état : null = non précisé (rien ne s'affirme au cédant dans le
+  // profil de reprise), true = majoritaire requis, false = ouvert au minoritaire.
+  const [fullAcquisitionRequired, setFullAcquisitionRequired] = useState<boolean | null>(null);
   const [strategicRationale, setStrategicRationale] = useState("");
 
   // Step 2 — Fiche de cadrage (cadrage-first) : upload PDF -> IA -> pré-remplissage.
@@ -159,6 +161,9 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
   // Le PDF est conservé pour être ARCHIVÉ dans les Documents du mandat à la
   // création (la pièce fondatrice ne doit pas être jetée après extraction).
   const [cadrageFile, setCadrageFile] = useState<File | null>(null);
+  // Mandat créé mais archivage du cadrage échoué : on affiche l'erreur et un
+  // bouton pour ouvrir le mandat, au lieu de rediriger en silence.
+  const [createdTarget, setCreatedTarget] = useState<string | null>(null);
   const [cadrageLoading, setCadrageLoading] = useState(false);
   const [cadrageMsg, setCadrageMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -212,7 +217,7 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
 
   // Fiche de cadrage : l'IA extrait les critères, on pré-remplit, l'utilisateur
   // vérifie et corrige avant de valider (propose/dispose).
-  async function analyzeCadrage(file: File) {
+  async function analyzeCadrage(file: File): Promise<boolean> {
     setCadrageLoading(true);
     setCadrageMsg(null);
     const fd = new FormData();
@@ -220,8 +225,8 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
     const res = await extractCadrageFromUploadAction(fd);
     setCadrageLoading(false);
     if (!res.success || !res.content) {
-      setCadrageMsg({ kind: "err", text: res.error ?? "Analyse échouée." });
-      return;
+      setCadrageMsg({ kind: "err", text: `${res.error ?? "Analyse échouée."}${cadrageFile ? ` La fiche précédente (${cadrageFile.name}) reste en place.` : ""}` });
+      return false;
     }
     const c = res.content;
     setCadrageContent(c);
@@ -236,6 +241,7 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
     setStrategicRationale(p.strategicRationale);
     if (c.repreneur_nom && !name.trim()) setName(`Acquisition ${c.repreneur_nom}`);
     setCadrageMsg({ kind: "ok", text: `Fiche analysée (confiance ${c.confidence}/100). Vérifiez et corrigez les critères ci-dessous.` });
+    return true;
   }
 
   // ── Soumission finale ──
@@ -410,13 +416,18 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
     }
 
     // Archive du PDF de cadrage dans les Documents du mandat (type dédié) :
-    // la pièce fondatrice reste consultable et ré-analysable. Non bloquant,
-    // le dossier est déjà créé.
+    // la pièce fondatrice reste consultable et ré-analysable. Le dossier est
+    // déjà créé : un échec ne le remet pas en cause, mais il se DIT (jamais
+    // un console.warn muet), et l'utilisateur choisit quand ouvrir le mandat.
+    const target = `/protected/dossiers/${res.id}${dealType === "ma_buy" ? "?tab=sourcing" : ""}`;
     if (dealType === "ma_buy" && cadrageFile) {
+      let archiveError: string | null = null;
       try {
         const up = await uploadDealDocument(cadrageFile, res.id);
-        if (up.success) {
-          await createDealDocument({
+        if (!up.success) {
+          archiveError = up.error;
+        } else {
+          const doc = await createDealDocument({
             deal_id: res.id,
             document_type: "cadrage",
             file_name: cadrageFile.name,
@@ -425,17 +436,22 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
             storage_path: up.path,
             file_url: up.path, // le signed URL est généré à la demande
           });
-        } else {
-          console.warn("Archivage fiche de cadrage échoué:", up.error);
+          if (!doc.success) archiveError = doc.error;
         }
       } catch (e) {
-        console.warn("Archivage fiche de cadrage échoué:", e);
+        archiveError = e instanceof Error ? e.message : "erreur réseau";
+      }
+      if (archiveError) {
+        setSaving(false);
+        setCreatedTarget(target);
+        setError(`Mandat créé, mais la fiche de cadrage n'a pas pu être archivée dans ses Documents (${archiveError}). Ajoutez-la depuis l'onglet Documents du mandat.`);
+        return;
       }
     }
     setSaving(false);
     // Acquisition : on atterrit sur le sourcing (fiche de cadrage + cibles),
     // le cœur du mandat buy-side. Cession : la fiche dossier standard.
-    router.push(`/protected/dossiers/${res.id}${dealType === "ma_buy" ? "?tab=sourcing" : ""}`);
+    router.push(target);
   }
 
   // ── Progress bar ────────────────────────────────────────────────────────
@@ -812,7 +828,15 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <input type="file" accept="application/pdf" disabled={cadrageLoading}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) analyzeCadrage(f); }}
+                  onChange={async e => {
+                    const input = e.currentTarget;
+                    const f = input.files?.[0];
+                    if (!f) return;
+                    // Échec d'analyse : l'input ne doit pas afficher un fichier
+                    // qui n'est ni retenu ni archivé (l'état garde la fiche précédente).
+                    const ok = await analyzeCadrage(f);
+                    if (!ok) input.value = "";
+                  }}
                   style={{ fontSize: 12.5, fontFamily: "inherit", color: "var(--text-3)" }} />
                 {cadrageLoading && <span style={{ fontSize: 12.5, color: "var(--text-4)" }}>Analyse en cours…</span>}
               </div>
@@ -859,10 +883,15 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
               </div>
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--text-2)" }}>
-                <input type="checkbox" checked={fullAcquisitionRequired} onChange={e => setFullAcquisitionRequired(e.target.checked)} />
-                Prise de contrôle majoritaire requise (deal breaker)
-              </label>
+              <label style={lbl}>Type d&apos;opération recherchée</label>
+              <select
+                value={fullAcquisitionRequired === null ? "" : fullAcquisitionRequired ? "majoritaire" : "ouvert"}
+                onChange={e => setFullAcquisitionRequired(e.target.value === "" ? null : e.target.value === "majoritaire")}
+                style={inp}>
+                <option value="">— Non précisé —</option>
+                <option value="majoritaire">Prise de contrôle majoritaire requise (deal breaker)</option>
+                <option value="ouvert">Ouvert à une prise de participation, majoritaire ou minoritaire</option>
+              </select>
             </div>
             <div>
               <label style={lbl}>Projet du repreneur / rationale</label>
@@ -949,8 +978,14 @@ export function DealWizard({ organisations, contacts, initialType }: Props) {
 
         {/* Erreur */}
         {error && (
-          <div style={{ padding: "10px 14px", borderRadius: 8, background: "#fee2e2", color: "#b91c1c", fontSize: 13, marginBottom: 14 }}>
-            {error}
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: "#fee2e2", color: "#b91c1c", fontSize: 13, marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ flex: 1 }}>{error}</span>
+            {createdTarget && (
+              <button type="button" onClick={() => router.push(createdTarget)}
+                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: "#b91c1c", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                Ouvrir le mandat →
+              </button>
+            )}
           </div>
         )}
 

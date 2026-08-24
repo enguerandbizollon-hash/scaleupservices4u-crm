@@ -61,7 +61,8 @@ export interface CadrageWizardPrefill {
   targetRevenueMin: string;
   targetRevenueMax: string;
   acquisitionBudgetMin: string;
-  fullAcquisitionRequired: boolean;
+  /** Tri-état : null = la fiche ne se prononce pas (rien ne s'affirme au client). */
+  fullAcquisitionRequired: boolean | null;
   managementRetention: boolean;
   strategicRationale: string;
 }
@@ -87,7 +88,7 @@ export function cadrageToWizardPrefill(c: CadrageContent): CadrageWizardPrefill 
     targetRevenueMin: c.ca_min != null ? String(c.ca_min) : "",
     targetRevenueMax: c.ca_max != null ? String(c.ca_max) : "",
     acquisitionBudgetMin: c.apport != null ? String(c.apport) : "",
-    fullAcquisitionRequired: c.full_acquisition ?? false,
+    fullAcquisitionRequired: c.full_acquisition ?? null,
     managementRetention: c.management_retention ?? true,
     strategicRationale: c.projet ?? "",
   };
